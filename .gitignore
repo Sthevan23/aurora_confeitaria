@@ -1,16 +1,7 @@
 node_modules/
-dist/
-build/
-.env
-.env.local
-.env.*.local
+.git/
 *.log
 .DS_Store
-coverage/
-.vite/
-*.tsbuildinfo
-backend/data/*.json
-!backend/data/.gitkeep
 .idea/
 .vscode/
 *.zip
