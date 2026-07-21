@@ -400,8 +400,13 @@ function viewOrder(id) {
 
 function adminImageSrc(path) {
   if (!path) return '';
-  if (/^(https?:|data:|\/|\.\.\/)/i.test(path)) return path;
-  return '../' + path;
+  if (/^(https?:|data:)/i.test(path)) return path;
+  const clean = String(path).replace(/^\//, '');
+  if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '')) {
+    return `https://auroraconfeitaria.com.br/${clean}`;
+  }
+  if (/^(\/|\.\.\/)/i.test(path)) return path;
+  return '../' + clean;
 }
 
 function onlyDigits(value) {
@@ -606,8 +611,9 @@ function renderProducts() {
       <td><img src="${adminImageSrc(p.image)}" alt="${escapeHtml(p.name)}" class="table__img"></td>
       <td><strong>${escapeHtml(p.name)}</strong></td>
       <td>${Storage.getCategoryName(p.categoryId)}</td>
+      <td>${p.size ? `<span class="badge badge--info">${escapeHtml(p.size)}</span>` : '—'}</td>
       <td>${Number(p.price) > 0 ? Storage.formatCurrency(p.price) : 'Consultar'}${p.promoActive && p.promoPrice != null ? `<br><small style="color:#fc7890">Promo ${Storage.formatCurrency(p.promoPrice)}</small>` : ''}</td>
-      <td>${p.featured ? '<i class="fas fa-star" style="color:#FFD700"></i>' : '—'}${p.promoActive ? ' <span class="badge badge--novo">Promo</span>' : ''}</td>
+      <td>${p.featured ? '<i class="fas fa-star" style="color:#FFD700"></i>' : '—'}${p.bestSeller ? ' <span class="badge badge--novo">Mais vendido</span>' : ''}${p.promoActive ? ' <span class="badge badge--novo">Promo</span>' : ''}</td>
       <td>
         <div class="table__actions">
           <button class="btn--icon edit" onclick="editProduct('${p.id}')" title="Editar"><i class="fas fa-edit"></i></button>
@@ -623,7 +629,10 @@ async function uploadAdminImage(file) {
   if (!password) throw new Error('Faça login novamente');
   const form = new FormData();
   form.append('image', file);
-  const res = await fetch('../api/upload.php', {
+  const apiBase = typeof Storage.getApiUrl === 'function'
+    ? Storage.getApiUrl().replace(/data\.php$/i, 'upload.php')
+    : '../api/upload.php';
+  const res = await fetch(apiBase, {
     method: 'POST',
     headers: { 'X-Admin-Password': password },
     body: form,
@@ -716,9 +725,17 @@ function openProductModal(product = null) {
         <label>Sabores (separados por vírgula)</label>
         <textarea id="prod-flavors" rows="2">${(product?.flavors || []).join(', ')}</textarea>
       </div>
-      <div class="form-group">
-        <label>Tamanho</label>
-        <input type="text" id="prod-size" value="${product?.size || ''}" placeholder="300ml">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Volume / ml do produto</label>
+          <input type="text" id="prod-size" value="${product?.size || ''}" placeholder="Ex: 300ml ou 140ml" inputmode="text" autocomplete="off">
+          <small style="display:block;margin-top:6px;color:var(--texto-claro)">Aparece no selo da foto (como 300ml). Digite só o número (ex: 300) que completa com ml.</small>
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end">
+          <div id="prod-size-preview" style="width:100%;min-height:44px;border:1px dashed var(--rosa-escuro);border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fff;color:var(--marrom-escuro);font-weight:700;font-size:0.9rem">
+            ${product?.size ? `Selo: ${escapeHtml(product.size)}` : 'Selo: —'}
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label class="checkbox-label">
@@ -737,6 +754,11 @@ function openProductModal(product = null) {
       </div>
       <div class="form-group">
         <label class="checkbox-label">
+          <input type="checkbox" id="prod-bestseller" ${product?.bestSeller ? 'checked' : ''}> Mais vendido (seção especial)
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
           <input type="checkbox" id="prod-active" ${product?.active !== false ? 'checked' : ''}> Visível no site
         </label>
       </div>
@@ -748,6 +770,25 @@ function openProductModal(product = null) {
   `);
 
   bindImageUpload('prod-image-file', 'prod-image', 'prod-preview');
+
+  const sizeInput = document.getElementById('prod-size');
+  const sizePreview = document.getElementById('prod-size-preview');
+  const formatProductSize = (raw) => {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    if (/^\d+([.,]\d+)?$/.test(value)) return `${value.replace(',', '.')}ml`;
+    if (/^\d+([.,]\d+)?\s*ml$/i.test(value)) return value.replace(/\s+/g, '').toLowerCase().replace('ml', 'ml');
+    return value;
+  };
+  const refreshSizePreview = () => {
+    const formatted = formatProductSize(sizeInput.value);
+    sizePreview.textContent = formatted ? `Selo: ${formatted}` : 'Selo: —';
+  };
+  sizeInput.addEventListener('input', refreshSizePreview);
+  sizeInput.addEventListener('blur', () => {
+    sizeInput.value = formatProductSize(sizeInput.value);
+    refreshSizePreview();
+  });
 
   document.getElementById('product-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -761,10 +802,11 @@ function openProductModal(product = null) {
       categoryId: document.getElementById('prod-category').value,
       image: document.getElementById('prod-image').value.trim() || 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg',
       featured: document.getElementById('prod-featured').checked,
+      bestSeller: document.getElementById('prod-bestseller').checked,
       promoActive: document.getElementById('prod-promo').checked,
       promoPrice: promoPriceRaw === '' ? null : parseFloat(promoPriceRaw),
       promoLabel: document.getElementById('prod-promo-label').value.trim() || 'Promoção',
-      size: document.getElementById('prod-size').value.trim(),
+      size: formatProductSize(document.getElementById('prod-size').value),
       flavors: document.getElementById('prod-flavors').value.split(',').map(s => s.trim()).filter(Boolean),
       active: document.getElementById('prod-active').checked
     };

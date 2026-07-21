@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
   <header class="header" id="header">
@@ -22,10 +22,16 @@
       </button>
       <nav class="header__nav" id="nav-menu" aria-label="Principal">
         <a href="#sobre">Sobre</a>
+        <a href="#mais-vendidos">Mais vendidos</a>
         <a href="#produtos">Cardápio</a>
         <a href="#galeria">Galeria</a>
         <a href="#encomendas">Encomendas</a>
         <a href="#contato">Contato</a>
+        <button type="button" class="header__cart" id="cart-open" aria-label="Abrir carrinho">
+          <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
+          <span>Carrinho</span>
+          <span class="header__cart-count" id="cart-count" hidden>0</span>
+        </button>
         <a class="header__cta" id="header-whatsapp" href="#" target="_blank" rel="noopener">Fazer Pedido</a>
       </nav>
     </div>
@@ -78,12 +84,26 @@
     <section class="section about" id="sobre">
       <div class="container about__grid is-visible">
         <div class="about__media reveal">
-          <img src="products/4c3b51e1-88fc-473a-a06d-e3f13e31c525.jpg" alt="Sandubrownie de morango da Aurora" id="sobre-image">
+          <img src="products/clara-aurora-historia.jpg" alt="Clara, da Aurora Confeitaria Artesanal" id="sobre-image">
         </div>
         <div class="about__copy">
           <p class="section__eyebrow">Nossa história</p>
           <h2 class="section__title">Feito para adoçar a sua <em>história</em></h2>
           <div class="about__text" id="sobre-text"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section bestsellers" id="mais-vendidos">
+      <div class="container">
+        <div class="bestsellers__intro">
+          <p class="section__eyebrow">Favoritos da casa</p>
+          <h2 class="section__title">Mais <em>vendidos</em></h2>
+          <p class="section__lead">Os queridinhos de quem já pediu — incluindo a nossa coxinha de costela.</p>
+        </div>
+        <div class="products__grid bestsellers__grid" id="bestsellers-grid"></div>
+        <div class="bestsellers__cta">
+          <a class="btn btn--ghost" href="#produtos">Ver cardápio completo</a>
         </div>
       </div>
     </section>
@@ -152,38 +172,76 @@
       <div class="container contact__grid is-visible">
         <div class="contact__copy">
           <p class="section__eyebrow">Contato</p>
-          <h2 class="section__title">Vamos conversar sobre o seu pedido</h2>
-          <p class="section__lead">Fale pelo WhatsApp ou Instagram. Respondemos com carinho para combinar sabores, datas e quantidades.</p>
-          <div class="contact__channels">
-            <a id="contact-whatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
-            <a id="contact-instagram" href="https://www.instagram.com/a.aurora.confeitaria" target="_blank" rel="noopener">@a.aurora.confeitaria</a>
-            <a id="contact-address" href="#" target="_blank" rel="noopener">Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil</a>
-          </div>
+          <h2 class="section__title">Seu pedido começa <em>aqui</em></h2>
+          <p class="section__lead">Conte o que você quer — a gente monta a mensagem e segue no WhatsApp.</p>
+
+          <form class="contact__form" id="contact-form">
+            <label>Nome<input name="name" required minlength="2" placeholder="Seu nome" autocomplete="name"></label>
+            <label>Telefone / WhatsApp<input name="phone" id="contact-phone" type="tel" required minlength="14" maxlength="15" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel"></label>
+            <label>Mensagem<textarea name="message" required minlength="5" rows="4" placeholder="Sabor, quantidade e data…"></textarea></label>
+            <div class="contact__actions">
+              <button class="btn btn--primary" type="submit">Enviar mensagem</button>
+              <a class="btn btn--ghost" id="contact-whatsapp-cta" href="#" target="_blank" rel="noopener">Só abrir WhatsApp</a>
+            </div>
+            <p class="contact__feedback contact__feedback--ok" id="contact-ok" hidden>Mensagem pronta. Vamos te redirecionar ao WhatsApp.</p>
+          </form>
         </div>
-        <form class="contact__form" id="contact-form">
-          <label>Nome<input name="name" required minlength="2" placeholder="Seu nome" autocomplete="name"></label>
-          <label>Telefone / WhatsApp<input name="phone" id="contact-phone" type="tel" required minlength="14" maxlength="15" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel"></label>
-          <label>Mensagem<textarea name="message" required minlength="5" rows="4" placeholder="Conte o que deseja encomendar"></textarea></label>
-          <button class="btn btn--primary" type="submit">Enviar mensagem</button>
-          <p class="contact__feedback contact__feedback--ok" id="contact-ok" hidden>Mensagem pronta. Vamos te redirecionar ao WhatsApp.</p>
-        </form>
+
+        <aside class="contact__aside">
+          <figure class="contact__media">
+            <img src="products/0ff19f98-37de-4629-9520-af19c38f27cc.jpg" alt="Cookies estilo americano da Aurora" id="contact-image">
+          </figure>
+          <div class="contact__aside-links">
+            <a id="contact-address" href="#" target="_blank" rel="noopener">
+              <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+              <span>
+                <small>Retirada</small>
+                <strong>Rua dos Expedicionários, 237 · Boa Esperança, MG</strong>
+              </span>
+            </a>
+          </div>
+        </aside>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <div class="container footer__inner">
+    <div class="container footer__top">
       <div class="footer__brand">
-        <span class="brand-logo brand-logo--footer">
+        <a href="#topo" class="brand-logo brand-logo--footer" aria-label="Aurora Confeitaria Artesanal">
           <span class="brand-logo__name">Aurora</span>
           <span class="brand-logo__sub">Confeitaria Artesanal</span>
-        </span>
-        <p><a id="footer-place" href="#" target="_blank" rel="noopener">Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil</a></p>
+        </a>
+        <p class="footer__tagline">Feito com amor em Boa Esperança, MG.</p>
       </div>
-      <div class="footer__meta">
-        <a id="footer-whatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
-        <a id="footer-instagram" href="https://www.instagram.com/a.aurora.confeitaria" target="_blank" rel="noopener">@a.aurora.confeitaria</a>
+
+      <nav class="footer__nav" aria-label="Rodapé">
+        <a href="#produtos">Cardápio</a>
+        <a href="#mais-vendidos">Mais vendidos</a>
+        <a href="#encomendas">Encomendas</a>
+        <a href="#contato">Contato</a>
+      </nav>
+
+      <div class="footer__channels">
+        <a id="footer-whatsapp" href="#" target="_blank" rel="noopener">
+          <i class="fab fa-whatsapp" aria-hidden="true"></i>
+          <span>WhatsApp</span>
+        </a>
+        <a id="footer-instagram" href="https://www.instagram.com/a.aurora.confeitaria" target="_blank" rel="noopener">
+          <i class="fab fa-instagram" aria-hidden="true"></i>
+          <span>@a.aurora.confeitaria</span>
+        </a>
+        <a id="footer-place" href="#" target="_blank" rel="noopener">
+          <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+          <span>Rua dos Expedicionários, 237</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer__bottom">
+      <div class="container footer__bottom-inner">
         <p>© <span id="footer-year"></span> Aurora Confeitaria Artesanal</p>
+        <p>Pedidos pelo WhatsApp · Retirada na loja</p>
       </div>
     </div>
   </footer>
@@ -191,6 +249,41 @@
   <a class="whatsapp-float" id="whatsapp-float" href="#" target="_blank" rel="noopener" aria-label="WhatsApp">
     <i class="fab fa-whatsapp"></i>
   </a>
+
+  <div class="cart-drawer" id="cart-drawer" hidden>
+    <button type="button" class="cart-drawer__backdrop" id="cart-close-backdrop" aria-label="Fechar carrinho"></button>
+    <aside class="cart-drawer__panel" aria-label="Carrinho">
+      <header class="cart-drawer__head">
+        <div>
+          <p class="cart-drawer__eyebrow">Seu pedido</p>
+          <h2 class="cart-drawer__title">Carrinho</h2>
+          <p class="cart-drawer__subtitle" id="cart-subtitle">Nenhum item ainda</p>
+        </div>
+        <button type="button" class="cart-drawer__close" id="cart-close" aria-label="Fechar">×</button>
+      </header>
+      <div class="cart-drawer__body" id="cart-items"></div>
+      <footer class="cart-drawer__foot">
+        <div class="cart-drawer__total" id="cart-total-row" hidden>
+          <span>Total</span>
+          <strong id="cart-total">R$ 0,00</strong>
+        </div>
+        <div class="cart-checkout" id="cart-checkout" hidden>
+          <p class="cart-checkout__label">Dados para finalizar</p>
+          <div class="cart-checkout__fields">
+            <label class="order-field">Nome *<input type="text" id="cart-nome" placeholder="Nome" autocomplete="given-name"></label>
+            <label class="order-field">Sobrenome *<input type="text" id="cart-sobrenome" placeholder="Sobrenome" autocomplete="family-name"></label>
+          </div>
+          <label class="order-field">WhatsApp *<input type="tel" id="cart-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
+          <p class="cart-drawer__error" id="cart-error" hidden></p>
+          <button type="button" class="btn btn--secondary" id="cart-checkout-btn">Finalizar no WhatsApp</button>
+        </div>
+        <div class="cart-drawer__actions">
+          <button type="button" class="btn btn--ghost" id="cart-continue">Continuar comprando</button>
+          <a class="btn btn--ghost" id="cart-go-menu" href="#produtos" hidden>Ver cardápio</a>
+        </div>
+      </footer>
+    </aside>
+  </div>
 
   <div class="order-lightbox" id="order-lightbox" hidden>
     <button type="button" class="order-lightbox__close" id="lightbox-close" aria-label="Fechar">×</button>
@@ -226,14 +319,15 @@
         </div>
         <div class="order-lightbox__actions">
           <p class="order-lightbox__error" id="order-error" hidden></p>
-          <button type="button" class="btn btn--secondary" id="lightbox-order">Finalizar pedido no WhatsApp</button>
+          <button type="button" class="btn btn--secondary" id="lightbox-add-cart">Adicionar ao carrinho</button>
+          <button type="button" class="btn btn--ghost" id="lightbox-order">Pedir só este no WhatsApp</button>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="js/default-data.js?v=3"></script>
-  <script src="js/storage.js?v=5"></script>
-  <script src="script.js?v=10"></script>
+  <script src="js/default-data.js?v=16"></script>
+  <script src="js/storage.js?v=20"></script>
+  <script src="script.js?v=23"></script>
 </body>
 </html>

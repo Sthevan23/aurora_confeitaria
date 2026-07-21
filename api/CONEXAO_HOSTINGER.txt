@@ -1,0 +1,34 @@
+========================================================
+BANCO NOVO — auroraconfeitaria.com.br
+========================================================
+
+Host:      localhost
+Porta:     3306
+Banco:     u586160337_aurora_doces
+Usuário:   u586160337_aurora_doces
+Senha:     (a do hPanel — confira se mudou ao criar o banco)
+Charset:   utf8mb4
+
+Arquivo: api/config.local.php
+
+PASSOS AGORA
+--------------------------------------------------------
+1) phpMyAdmin → banco u586160337_aurora_doces
+2) Importar: api/aurora_mysql.sql
+3) Subir para public_html/api/ (substituir):
+   - config.local.php
+   - data.php
+   - db.php
+   - mysql_store.php
+   - config.php
+   - upload.php
+4) Testar:
+   https://auroraconfeitaria.com.br/api/data.php?ping=1
+
+   Esperado:
+   "database":"u586160337_aurora_doces"
+   "ready":true
+
+5) Se a senha do banco novo for diferente, edite
+   config.local.php → 'pass' => 'SENHA_NOVA'
+========================================================

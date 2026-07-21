@@ -1,30 +1,33 @@
 ﻿# Aurora Confeitaria Artesanal
 
-Site + painel no **mesmo padrao do Gimarry** (HTML, CSS, JavaScript e PHP) — pronto para Hostinger.
+Site + painel admin para Hostinger (HTML/CSS/JS + PHP + MySQL).
 
 ## Estrutura
 
-- index.html, style.css, script.js — site publico
-- products/ — fotos
-- js/default-data.js + js/storage.js — dados e sync
-- admin/ — painel (produtos, pedidos, financeiro, config)
-- api/data.php + api/data.json — API Hostinger
+- `index.html`, `style.css`, `script.js` — site público
+- `products/` — fotos
+- `js/` — dados padrão e storage (cache + sync com API)
+- `admin/` — painel
+- `api/` — API PHP ligada ao MySQL Hostinger
+
+## Banco MySQL
+
+- Domínio: `auroraconfeitaria.com.br`
+- Banco: `u586160337_aurora_doces`
+- SQL: `api/aurora_mysql.sql`
+- Config: `api/config.local.php`
+- Guia: `api/CONEXAO_HOSTINGER.txt`
+- API: `api/data.php`
 
 ## Admin
 
-- URL: /admin/login.html
-- Email: admin@aurora.com
-- Senha: aurora123
+- URL: `/admin/login.html`
+- Email: `auroraconfeitaria2022@gmail.com`
+- Senha: `aurora123`
 
 ## Subir na Hostinger
 
-1. Envie toda a pasta para public_html
-2. PHP ja vem ativo na Hostinger compartilhada
-3. Entre no admin uma vez para sincronizar
-4. Nao precisa de Node.js
-
-## Testar no PC
-
-php -S localhost:8080
-
-Depois abra http://localhost:8080 e http://localhost:8080/admin/login.html
+1. Importar `api/aurora_mysql.sql` no phpMyAdmin
+2. Preencher senha em `api/config.local.php`
+3. Enviar o site para `public_html`
+4. Testar: `/api/data.php?ping=1`

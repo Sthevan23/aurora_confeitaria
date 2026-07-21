@@ -651,6 +651,7 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 }
 
 .badge--novo { background: #E3F2FD; color: var(--info); }
+.badge--info { background: #FFF1F4; color: var(--rosa-escuro); }
 .badge--preparo { background: #FFF3E0; color: var(--warning); }
 .badge--entrega { background: #F3E5F5; color: #9C27B0; }
 .badge--finalizado { background: #E8F5E9; color: var(--success); }

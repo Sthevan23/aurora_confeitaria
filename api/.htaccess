@@ -1,5 +1,5 @@
-# Impede acesso direto ao arquivo de dados
-<Files "data.json">
+# Protege credenciais MySQL
+<Files "config.local.php">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>

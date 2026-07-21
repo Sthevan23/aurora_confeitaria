@@ -1,6 +1,6 @@
 <?php
 /**
- * Upload de imagens — Aurora Confeitaria (Hostinger)
+ * Upload de imagens — autenticação via MySQL (Hostinger)
  */
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -19,19 +19,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
   exit;
 }
 
-$dataFile = __DIR__ . '/data.json';
+require_once __DIR__ . '/mysql_store.php';
+
 $password = $_SERVER['HTTP_X_ADMIN_PASSWORD'] ?? '';
 
-if (!file_exists($dataFile)) {
-  http_response_code(503);
-  echo json_encode(['error' => 'Sistema ainda não inicializado. Entre no admin e salve uma vez.']);
+try {
+  $pdo = aurora_db();
+  $auth = aurora_get_auth($pdo);
+} catch (Throwable $e) {
+  http_response_code(500);
+  echo json_encode(['error' => 'Falha na conexão MySQL', 'detail' => $e->getMessage()]);
   exit;
 }
 
-$stored = json_decode(file_get_contents($dataFile), true);
-$authPass = (string) ($stored['auth']['password'] ?? '');
-
-if ($password === '' || !hash_equals($authPass, $password)) {
+$authPass = (string) ($auth['password'] ?? '');
+if ($password === '' || $authPass === '' || !hash_equals($authPass, $password)) {
   http_response_code(401);
   echo json_encode(['error' => 'Senha inválida']);
   exit;

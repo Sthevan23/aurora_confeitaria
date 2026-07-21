@@ -1,11 +1,16 @@
 /**
  * storage.js — Aurora Confeitaria
- * Mesmo padrão do Gimarry: localStorage + api/data.php (Hostinger)
+ * Fonte única: MySQL via API Hostinger (sem dados locais / sem seed)
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const DATA_VERSION = 3;
+  const DATA_VERSION = 16;
+  const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
+  const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '');
+
   const API = (() => {
+    // No PC: sempre a API do domínio (banco Hostinger)
+    if (isLocalHost || location.protocol === 'file:') return PRODUCTION_API;
     const path = window.location.pathname || '';
     if (path.includes('/admin/')) {
       return path.replace(/\/admin\/.*$/, '/api/data.php');
@@ -17,37 +22,33 @@ const Storage = (() => {
   let cloudEnabled = false;
   let lastRemoteJson = '';
   let pollTimer = null;
+  let memoryData = null;
 
-  const defaultData = typeof AURORA_DEFAULT_DATA !== 'undefined'
-    ? AURORA_DEFAULT_DATA
-    : null;
-
-  function getDefault() {
-    if (defaultData) return structuredClone(defaultData);
+  function emptyStore() {
     return {
-      version: DATA_VERSION,
+      version: 0,
       settings: {
-        name: 'Aurora Confeitaria Artesanal',
-        tagline: 'Feito com amor',
+        name: '',
+        tagline: '',
         logo: '',
-        banner: 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg',
-        sobreImage: 'products/4c3b51e1-88fc-473a-a06d-e3f13e31c525.jpg',
-        whatsapp: '5535987216486',
-        instagram: 'https://www.instagram.com/a.aurora.confeitaria',
-        instagramUser: '@a.aurora.confeitaria',
+        banner: '',
+        sobreImage: '',
+        whatsapp: '',
+        instagram: '',
+        instagramUser: '',
         facebook: '',
-        email: 'contato@aurora.com',
-        address: 'Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil',
-        hours: 'Pedidos pelo WhatsApp',
+        email: '',
+        address: '',
+        hours: '',
         followers: '',
         posts: '',
         mapEmbed: '',
-        heroBadge: 'Confeitaria artesanal · Boa Esperança/MG',
+        heroBadge: '',
         heroStory: [],
-        sobreText1: 'A Aurora Confeitaria nasceu do sonho de transformar momentos simples em lembranças especiais.',
-        sobreText2: 'Seja bem-vindo à Aurora Confeitaria. Aqui, cada detalhe é feito para adoçar a sua história.',
+        sobreText1: '',
+        sobreText2: '',
       },
-      auth: { email: 'admin@aurora.com', password: 'aurora123' },
+      auth: { email: '', password: '' },
       categories: [],
       products: [],
       clients: [],
@@ -60,64 +61,31 @@ const Storage = (() => {
   }
 
   function init() {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) {
-      const data = getDefault();
-      data.version = DATA_VERSION;
-      localStorage.setItem(KEY, JSON.stringify(data));
-      return data;
-    }
-    try {
-      const data = JSON.parse(raw);
-      if (!Array.isArray(data.finance)) data.finance = [];
-      if (!data.version || data.version < DATA_VERSION) {
-        const fresh = getDefault();
-        data.settings = {
-          ...fresh.settings,
-          ...data.settings,
-          address: fresh.settings.address,
-          instagram: fresh.settings.instagram,
-          instagramUser: fresh.settings.instagramUser,
-        };
-        if (!Array.isArray(data.categories) || !data.categories.length) data.categories = fresh.categories;
-        if (!Array.isArray(data.products) || !data.products.length) {
-          data.products = fresh.products;
-        } else {
-          const mega = fresh.products.find((p) => p.id === 'p18');
-          data.products = data.products.map((p) => {
-            if (p.id === 'p18' || p.name === 'Marmitinha Ninho e Chocolate') {
-              return { ...p, ...mega };
-            }
-            return p;
-          });
-          if (!data.products.some((p) => p.id === 'p18') && mega) {
-            data.products.push(mega);
-          }
-        }
-        data.orders = data.orders || [];
-        data.clients = data.clients || [];
-        data.finance = data.finance || [];
-        data.auth = data.auth || fresh.auth;
-        data.version = DATA_VERSION;
-        localStorage.setItem(KEY, JSON.stringify(data));
-        return data;
-      }
-      localStorage.setItem(KEY, JSON.stringify(data));
-      return data;
-    } catch {
-      const data = getDefault();
-      localStorage.setItem(KEY, JSON.stringify(data));
-      return data;
-    }
+    // Não usa default-data nem localStorage de catálogo
+    try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+    if (!memoryData) memoryData = emptyStore();
+    return memoryData;
   }
 
   function getAll() {
-    return init();
+    if (!memoryData) return init();
+    return memoryData;
+  }
+
+  function setMemory(data) {
+    memoryData = data && typeof data === 'object' ? data : emptyStore();
+    if (!Array.isArray(memoryData.finance)) memoryData.finance = [];
+    if (!Array.isArray(memoryData.products)) memoryData.products = [];
+    if (!Array.isArray(memoryData.categories)) memoryData.categories = [];
+    if (!Array.isArray(memoryData.orders)) memoryData.orders = [];
+    if (!Array.isArray(memoryData.clients)) memoryData.clients = [];
+    if (!Array.isArray(memoryData.gallery)) memoryData.gallery = [];
+    return memoryData;
   }
 
   function save(data) {
-    data.version = DATA_VERSION;
-    localStorage.setItem(KEY, JSON.stringify(data));
+    data.version = data.version || DATA_VERSION;
+    setMemory(data);
     notifyUpdated();
     pushToCloud(data);
   }
@@ -139,7 +107,7 @@ const Storage = (() => {
     window.dispatchEvent(new CustomEvent('storage-updated'));
   }
 
-  async function fetchWithTimeout(url, options = {}, ms = 2500) {
+  async function fetchWithTimeout(url, options = {}, ms = 12000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
     try {
@@ -150,14 +118,11 @@ const Storage = (() => {
   }
 
   async function probeCloud() {
-    if (location.protocol === 'file:') {
-      cloudEnabled = false;
-      return false;
-    }
     try {
       const res = await fetchWithTimeout(API + '?ping=' + Date.now());
       const type = (res.headers.get('content-type') || '').toLowerCase();
-      cloudEnabled = res.ok && type.includes('json');
+      const body = await res.clone().json().catch(() => ({}));
+      cloudEnabled = res.ok && type.includes('json') && body.ok !== false;
       return cloudEnabled;
     } catch {
       cloudEnabled = false;
@@ -171,20 +136,26 @@ const Storage = (() => {
       const res = await fetchWithTimeout(API + '?t=' + Date.now());
       if (!res.ok) return false;
       const remote = await res.json();
-      if (remote.empty) return false;
-      const local = getAll();
+      if (remote.empty || remote.error) return false;
+      if (!remote.settings || !Array.isArray(remote.products)) return false;
       const merged = {
-        ...local,
-        version: remote.version || local.version,
-        settings: remote.settings || local.settings,
-        categories: remote.categories || local.categories,
-        products: remote.products || local.products,
-        reviews: remote.reviews || local.reviews,
-        faq: remote.faq || local.faq,
-        gallery: remote.gallery || local.gallery,
+        ...emptyStore(),
+        version: remote.version || DATA_VERSION,
+        settings: remote.settings,
+        categories: remote.categories || [],
+        products: remote.products || [],
+        reviews: remote.reviews || [],
+        faq: remote.faq || [],
+        gallery: remote.gallery || [],
+        // admin-only ficam vazios no público
+        clients: [],
+        orders: [],
+        finance: [],
+        auth: { email: '', password: '' },
       };
-      localStorage.setItem(KEY, JSON.stringify(merged));
+      setMemory(merged);
       lastRemoteJson = JSON.stringify(merged);
+      notifyUpdated();
       return true;
     } catch {
       return false;
@@ -203,7 +174,7 @@ const Storage = (() => {
       if (!remote || !remote.settings) return false;
       const json = JSON.stringify(remote);
       if (json === lastRemoteJson) return true;
-      localStorage.setItem(KEY, json);
+      setMemory(remote);
       lastRemoteJson = json;
       notifyUpdated();
       return true;
@@ -213,7 +184,6 @@ const Storage = (() => {
   }
 
   async function pushToCloud(data) {
-    if (location.protocol === 'file:') return false;
     const password = getAdminPassword() || (data.auth && data.auth.password) || '';
     if (!password) return false;
     try {
@@ -226,6 +196,7 @@ const Storage = (() => {
         body: JSON.stringify({ data }),
       });
       if (res.ok) {
+        setMemory(data);
         lastRemoteJson = JSON.stringify(data);
         cloudEnabled = true;
         return true;
@@ -236,45 +207,29 @@ const Storage = (() => {
     }
   }
 
-  function loginLocal(email, password) {
-    const { auth } = getAll();
-    return auth.email === email && auth.password === password;
-  }
-
   async function loginRemote(email, password) {
-    if (!(await probeCloud())) {
-      const ok = loginLocal(email, password);
-      if (ok) setAdminPassword(password);
-      return ok;
-    }
+    if (!(await probeCloud())) return false;
     try {
       const res = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', email, password }),
       });
-      const result = await res.json();
-      if (res.status === 404) {
-        if (loginLocal(email, password)) {
-          setAdminPassword(password);
-          await pushToCloud(getAll());
-          return true;
-        }
-        return false;
-      }
+      const result = await res.json().catch(() => ({}));
       if (!res.ok || !result.ok) return false;
-      localStorage.setItem(KEY, JSON.stringify(result.data));
+      setMemory(result.data);
       lastRemoteJson = JSON.stringify(result.data);
       setAdminPassword(password);
       cloudEnabled = true;
       return true;
     } catch {
-      if (loginLocal(email, password)) {
-        setAdminPassword(password);
-        return true;
-      }
       return false;
     }
+  }
+
+  function loginLocal() {
+    // Desativado: login só via MySQL/API
+    return false;
   }
 
   function startCloudPolling(intervalMs = 5000) {
@@ -293,8 +248,11 @@ const Storage = (() => {
   async function initCloud({ full = false } = {}) {
     init();
     const ok = full ? await pullFull() : await pullPublic();
-    if (!ok && full && getAdminPassword()) await pushToCloud(getAll());
-    return cloudEnabled;
+    return !!(ok && cloudEnabled);
+  }
+
+  function getApiUrl() {
+    return API;
   }
 
   function getSettings() { return getAll().settings; }
@@ -558,19 +516,27 @@ const Storage = (() => {
       source: 'site',
     };
 
-    data.orders.push(order);
-    localStorage.setItem(KEY, JSON.stringify(data));
-
-    try {
-      if (location.protocol !== 'file:') {
-        await fetch(API, {
+    if (location.protocol !== 'file:' || isLocalHost) {
+      try {
+        const res = await fetch(API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'create_order', order, client }),
         });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || !result.ok) {
+          return { ok: false, error: result.error || 'Falha ao gravar no MySQL' };
+        }
+        if (result.orderNumber) order.number = result.orderNumber;
+      } catch {
+        return { ok: false, error: 'Sem conexão com a API Hostinger' };
       }
-    } catch { /* local ok */ }
+    } else {
+      return { ok: false, error: 'Abra pelo localhost ou pelo site online' };
+    }
 
+    data.orders.push(order);
+    setMemory(data);
     return { ok: true, order };
   }
 
@@ -591,7 +557,7 @@ const Storage = (() => {
     initCloud, pullFull, pullPublic, pushToCloud,
     isCloudEnabled, setAdminPassword, getAdminPassword,
     startCloudPolling, stopCloudPolling, notifyUpdated,
-    createPublicOrder,
+    createPublicOrder, getApiUrl,
   };
 })();
 
