@@ -722,6 +722,11 @@ function openProductModal(product = null) {
       </div>
       <div class="form-group">
         <label class="checkbox-label">
+          <input type="checkbox" id="prod-price-from" ${product?.priceFrom ? 'checked' : ''}> Mostrar como "a partir de"
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
           <input type="checkbox" id="prod-promo" ${product?.promoActive ? 'checked' : ''}> Em promoção
         </label>
       </div>
@@ -752,6 +757,7 @@ function openProductModal(product = null) {
       name: document.getElementById('prod-name').value.trim(),
       description: document.getElementById('prod-desc').value.trim(),
       price: parseFloat(document.getElementById('prod-price').value) || 0,
+      priceFrom: document.getElementById('prod-price-from').checked,
       categoryId: document.getElementById('prod-category').value,
       image: document.getElementById('prod-image').value.trim() || 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg',
       featured: document.getElementById('prod-featured').checked,

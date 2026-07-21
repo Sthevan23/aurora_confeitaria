@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=50">
+  <link rel="stylesheet" href="admin.css?v=51">
   <script>
     if (sessionStorage.getItem('admin_logged') !== 'true') {
       location.replace('login.html');
@@ -357,8 +357,8 @@
             </div>
           </div>
           <div class="form-group">
-            <label for="set-address">Cidade / endereço</label>
-            <input type="text" id="set-address">
+            <label for="set-address">Endereço completo</label>
+            <input type="text" id="set-address" placeholder="Rua, número, cidade, CEP">
           </div>
           <div class="form-group">
             <label for="set-hours">Horário / atendimento</label>
@@ -416,8 +416,8 @@
   <div class="toast-admin" id="toast-admin"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="../js/default-data.js"></script>
-  <script src="../js/storage.js?v=3"></script>
+  <script src="../js/default-data.js?v=3"></script>
+  <script src="../js/storage.js?v=5"></script>
   <script src="admin.js?v=3"></script>
 </body>
 </html>

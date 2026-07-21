@@ -27,10 +27,12 @@ function waLink(base, text) {
 function displayPrice(product) {
   const sale = Storage.productDisplayPrice(product);
   if (!(sale > 0)) return 'Consultar';
+  const money = Storage.formatCurrency(sale);
+  const label = product.priceFrom ? `a partir de ${money}` : money;
   if (product.promoActive && product.promoPrice != null && Number(product.price) > 0) {
-    return `<s class="product-card__price-old">${Storage.formatCurrency(product.price)}</s><span>${Storage.formatCurrency(sale)}</span>`;
+    return `<s class="product-card__price-old">${Storage.formatCurrency(product.price)}</s><span>${label}</span>`;
   }
-  return Storage.formatCurrency(sale);
+  return label;
 }
 
 function imgSrc(path) {
@@ -44,19 +46,35 @@ function getProducts() {
 
 function applySettings() {
   const s = Storage.getSettings();
-  const place = `${(s.address || 'Boa Esperança — MG').replace('—', ',').replace('MG', 'MG')}`.includes('Boa')
-    ? 'Boa Esperança, MG'
-    : s.address || 'Boa Esperança, MG';
-
-  const wa = s.whatsapp || '5535987216486';
-  const waUrl = wa.startsWith('http') ? wa : `https://wa.me/${String(wa).replace(/\D/g, '')}`;
-  const ig = s.instagram || 'https://www.instagram.com/a.aurora.confeitaria/';
+  const address =
+    s.address ||
+    'Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil';
+  const placeShort = 'Boa Esperança, MG';
+  const ig = s.instagram || 'https://www.instagram.com/a.aurora.confeitaria';
   const igUser = s.instagramUser || '@a.aurora.confeitaria';
-  const orderText = 'Olá, Aurora! Quero fazer um pedido 😊';
+  const mapsUrl =
+    'https://www.google.com/maps/search/?api=1&query=' +
+    encodeURIComponent(address);
 
-  document.getElementById('hero-place').textContent = place;
-  document.getElementById('footer-place').textContent = place;
+  document.getElementById('hero-place').textContent = placeShort;
+  document.getElementById('footer-place').textContent = address;
   document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+  const contactAddress = document.getElementById('contact-address');
+  if (contactAddress) {
+    contactAddress.textContent = address;
+    contactAddress.href = mapsUrl;
+  }
+
+  const footerPlace = document.getElementById('footer-place');
+  if (footerPlace && footerPlace.tagName === 'A') {
+    footerPlace.href = mapsUrl;
+  }
+
+  const orderPickup = document.getElementById('order-pickup');
+  if (orderPickup) {
+    orderPickup.textContent = `Retire em ${address}.`;
+  }
 
   const heroBg = document.getElementById('hero-bg');
   if (heroBg && s.banner) {
@@ -76,20 +94,23 @@ function applySettings() {
       .join('');
   }
 
-  const pairs = [
-    ['header-whatsapp', waLink(waUrl, orderText)],
-    ['hero-whatsapp', waLink(waUrl, orderText)],
-    ['order-whatsapp', waLink(waUrl, 'Olá, Aurora! Quero fazer uma encomenda 😊')],
-    ['contact-whatsapp', waLink(waUrl, orderText)],
-    ['footer-whatsapp', waUrl],
-    ['whatsapp-float', waLink(waUrl, 'Olá, Aurora! Gostaria de fazer um pedido 😊')],
+  const orderText = 'Olá, Aurora! Quero fazer um pedido 😊';
+  const orderMsg = 'Olá, Aurora! Quero fazer uma encomenda 😊';
+  const floatMsg = 'Olá, Aurora! Gostaria de fazer um pedido 😊';
+  const waBase = getStoreWhatsAppBase();
+
+  [
+    ['header-whatsapp', `${waBase}?text=${encodeURIComponent(orderText)}`],
+    ['hero-whatsapp', `${waBase}?text=${encodeURIComponent(orderText)}`],
+    ['order-whatsapp-btn', `${waBase}?text=${encodeURIComponent(orderMsg)}`],
+    ['contact-whatsapp', `${waBase}?text=${encodeURIComponent(orderText)}`],
+    ['footer-whatsapp', waBase],
+    ['whatsapp-float', `${waBase}?text=${encodeURIComponent(floatMsg)}`],
     ['hero-instagram', ig],
     ['order-instagram', ig],
     ['contact-instagram', ig],
     ['footer-instagram', ig],
-  ];
-
-  pairs.forEach(([id, href]) => {
+  ].forEach(([id, href]) => {
     const el = document.getElementById(id);
     if (el) el.href = href;
   });
@@ -100,9 +121,9 @@ function applySettings() {
   if (footerIg) footerIg.textContent = igUser;
   const contactWa = document.getElementById('contact-whatsapp');
   if (contactWa) {
-    const digits = String(wa).replace(/\D/g, '');
-    contactWa.textContent = digits.length >= 11
-      ? `WhatsApp (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`
+    const local = normalizePhoneBR(s.whatsapp || '5535987216486');
+    contactWa.textContent = local.length >= 10
+      ? `WhatsApp ${formatPhoneBR(local)}`
       : 'WhatsApp';
   }
 }
@@ -210,7 +231,11 @@ function openLightbox(productId) {
   document.getElementById('order-error').hidden = true;
   document.getElementById('order-nome').value = '';
   document.getElementById('order-sobrenome').value = '';
-  document.getElementById('order-whatsapp').value = '';
+  const phoneInput = getOrderPhoneInput();
+  if (phoneInput) {
+    phoneInput.value = '';
+    bindPhoneMask(phoneInput);
+  }
 
   const flavorsBox = document.getElementById('lightbox-flavors');
   if (Array.isArray(product.flavors) && product.flavors.length) {
@@ -262,10 +287,44 @@ function closeLightbox() {
   selectedProduct = null;
 }
 
-async function finalizeOrder() {
-  const nome = document.getElementById('order-nome').value.trim();
-  const sobrenome = document.getElementById('order-sobrenome').value.trim();
-  const phone = document.getElementById('order-whatsapp').value.replace(/\D/g, '');
+function getOrderPhoneInput() {
+  return (
+    document.getElementById('order-phone') ||
+    document.querySelector('#order-lightbox input[name="order-phone"]') ||
+    document.querySelector('#order-lightbox input[type="tel"]')
+  );
+}
+
+function getStoreWhatsAppBase() {
+  const s = Storage.getSettings();
+  const raw = String(s.whatsapp || '5535987216486').trim();
+  if (/^https?:\/\//i.test(raw)) {
+    const match = raw.match(/wa\.me\/(\d+)/i);
+    return match ? `https://wa.me/${match[1]}` : raw.split('?')[0];
+  }
+  let digits = raw.replace(/\D/g, '');
+  if (!digits) digits = '5535987216486';
+  if (!digits.startsWith('55')) digits = `55${digits}`;
+  return `https://wa.me/${digits}`;
+}
+
+function openWhatsAppChat(text) {
+  const url = `${getStoreWhatsAppBase()}?text=${encodeURIComponent(text)}`;
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  if (mobile) {
+    window.location.href = url;
+    return;
+  }
+  const win = window.open(url, '_blank');
+  if (!win) window.location.href = url;
+}
+
+function finalizeOrder() {
+  const nome = document.getElementById('order-nome')?.value.trim() || '';
+  const sobrenome = document.getElementById('order-sobrenome')?.value.trim() || '';
+  const phoneInput = getOrderPhoneInput();
+  if (phoneInput) phoneInput.value = formatPhoneBR(phoneInput.value);
+  const phone = normalizePhoneBR(phoneInput?.value || '');
   const error = document.getElementById('order-error');
 
   if (!nome || !sobrenome) {
@@ -273,9 +332,10 @@ async function finalizeOrder() {
     error.hidden = false;
     return;
   }
-  if (phone.length < 10) {
+  if (phone.length < 10 || phone.length > 11) {
     error.textContent = 'Informe um WhatsApp válido com DDD.';
     error.hidden = false;
+    phoneInput?.focus();
     return;
   }
   if (selectedProduct?.flavors?.length && !selectedFlavor) {
@@ -286,11 +346,27 @@ async function finalizeOrder() {
 
   error.hidden = true;
   const product = selectedProduct;
+  if (!product) return;
+
   const unit = Storage.productDisplayPrice(product);
   const detail = [product.size, selectedFlavor].filter(Boolean).join(' · ');
   const fullName = `${nome} ${sobrenome}`;
+  const size = product.size ? `\nTamanho: ${product.size}` : '';
+  const flavorLine = selectedFlavor ? `\nSabor: ${selectedFlavor}` : '';
+  const priceLabel = unit > 0
+    ? (product.priceFrom ? `a partir de ${Storage.formatCurrency(unit)}` : Storage.formatCurrency(unit))
+    : 'Consultar';
+  const message =
+    `Olá, Aurora! Quero fazer um pedido:\n\n` +
+    `Produto: ${product.name}${size}${flavorLine}\n` +
+    `Valor: ${priceLabel}\n\n` +
+    `Cliente: ${fullName}\n` +
+    `WhatsApp: ${formatPhoneBR(phone)}`;
 
-  await Storage.createPublicOrder({
+  // Abre o WhatsApp na hora (antes do await) para não ser bloqueado no celular
+  openWhatsAppChat(message);
+
+  Storage.createPublicOrder({
     fullName,
     whatsapp: phone,
     items: [{
@@ -302,24 +378,8 @@ async function finalizeOrder() {
     }],
     total: unit,
     notes: detail,
-  });
+  }).catch(() => {});
 
-  const s = Storage.getSettings();
-  const waUrl = s.whatsapp?.startsWith('http')
-    ? s.whatsapp
-    : `https://wa.me/${String(s.whatsapp || '5535987216486').replace(/\D/g, '')}`;
-
-  const size = product.size ? `\nTamanho: ${product.size}` : '';
-  const flavorLine = selectedFlavor ? `\nSabor: ${selectedFlavor}` : '';
-  const priceLabel = unit > 0 ? Storage.formatCurrency(unit) : 'Consultar';
-  const message =
-    `Olá, Aurora! Quero fazer um pedido:\n\n` +
-    `Produto: ${product.name}${size}${flavorLine}\n` +
-    `Valor: ${priceLabel}\n\n` +
-    `Cliente: ${fullName}\n` +
-    `WhatsApp: ${phone}`;
-
-  window.open(`${waUrl}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   closeLightbox();
 }
 
@@ -334,17 +394,23 @@ function initHeader() {
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  toggle?.addEventListener('click', () => {
-    const open = nav.classList.toggle('is-open');
+  function setMenuOpen(open) {
+    nav.classList.toggle('is-open', open);
     toggle.classList.toggle('is-open', open);
     toggle.setAttribute('aria-expanded', String(open));
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+
+  toggle?.addEventListener('click', () => {
+    setMenuOpen(!nav.classList.contains('is-open'));
   });
 
   nav?.querySelectorAll('a').forEach((a) => {
-    a.addEventListener('click', () => {
-      nav.classList.remove('is-open');
-      toggle.classList.remove('is-open');
-    });
+    a.addEventListener('click', () => setMenuOpen(false));
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 860) setMenuOpen(false);
   });
 }
 
@@ -360,21 +426,101 @@ function initLightbox() {
   });
 }
 
+function normalizePhoneBR(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('55') && digits.length >= 12) digits = digits.slice(2);
+  return digits.slice(0, 11);
+}
+
+function formatPhoneBR(value) {
+  const digits = normalizePhoneBR(value);
+  if (!digits) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function bindPhoneMask(input) {
+  if (!input || input.dataset.maskBound === '1') return;
+  input.dataset.maskBound = '1';
+
+  const apply = () => {
+    const formatted = formatPhoneBR(input.value);
+    if (input.value !== formatted) input.value = formatted;
+  };
+
+  input.addEventListener('input', apply);
+  input.addEventListener('blur', apply);
+  input.addEventListener('paste', () => requestAnimationFrame(apply));
+  apply();
+}
+
 function initContactForm() {
+  bindPhoneMask(document.getElementById('contact-phone'));
+  bindPhoneMask(getOrderPhoneInput());
+
+  // Máscara também por delegação (garante no lightbox)
+  document.getElementById('order-lightbox')?.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el && (el.id === 'order-phone' || el.name === 'order-phone' || el.type === 'tel')) {
+      const formatted = formatPhoneBR(el.value);
+      if (el.value !== formatted) {
+        const pos = el.selectionStart;
+        el.value = formatted;
+        if (typeof pos === 'number') el.setSelectionRange(formatted.length, formatted.length);
+      }
+    }
+  });
+
   document.getElementById('contact-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    const name = String(data.get('name') || '');
-    const phone = String(data.get('phone') || '');
-    const message = String(data.get('message') || '');
-    const s = Storage.getSettings();
-    const waUrl = s.whatsapp?.startsWith('http')
-      ? s.whatsapp
-      : `https://wa.me/${String(s.whatsapp || '5535987216486').replace(/\D/g, '')}`;
+    const name = String(data.get('name') || '').trim();
+    const phone = formatPhoneBR(data.get('phone'));
+    const digits = normalizePhoneBR(phone);
+    const message = String(data.get('message') || '').trim();
+    const ok = document.getElementById('contact-ok');
+
+    if (digits.length < 10) {
+      if (ok) {
+        ok.hidden = false;
+        ok.className = 'contact__feedback contact__feedback--err';
+        ok.textContent = 'Informe um WhatsApp válido com DDD.';
+      }
+      return;
+    }
+
     const text = `Olá, Aurora! Sou ${name}.\nWhatsApp: ${phone}\n\n${message}`;
-    document.getElementById('contact-ok').hidden = false;
-    window.open(`${waUrl}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+    if (ok) {
+      ok.hidden = false;
+      ok.className = 'contact__feedback contact__feedback--ok';
+      ok.textContent = 'Mensagem pronta. Vamos te redirecionar ao WhatsApp.';
+    }
+    openWhatsAppChat(text);
   });
+}
+
+function initHeroWords() {
+  const root = document.getElementById('hero-words');
+  if (!root) return;
+  const words = [...root.querySelectorAll('span')];
+  if (words.length < 2) return;
+
+  let index = words.findIndex((w) => w.classList.contains('is-active'));
+  if (index < 0) index = 0;
+  words.forEach((w, i) => w.classList.toggle('is-active', i === index));
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced) return;
+
+  setInterval(() => {
+    words[index].classList.remove('is-active');
+    index = (index + 1) % words.length;
+    words[index].classList.add('is-active');
+  }, 2200);
 }
 
 function initParallax() {
@@ -400,6 +546,7 @@ async function boot() {
   initHeader();
   initLightbox();
   initContactForm();
+  initHeroWords();
   initParallax();
 
   window.addEventListener('storage-updated', () => {

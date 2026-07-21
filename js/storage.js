@@ -4,7 +4,7 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const DATA_VERSION = 1;
+  const DATA_VERSION = 3;
   const API = (() => {
     const path = window.location.pathname || '';
     if (path.includes('/admin/')) {
@@ -33,11 +33,11 @@ const Storage = (() => {
         banner: 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg',
         sobreImage: 'products/4c3b51e1-88fc-473a-a06d-e3f13e31c525.jpg',
         whatsapp: '5535987216486',
-        instagram: 'https://www.instagram.com/a.aurora.confeitaria/',
+        instagram: 'https://www.instagram.com/a.aurora.confeitaria',
         instagramUser: '@a.aurora.confeitaria',
         facebook: '',
         email: 'contato@aurora.com',
-        address: 'Boa Esperança — MG',
+        address: 'Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil',
         hours: 'Pedidos pelo WhatsApp',
         followers: '',
         posts: '',
@@ -72,13 +72,35 @@ const Storage = (() => {
       if (!Array.isArray(data.finance)) data.finance = [];
       if (!data.version || data.version < DATA_VERSION) {
         const fresh = getDefault();
-        fresh.orders = data.orders || [];
-        fresh.clients = data.clients || [];
-        fresh.finance = data.finance || [];
-        fresh.auth = data.auth || fresh.auth;
-        fresh.version = DATA_VERSION;
-        localStorage.setItem(KEY, JSON.stringify(fresh));
-        return fresh;
+        data.settings = {
+          ...fresh.settings,
+          ...data.settings,
+          address: fresh.settings.address,
+          instagram: fresh.settings.instagram,
+          instagramUser: fresh.settings.instagramUser,
+        };
+        if (!Array.isArray(data.categories) || !data.categories.length) data.categories = fresh.categories;
+        if (!Array.isArray(data.products) || !data.products.length) {
+          data.products = fresh.products;
+        } else {
+          const mega = fresh.products.find((p) => p.id === 'p18');
+          data.products = data.products.map((p) => {
+            if (p.id === 'p18' || p.name === 'Marmitinha Ninho e Chocolate') {
+              return { ...p, ...mega };
+            }
+            return p;
+          });
+          if (!data.products.some((p) => p.id === 'p18') && mega) {
+            data.products.push(mega);
+          }
+        }
+        data.orders = data.orders || [];
+        data.clients = data.clients || [];
+        data.finance = data.finance || [];
+        data.auth = data.auth || fresh.auth;
+        data.version = DATA_VERSION;
+        localStorage.setItem(KEY, JSON.stringify(data));
+        return data;
       }
       localStorage.setItem(KEY, JSON.stringify(data));
       return data;

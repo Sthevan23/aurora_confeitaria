@@ -30,6 +30,8 @@
 
 body {
   font-family: var(--font-body);
+  font-variant-numeric: lining-nums;
+  font-feature-settings: 'lnum' 1;
   background: var(--bg);
   color: var(--texto);
   display: flex;
@@ -475,9 +477,11 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 }
 
 .stat-card__value {
+  font-family: var(--font-body);
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--marrom-escuro);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 /* --- Cards --- */

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="Aurora Confeitaria Artesanal — Boa Esperança/MG. Brownies, cookies, potes e doces feitos com amor.">
   <meta name="author" content="Aurora Confeitaria Artesanal">
   <meta property="og:title" content="Aurora Confeitaria Artesanal">
@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <header class="header" id="header">
@@ -47,8 +47,10 @@
           <span class="hero__title-line">Feito com amor para</span>
           <span class="hero__title-line hero__title-line--dynamic">
             deixar seu dia mais
-            <span class="hero__words" aria-hidden="true">
-              <span>doce</span><span>especial</span><span>feliz</span><span>doce</span>
+            <span class="hero__words" id="hero-words" aria-hidden="true">
+              <span class="is-active">doce</span>
+              <span>especial</span>
+              <span>feliz</span>
             </span>
             <span class="sr-only">doce</span>
           </span>
@@ -116,7 +118,7 @@
           <h2 class="section__title">Pedidos simples, atendimento próximo</h2>
           <p class="section__lead">Preferimos conversar com calma para acertar cada detalhe. O canal principal é o WhatsApp da Aurora.</p>
           <div class="order__cta">
-            <a class="btn btn--secondary" id="order-whatsapp" href="#" target="_blank" rel="noopener">Pedir no WhatsApp</a>
+            <a class="btn btn--secondary" id="order-whatsapp-btn" href="#" target="_blank" rel="noopener">Pedir no WhatsApp</a>
             <a class="btn btn--ghost" id="order-instagram" href="#" target="_blank" rel="noopener">Ver Instagram</a>
           </div>
         </div>
@@ -139,7 +141,7 @@
             <span>03</span>
             <div>
               <h3>Retire com carinho</h3>
-              <p>Combinamos a retirada em Boa Esperança, MG.</p>
+              <p id="order-pickup">Retire em Rua dos Expedicionários, 237, Boa Esperança MG.</p>
             </div>
           </li>
         </ol>
@@ -154,13 +156,13 @@
           <p class="section__lead">Fale pelo WhatsApp ou Instagram. Respondemos com carinho para combinar sabores, datas e quantidades.</p>
           <div class="contact__channels">
             <a id="contact-whatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
-            <a id="contact-instagram" href="#" target="_blank" rel="noopener">@a.aurora.confeitaria</a>
+            <a id="contact-instagram" href="https://www.instagram.com/a.aurora.confeitaria" target="_blank" rel="noopener">@a.aurora.confeitaria</a>
+            <a id="contact-address" href="#" target="_blank" rel="noopener">Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil</a>
           </div>
         </div>
         <form class="contact__form" id="contact-form">
-          <label>Nome<input name="name" required minlength="2" placeholder="Seu nome"></label>
-          <label>E-mail<input name="email" type="email" required placeholder="voce@email.com"></label>
-          <label>Telefone / WhatsApp<input name="phone" required minlength="8" placeholder="(00) 00000-0000"></label>
+          <label>Nome<input name="name" required minlength="2" placeholder="Seu nome" autocomplete="name"></label>
+          <label>Telefone / WhatsApp<input name="phone" id="contact-phone" type="tel" required minlength="14" maxlength="15" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel"></label>
           <label>Mensagem<textarea name="message" required minlength="5" rows="4" placeholder="Conte o que deseja encomendar"></textarea></label>
           <button class="btn btn--primary" type="submit">Enviar mensagem</button>
           <p class="contact__feedback contact__feedback--ok" id="contact-ok" hidden>Mensagem pronta. Vamos te redirecionar ao WhatsApp.</p>
@@ -176,11 +178,11 @@
           <span class="brand-logo__name">Aurora</span>
           <span class="brand-logo__sub">Confeitaria Artesanal</span>
         </span>
-        <p id="footer-place">Boa Esperança, MG</p>
+        <p><a id="footer-place" href="#" target="_blank" rel="noopener">Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil</a></p>
       </div>
       <div class="footer__meta">
         <a id="footer-whatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
-        <a id="footer-instagram" href="#" target="_blank" rel="noopener">@a.aurora.confeitaria</a>
+        <a id="footer-instagram" href="https://www.instagram.com/a.aurora.confeitaria" target="_blank" rel="noopener">@a.aurora.confeitaria</a>
         <p>© <span id="footer-year"></span> Aurora Confeitaria Artesanal</p>
       </div>
     </div>
@@ -216,7 +218,7 @@
                     <label class="order-field">Nome *<input type="text" id="order-nome" placeholder="Nome" autocomplete="given-name"></label>
                     <label class="order-field">Sobrenome *<input type="text" id="order-sobrenome" placeholder="Sobrenome" autocomplete="family-name"></label>
                   </div>
-                  <label class="order-field">Telefone / WhatsApp *<input type="tel" id="order-whatsapp" placeholder="DDD + número" inputmode="tel"></label>
+                  <label class="order-field">Telefone / WhatsApp *<input type="tel" id="order-phone" name="order-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
                 </div>
               </div>
             </div>
@@ -230,8 +232,8 @@
     </div>
   </div>
 
-  <script src="js/default-data.js"></script>
-  <script src="js/storage.js?v=2"></script>
-  <script src="script.js?v=2"></script>
+  <script src="js/default-data.js?v=3"></script>
+  <script src="js/storage.js?v=5"></script>
+  <script src="script.js?v=9"></script>
 </body>
 </html>
