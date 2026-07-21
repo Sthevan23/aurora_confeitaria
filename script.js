@@ -40,6 +40,50 @@ function imgSrc(path) {
   return path.replace(/^\//, '');
 }
 
+function getPublicAssetUrl(path) {
+  const src = imgSrc(path);
+  if (!src) return '';
+  if (/^https?:\/\//i.test(src)) return src;
+  try {
+    return new URL(src, window.location.href).href;
+  } catch {
+    return src;
+  }
+}
+
+function buildOrderWhatsAppMessage({ product, fullName, phone, flavor, unit }) {
+  const s = Storage.getSettings();
+  const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
+  const priceLabel = unit > 0
+    ? (product.priceFrom ? `a partir de ${Storage.formatCurrency(unit)}` : Storage.formatCurrency(unit))
+    : 'Consultar';
+  const size = product.size || 'A combinar';
+  const flavorLine = flavor || (Array.isArray(product.flavors) && product.flavors.length ? 'A combinar' : 'Não se aplica');
+  const imageUrl = getPublicAssetUrl(product.image);
+  const imageBlock = imageUrl
+    ? `\nFoto do produto:\n${imageUrl}\n`
+    : '\n';
+
+  return (
+    `PEDIDO RECEBIDO - ${storeName}\n\n` +
+    `CLIENTE:\n` +
+    `Nome: ${fullName}\n` +
+    `Telefone: ${formatPhoneBR(phone)}\n\n` +
+    `ITENS DO PEDIDO:\n\n` +
+    `* ITEM: ${product.name}\n` +
+    `  Tamanho/modelo: ${size}\n` +
+    `  Sabor: ${flavorLine}\n` +
+    `  Valor: ${priceLabel}\n` +
+    `--------------------------------\n` +
+    `PRODUTO ESCOLHIDO:${imageBlock}` +
+    `--------------------------------\n` +
+    `TOTAL A PAGAR: ${priceLabel}\n` +
+    `--------------------------------\n\n` +
+    `Aguardo confirmação de disponibilidade e pagamento.\n\n` +
+    `Obrigado!`
+  );
+}
+
 function getProducts() {
   return Storage.getProducts().filter((p) => p.active !== false);
 }
@@ -351,17 +395,13 @@ function finalizeOrder() {
   const unit = Storage.productDisplayPrice(product);
   const detail = [product.size, selectedFlavor].filter(Boolean).join(' · ');
   const fullName = `${nome} ${sobrenome}`;
-  const size = product.size ? `\nTamanho: ${product.size}` : '';
-  const flavorLine = selectedFlavor ? `\nSabor: ${selectedFlavor}` : '';
-  const priceLabel = unit > 0
-    ? (product.priceFrom ? `a partir de ${Storage.formatCurrency(unit)}` : Storage.formatCurrency(unit))
-    : 'Consultar';
-  const message =
-    `Olá, Aurora! Quero fazer um pedido:\n\n` +
-    `Produto: ${product.name}${size}${flavorLine}\n` +
-    `Valor: ${priceLabel}\n\n` +
-    `Cliente: ${fullName}\n` +
-    `WhatsApp: ${formatPhoneBR(phone)}`;
+  const message = buildOrderWhatsAppMessage({
+    product,
+    fullName,
+    phone,
+    flavor: selectedFlavor,
+    unit,
+  });
 
   // Abre o WhatsApp na hora (antes do await) para não ser bloqueado no celular
   openWhatsAppChat(message);
