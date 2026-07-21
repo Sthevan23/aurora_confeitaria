@@ -1,0 +1,72 @@
+.marquee {
+  width: 100%;
+  padding-block: 0.35rem;
+  overflow: hidden;
+}
+
+.marquee__scroller {
+  overflow: hidden;
+  padding-block: 1rem;
+  background: linear-gradient(
+    90deg,
+    #fff1f4,
+    #ffe4ec,
+    #f7efe8,
+    #fff1f4
+  );
+  background-size: 300% 100%;
+  animation: aurora-gradient 18s ease infinite;
+}
+
+.marquee__track {
+  display: flex;
+  width: max-content;
+  gap: 0;
+  animation: aurora-rolling 28s linear infinite;
+}
+
+.marquee__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding-inline: 0.35rem 0;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.2vw, 1.25rem);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-brown);
+  white-space: nowrap;
+}
+
+.marquee__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--color-pink);
+  margin-inline: 1.25rem 0.35rem;
+  flex-shrink: 0;
+}
+
+@keyframes aurora-rolling {
+  to {
+    transform: translateX(-25%);
+  }
+}
+
+@keyframes aurora-gradient {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee__track,
+  .marquee__scroller {
+    animation: none;
+  }
+}

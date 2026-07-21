@@ -1,0 +1,13 @@
+.home-loading {
+  min-height: 100svh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  background: var(--color-cream);
+  color: var(--color-brown-soft);
+}
+
+.home-loading .brand-logo {
+  animation: float-soft 3.5s ease-in-out infinite;
+}

@@ -1,0 +1,23 @@
+{
+  "name": "aurora-confeitaria",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aurora Confeitaria Artesanal — monorepo frontend + backend (Clean Architecture)",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "build:frontend": "npm run build -w frontend",
+    "build:backend": "npm run build -w backend",
+    "start:backend": "npm run start -w backend",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

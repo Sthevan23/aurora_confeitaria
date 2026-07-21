@@ -1,0 +1,222 @@
+.products {
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(252, 120, 144, 0.05) 40%, transparent 100%);
+}
+
+.products__intro {
+  max-width: 40rem;
+  margin-bottom: var(--space-6);
+  text-align: center;
+  margin-inline: auto;
+}
+
+.products__intro .section__lead {
+  margin-inline: auto;
+}
+
+.products__intro em {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--color-pink-deep);
+}
+
+.products__intro .reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity var(--duration) var(--ease-out),
+    transform var(--duration) var(--ease-out);
+}
+
+.products__intro.is-visible .reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.products__grid .product-card {
+  opacity: 1;
+  transform: none;
+  transition:
+    transform 350ms var(--ease-out),
+    box-shadow 350ms var(--ease-out);
+  animation: rise-in 620ms var(--ease-out) both;
+}
+
+.products__grid .product-card:hover {
+  transform: translateY(-8px) scale(1.02);
+}
+
+.products__grid .product-card:nth-child(1) { animation-delay: 40ms; }
+.products__grid .product-card:nth-child(2) { animation-delay: 90ms; }
+.products__grid .product-card:nth-child(3) { animation-delay: 140ms; }
+.products__grid .product-card:nth-child(4) { animation-delay: 180ms; }
+.products__grid .product-card:nth-child(5) { animation-delay: 220ms; }
+.products__grid .product-card:nth-child(6) { animation-delay: 260ms; }
+
+.products__filter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-bottom: var(--space-7);
+}
+
+.filter-btn {
+  border: 1px solid var(--color-line);
+  background: var(--color-white);
+  color: var(--color-brown-soft);
+  border-radius: var(--radius-pill);
+  padding: 0.55rem 1.1rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 200ms var(--ease-out),
+    color 200ms var(--ease-out),
+    border-color 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+
+.filter-btn:hover {
+  border-color: var(--color-pink);
+  color: var(--color-pink-deep);
+  transform: translateY(-1px);
+}
+
+.filter-btn.is-active {
+  background: var(--color-pink);
+  border-color: var(--color-pink);
+  color: var(--color-white);
+}
+
+.products__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.product-card {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  transition:
+    transform 280ms var(--ease-out),
+    box-shadow 280ms var(--ease-out);
+}
+
+.product-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lift);
+}
+
+.product-card__img {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: var(--color-pink-mist);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.product-card__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 500ms var(--ease-out);
+}
+
+.product-card:hover .product-card__img img {
+  transform: scale(1.08);
+}
+
+.product-card__badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  background: var(--color-pink);
+  color: var(--color-white);
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.product-card__body {
+  padding: 1.25rem 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.product-card__category {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-brown-soft);
+  margin-bottom: 0.4rem;
+}
+
+.product-card__name {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: var(--color-brown-deep);
+  margin-bottom: 0.45rem;
+  line-height: 1.2;
+}
+
+.product-card__desc {
+  color: var(--color-brown-soft);
+  font-size: 0.92rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.product-card__footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.product-card__price {
+  font-weight: 700;
+  color: var(--color-pink-deep);
+  font-size: 1.05rem;
+}
+
+.btn--sm {
+  min-height: 2.4rem;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 980px) {
+  .products__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .products__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-card__img {
+    aspect-ratio: 4 / 5;
+  }
+}

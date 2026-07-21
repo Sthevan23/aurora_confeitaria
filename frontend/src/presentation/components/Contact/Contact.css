@@ -1,0 +1,108 @@
+.contact__grid {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+
+.contact__grid .reveal {
+  opacity: 0;
+}
+
+.contact__grid.is-visible .reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.contact__channels {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1.5rem;
+}
+
+.contact__channels a {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  color: var(--color-pink-deep);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-pink) 50%, transparent);
+  width: fit-content;
+  transition: color 200ms var(--ease-out);
+}
+
+.contact__channels a:hover {
+  color: var(--color-brown);
+}
+
+.contact__ig {
+  display: inline-block;
+  margin-top: 1.5rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--color-pink-deep);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-pink) 50%, transparent);
+  transition: color 200ms var(--ease-out);
+}
+
+.contact__ig:hover {
+  color: var(--color-brown);
+}
+
+.contact__form {
+  display: grid;
+  gap: 1rem;
+}
+
+.contact__form label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-brown-soft);
+}
+
+.contact__form input,
+.contact__form textarea {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.9rem 1rem;
+  color: var(--color-brown-deep);
+  outline: none;
+  transition:
+    border-color 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
+}
+
+.contact__form input:focus,
+.contact__form textarea:focus {
+  border-color: var(--color-pink);
+  box-shadow: 0 0 0 3px rgba(252, 120, 144, 0.18);
+}
+
+.contact__form textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.contact__feedback {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.contact__feedback--ok {
+  color: #2f6b45;
+}
+
+.contact__feedback--err {
+  color: #9b2c3a;
+}
+
+@media (max-width: 860px) {
+  .contact__grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,48 @@
+:root {
+  /* Brand — extracted from logo */
+  --color-pink: #fc7890;
+  --color-pink-soft: #f9a8b8;
+  --color-pink-deep: #e85a76;
+  --color-pink-mist: #fff1f4;
+  --color-brown: #583818;
+  --color-brown-soft: #7a5638;
+  --color-brown-deep: #3d2610;
+  --color-cream: #fffaf8;
+  --color-white: #ffffff;
+  --color-line: rgba(88, 56, 24, 0.12);
+
+  --font-brand: 'Allura', cursive;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+  --space-9: 7rem;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.5rem;
+  --radius-pill: 999px;
+
+  --shadow-soft: 0 18px 40px rgba(88, 56, 24, 0.08);
+  --shadow-lift: 0 24px 48px rgba(232, 90, 118, 0.14);
+
+  --container: min(1120px, calc(100% - 2.5rem));
+  --header-h: 4.5rem;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration: 700ms;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --container: min(1120px, calc(100% - 1.5rem));
+    --header-h: 4rem;
+  }
+}

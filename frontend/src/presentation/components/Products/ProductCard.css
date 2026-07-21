@@ -1,0 +1,19 @@
+.product-card__size {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: rgba(255, 250, 248, 0.94);
+  color: var(--color-brown-deep);
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.product-card__flavor-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  color: var(--color-pink-deep);
+  font-weight: 600;
+}
