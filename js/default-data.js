@@ -13,6 +13,8 @@ const AURORA_DEFAULT_DATA = {
     "email": "contato@aurora.com",
     "address": "Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil",
     "hours": "Pedidos pelo WhatsApp",
+    "deliveryFee": 7,
+    "deliveryNote": "Bairros mais afastados: consultar",
     "followers": "",
     "posts": "",
     "mapEmbed": "",
@@ -77,7 +79,7 @@ const AURORA_DEFAULT_DATA = {
     {
       "id": "p-sandu",
       "name": "Sandubrownies",
-      "description": "Sanduíche de brownie com recheios especiais. Preço conforme o sabor — ex.: Ninho com Nutella e Morangos R$ 29 (2 por R$ 55).",
+      "description": "Sanduíche de brownie com recheios especiais. Escolha o sabor: R$ 28 (Ninho ou Brigadeiro com Nutella), R$ 31 (com morango) ou R$ 34 (Ferrero).",
       "price": 28,
       "priceFrom": true,
       "categoryId": "cat-sandu",
@@ -87,17 +89,17 @@ const AURORA_DEFAULT_DATA = {
       "size": "",
       "flavors": [
         "Ninho com Nutella",
-        "Ninho com Nutella e Morangos",
-        "Ferrero",
-        "Brigadeiro com Morango e Nutella",
-        "Brigadeiro com Nutella"
+        "Brigadeiro com Nutella",
+        "Ninho com Nutella e Morango",
+        "Brigadeiro com Nutella e Morango",
+        "Ferrero"
       ],
       "flavorPrices": {
         "Ninho com Nutella": 28,
-        "Ninho com Nutella e Morangos": 29,
-        "Ferrero": 34,
-        "Brigadeiro com Morango e Nutella": 31,
-        "Brigadeiro com Nutella": 28
+        "Brigadeiro com Nutella": 28,
+        "Ninho com Nutella e Morango": 31,
+        "Brigadeiro com Nutella e Morango": 31,
+        "Ferrero": 34
       },
       "promoActive": false,
       "promoPrice": null,
@@ -165,7 +167,7 @@ const AURORA_DEFAULT_DATA = {
       "description": "Mini bolo de pote 140 ml — R$ 8 cada ou 2 por R$ 15. Escolha o sabor.",
       "price": 8,
       "categoryId": "cat-potes",
-      "image": "products/7288ea2a-8bcc-424b-a2d9-e13d9b0d2cc7.jpg",
+      "image": "https://iili.io/CNBagxj.jpg",
       "featured": true,
       "slug": "mini-bolo-de-pote",
       "size": "140ml",

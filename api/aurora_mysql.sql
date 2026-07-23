@@ -13,6 +13,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `order_items`;
 DROP TABLE IF EXISTS `orders`;
 DROP TABLE IF EXISTS `finance`;
+DROP TABLE IF EXISTS `coupons`;
 DROP TABLE IF EXISTS `clients`;
 DROP TABLE IF EXISTS `product_flavor_prices`;
 DROP TABLE IF EXISTS `product_flavors`;
@@ -54,6 +55,8 @@ CREATE TABLE `settings` (
   `hero_story` JSON DEFAULT NULL,
   `sobre_text1` TEXT,
   `sobre_text2` TEXT,
+  `delivery_fee` DECIMAL(10,2) NOT NULL DEFAULT 7.00,
+  `delivery_note` VARCHAR(255) DEFAULT 'Bairros mais afastados: consultar',
   `data_version` INT UNSIGNED NOT NULL DEFAULT 16,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
@@ -75,7 +78,7 @@ CREATE TABLE `products` (
   `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `price_from` TINYINT(1) NOT NULL DEFAULT 0,
   `category_id` VARCHAR(64) NOT NULL,
-  `image` VARCHAR(500) DEFAULT NULL,
+  `image` MEDIUMTEXT DEFAULT NULL,
   `featured` TINYINT(1) NOT NULL DEFAULT 0,
   `slug` VARCHAR(190) NOT NULL,
   `size` VARCHAR(50) DEFAULT NULL,
@@ -175,6 +178,20 @@ CREATE TABLE `finance` (
   KEY `idx_finance_type` (`type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `coupons` (
+  `id` VARCHAR(64) NOT NULL,
+  `code` VARCHAR(40) NOT NULL,
+  `type` ENUM('percent','fixed') NOT NULL DEFAULT 'percent',
+  `value` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `min_order` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `label` VARCHAR(120) DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_coupons_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `reviews` (
   `id` VARCHAR(64) NOT NULL,
   `author` VARCHAR(120) NOT NULL,
@@ -255,21 +272,21 @@ INSERT INTO `products` (
   `featured`, `slug`, `size`, `promo_active`, `promo_price`, `promo_label`,
   `best_seller`, `active`, `sort_order`
 ) VALUES (
-  'p-sandu', 'Sandubrownies', 'Sanduíche de brownie com recheios especiais. Preço conforme o sabor — ex.: Ninho com Nutella e Morangos R$ 29 (2 por R$ 55).', 28, 1,
+  'p-sandu', 'Sandubrownies', 'Sanduíche de brownie com recheios especiais. Escolha o sabor: R$ 28 (Ninho ou Brigadeiro com Nutella), R$ 31 (com morango) ou R$ 34 (Ferrero).', 28, 1,
   'cat-sandu', 'products/4c3b51e1-88fc-473a-a06d-e3f13e31c525.jpg', 1, 'sandubrownies', '',
   0, NULL, '',
   1, 1, 2
 );
 INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Ninho com Nutella', 0);
-INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Ninho com Nutella e Morangos', 1);
-INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Ferrero', 2);
-INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Brigadeiro com Morango e Nutella', 3);
-INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Brigadeiro com Nutella', 4);
+INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Brigadeiro com Nutella', 1);
+INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Ninho com Nutella e Morango', 2);
+INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Brigadeiro com Nutella e Morango', 3);
+INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p-sandu', 'Ferrero', 4);
 INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Ninho com Nutella', 28);
-INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Ninho com Nutella e Morangos', 29);
-INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Ferrero', 34);
-INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Brigadeiro com Morango e Nutella', 31);
 INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Brigadeiro com Nutella', 28);
+INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Ninho com Nutella e Morango', 31);
+INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Brigadeiro com Nutella e Morango', 31);
+INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES ('p-sandu', 'Ferrero', 34);
 
 INSERT INTO `products` (
   `id`, `name`, `description`, `price`, `price_from`, `category_id`, `image`,

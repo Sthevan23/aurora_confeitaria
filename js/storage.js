@@ -23,6 +23,8 @@ const Storage = (() => {
   let lastRemoteJson = '';
   let pollTimer = null;
   let memoryData = null;
+  let pushInFlight = false;
+  let pendingPushData = null;
 
   function emptyStore() {
     return {
@@ -54,6 +56,7 @@ const Storage = (() => {
       clients: [],
       orders: [],
       finance: [],
+      coupons: [],
       reviews: [],
       faq: [],
       gallery: [],
@@ -75,6 +78,7 @@ const Storage = (() => {
   function setMemory(data) {
     memoryData = data && typeof data === 'object' ? data : emptyStore();
     if (!Array.isArray(memoryData.finance)) memoryData.finance = [];
+    if (!Array.isArray(memoryData.coupons)) memoryData.coupons = [];
     if (!Array.isArray(memoryData.products)) memoryData.products = [];
     if (!Array.isArray(memoryData.categories)) memoryData.categories = [];
     if (!Array.isArray(memoryData.orders)) memoryData.orders = [];
@@ -87,7 +91,15 @@ const Storage = (() => {
     data.version = data.version || DATA_VERSION;
     setMemory(data);
     notifyUpdated();
-    pushToCloud(data);
+    // fire-and-forget (compatível com o resto do admin)
+    pushToCloud(data).catch(() => {});
+  }
+
+  async function saveAsync(data) {
+    data.version = data.version || DATA_VERSION;
+    setMemory(data);
+    notifyUpdated();
+    return pushToCloud(data);
   }
 
   function getAdminPassword() {
@@ -147,6 +159,7 @@ const Storage = (() => {
         reviews: remote.reviews || [],
         faq: remote.faq || [],
         gallery: remote.gallery || [],
+        coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
         // admin-only ficam vazios no público
         clients: [],
         orders: [],
@@ -186,24 +199,52 @@ const Storage = (() => {
   async function pushToCloud(data) {
     const password = getAdminPassword() || (data.auth && data.auth.password) || '';
     if (!password) return false;
+
+    // Evita corrida: se já está enviando, agenda o mais recente
+    if (pushInFlight) {
+      pendingPushData = data;
+      return false;
+    }
+
+    pushInFlight = true;
     try {
-      const res = await fetch(API, {
+      const payload = JSON.stringify({ data });
+      // Foto em data-URL deixa o JSON grande — dá mais tempo
+      const timeoutMs = payload.length > 400000 ? 90000 : 25000;
+      const res = await fetchWithTimeout(API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Password': password,
         },
-        body: JSON.stringify({ data }),
-      });
-      if (res.ok) {
+        body: payload,
+      }, timeoutMs);
+
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
+      if (res.ok && result.ok !== false) {
         setMemory(data);
         lastRemoteJson = JSON.stringify(data);
         cloudEnabled = true;
         return true;
       }
+      console.warn('[Aurora] Falha ao salvar na nuvem', res.status, result);
       return false;
-    } catch {
+    } catch (err) {
+      console.warn('[Aurora] Erro de rede ao salvar', err);
       return false;
+    } finally {
+      pushInFlight = false;
+      if (pendingPushData) {
+        const next = pendingPushData;
+        pendingPushData = null;
+        await pushToCloud(next);
+      }
     }
   }
 
@@ -235,7 +276,10 @@ const Storage = (() => {
   function startCloudPolling(intervalMs = 5000) {
     stopCloudPolling();
     if (!getAdminPassword()) return;
-    pollTimer = setInterval(() => pullFull(), intervalMs);
+    pollTimer = setInterval(() => {
+      if (pushInFlight) return; // não sobrescreve enquanto salva
+      pullFull();
+    }, intervalMs);
   }
 
   function stopCloudPolling() {
@@ -267,6 +311,11 @@ const Storage = (() => {
     data.products = products;
     save(data);
   }
+  async function saveProductsAsync(products) {
+    const data = getAll();
+    data.products = products;
+    return saveAsync(data);
+  }
   function getCategories() { return getAll().categories; }
   function saveCategories(categories) {
     const data = getAll();
@@ -292,6 +341,41 @@ const Storage = (() => {
     const data = getAll();
     data.finance = entries;
     save(data);
+  }
+  function getCoupons() {
+    return getAll().coupons || [];
+  }
+  function saveCoupons(coupons) {
+    const data = getAll();
+    data.coupons = coupons;
+    save(data);
+  }
+  async function saveCouponsAsync(coupons) {
+    const data = getAll();
+    data.coupons = coupons;
+    return saveAsync(data);
+  }
+  function findCouponByCode(code) {
+    const needle = String(code || '').trim().toUpperCase();
+    if (!needle) return null;
+    return getCoupons().find((c) => {
+      const active = c.active !== false;
+      return active && String(c.code || '').trim().toUpperCase() === needle;
+    }) || null;
+  }
+  function calcCouponDiscount(coupon, subtotal) {
+    const total = Math.max(0, Number(subtotal) || 0);
+    if (!coupon || total <= 0) return 0;
+    const minOrder = Number(coupon.minOrder) || 0;
+    if (total < minOrder) return 0;
+    const value = Number(coupon.value) || 0;
+    if (value <= 0) return 0;
+    if (coupon.type === 'fixed') {
+      return Math.min(total, value);
+    }
+    // percent
+    const pct = Math.min(100, Math.max(0, value));
+    return Math.round((total * (pct / 100)) * 100) / 100;
   }
   function addFinanceEntry({ type, amount, description, category }) {
     const entries = getFinance();
@@ -543,18 +627,19 @@ const Storage = (() => {
   return {
     init, getAll, save,
     getSettings, saveSettings,
-    getProducts, saveProducts,
+    getProducts, saveProducts, saveProductsAsync,
     getCategories, saveCategories,
     getClients, saveClients,
     getOrders, saveOrders,
     getFinance, saveFinance, addFinanceEntry, deleteFinanceEntry, getFinanceSummary,
+    getCoupons, saveCoupons, saveCouponsAsync, findCouponByCode, calcCouponDiscount,
     getReviews, getFaq, getGallery,
     login, loginAsync, updatePassword,
     generateId, generateOrderNumber,
     getCategoryName, formatCurrency, productDisplayPrice,
     getDashboardStats, getMonthlyRevenue,
     getFinishedOrdersByPeriod, getProductSalesBreakdown, getSalesPeriodStats,
-    initCloud, pullFull, pullPublic, pushToCloud,
+    initCloud, pullFull, pullPublic, pushToCloud, saveAsync,
     isCloudEnabled, setAdminPassword, getAdminPassword,
     startCloudPolling, stopCloudPolling, notifyUpdated,
     createPublicOrder, getApiUrl,

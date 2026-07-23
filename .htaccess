@@ -1,0 +1,17 @@
+# Aurora Confeitaria — URL limpa
+# /index.html → https://auroraconfeitaria.com.br/
+
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Força HTTPS (Hostinger)
+  RewriteCond %{HTTPS} off
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # Esconde index.html da barra de endereço
+  RewriteCond %{THE_REQUEST} /index\.html[\s?] [NC]
+  RewriteRule ^index\.html$ / [R=301,L]
+</IfModule>

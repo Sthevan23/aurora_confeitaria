@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
   <header class="header" id="header">
@@ -27,13 +27,12 @@
         <a href="#galeria">Galeria</a>
         <a href="#encomendas">Encomendas</a>
         <a href="#contato">Contato</a>
-        <button type="button" class="header__cart" id="cart-open" aria-label="Abrir carrinho">
-          <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
-          <span>Carrinho</span>
-          <span class="header__cart-count" id="cart-count" hidden>0</span>
-        </button>
-        <a class="header__cta" id="header-whatsapp" href="#" target="_blank" rel="noopener">Fazer Pedido</a>
       </nav>
+      <button type="button" class="header__cart" id="cart-open" aria-label="Abrir carrinho">
+        <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
+        <span>Carrinho</span>
+        <span class="header__cart-count" id="cart-count" hidden>0</span>
+      </button>
     </div>
   </header>
 
@@ -69,7 +68,7 @@
 
         <div class="hero__actions">
           <a class="btn btn--primary" href="#produtos">Ver cardápio</a>
-          <a class="btn btn--secondary" id="hero-whatsapp" href="#" target="_blank" rel="noopener">Pedir no WhatsApp</a>
+          <a class="btn btn--secondary" href="#produtos">Montar pedido</a>
           <a class="btn btn--ghost" id="hero-instagram" href="#" target="_blank" rel="noopener">Instagram</a>
         </div>
       </div>
@@ -113,7 +112,7 @@
         <div class="products__intro is-visible">
           <p class="section__eyebrow">Cardápio</p>
           <h2 class="section__title">Nossos <em>produtos</em></h2>
-          <p class="section__lead">Toque em Pedir para ver a foto, escolher o sabor e finalizar no WhatsApp.</p>
+          <p class="section__lead">Toque em Adicionar, escolha o sabor e finalize no carrinho. O pedido entra no sistema e você confirma no WhatsApp.</p>
         </div>
         <div class="products__filter is-visible" id="category-filter"></div>
         <div class="products__grid is-visible" id="products-grid"></div>
@@ -136,9 +135,9 @@
         <div class="order__copy">
           <p class="section__eyebrow">Encomendas</p>
           <h2 class="section__title">Pedidos simples, atendimento próximo</h2>
-          <p class="section__lead">Preferimos conversar com calma para acertar cada detalhe. O canal principal é o WhatsApp da Aurora.</p>
+          <p class="section__lead">Monte o pedido pelo cardápio do site. Assim a Aurora recebe tudo certinho no painel e vocês só confirmam no WhatsApp.</p>
           <div class="order__cta">
-            <a class="btn btn--secondary" id="order-whatsapp-btn" href="#" target="_blank" rel="noopener">Pedir no WhatsApp</a>
+            <a class="btn btn--secondary" href="#produtos">Montar pedido no cardápio</a>
             <a class="btn btn--ghost" id="order-instagram" href="#" target="_blank" rel="noopener">Ver Instagram</a>
           </div>
         </div>
@@ -146,22 +145,22 @@
           <li>
             <span>01</span>
             <div>
-              <h3>Escolha o sabor</h3>
-              <p>Navegue pelo cardápio e escolha copos, sandubrownies, cookies ou potes.</p>
+              <h3>Escolha no cardápio</h3>
+              <p>Toque no produto, escolha o sabor e adicione ao carrinho.</p>
             </div>
           </li>
           <li>
             <span>02</span>
             <div>
-              <h3>Peça no WhatsApp</h3>
-              <p>Envie o pedido pelo WhatsApp para alinhar sabor, quantidade e data.</p>
+              <h3>Finalize o pedido</h3>
+              <p>Preencha seus dados no carrinho. O pedido já fica registrado para a Aurora.</p>
             </div>
           </li>
           <li>
             <span>03</span>
             <div>
-              <h3>Retire com carinho</h3>
-              <p id="order-pickup">Retire em Rua dos Expedicionários, 237, Boa Esperança MG.</p>
+              <h3>Retirada ou entrega</h3>
+              <p id="order-pickup">Retire em Rua dos Expedicionários, 237, Boa Esperança MG. Entrega: R$&nbsp;7,00 na região central · bairros mais afastados, consultar.</p>
             </div>
           </li>
         </ol>
@@ -199,6 +198,14 @@
                 <strong>Rua dos Expedicionários, 237 · Boa Esperança, MG</strong>
               </span>
             </a>
+            <div class="contact__delivery" aria-label="Taxa de entrega">
+              <i class="fa-solid fa-motorcycle" aria-hidden="true"></i>
+              <span>
+                <small>Entrega</small>
+                <strong id="contact-delivery-fee">R$ 7,00 — região central</strong>
+                <em id="contact-delivery-note">Bairros mais afastados: consultar no WhatsApp</em>
+              </span>
+            </div>
           </div>
         </aside>
       </div>
@@ -241,12 +248,12 @@
     <div class="footer__bottom">
       <div class="container footer__bottom-inner">
         <p>© <span id="footer-year"></span> Aurora Confeitaria Artesanal</p>
-        <p>Pedidos pelo WhatsApp · Retirada na loja</p>
+        <p id="footer-delivery">Pedidos pelo WhatsApp · Entrega R$ 7 (centro) · Bairros afastados consultar</p>
       </div>
     </div>
   </footer>
 
-  <a class="whatsapp-float" id="whatsapp-float" href="#" target="_blank" rel="noopener" aria-label="WhatsApp">
+  <a class="whatsapp-float" id="whatsapp-float" href="#" target="_blank" rel="noopener" aria-label="Dúvidas no WhatsApp">
     <i class="fab fa-whatsapp"></i>
   </a>
 
@@ -264,10 +271,50 @@
       <div class="cart-drawer__body" id="cart-items"></div>
       <footer class="cart-drawer__foot">
         <div class="cart-drawer__total" id="cart-total-row" hidden>
+          <span>Subtotal</span>
+          <strong id="cart-subtotal">R$ 0,00</strong>
+        </div>
+        <div class="cart-drawer__discount" id="cart-discount-row" hidden>
+          <span>Desconto <em id="cart-coupon-label"></em></span>
+          <strong id="cart-discount">− R$ 0,00</strong>
+        </div>
+        <div class="cart-drawer__total cart-drawer__total--final" id="cart-final-row" hidden>
           <span>Total</span>
           <strong id="cart-total">R$ 0,00</strong>
         </div>
+        <div class="cart-coupon" id="cart-coupon" hidden>
+          <label class="order-field" for="cart-coupon-input">Cupom de desconto</label>
+          <div class="cart-coupon__row">
+            <input type="text" id="cart-coupon-input" placeholder="Ex: AURORA10" autocomplete="off" maxlength="40">
+            <button type="button" class="btn btn--ghost" id="cart-coupon-apply">Aplicar</button>
+          </div>
+          <p class="cart-coupon__msg" id="cart-coupon-msg" hidden></p>
+          <button type="button" class="cart-coupon__remove" id="cart-coupon-remove" hidden>Remover cupom</button>
+        </div>
         <div class="cart-checkout" id="cart-checkout" hidden>
+          <p class="cart-checkout__label">Como prefere receber?</p>
+          <div class="fulfillment" role="radiogroup" aria-label="Entrega ou retirada">
+            <label class="fulfillment__option">
+              <input type="radio" name="cart-fulfillment" value="retirada" id="cart-fulfillment-retirada" checked>
+              <span>
+                <strong>Retirada</strong>
+                <small>Buscar no local</small>
+              </span>
+            </label>
+            <label class="fulfillment__option">
+              <input type="radio" name="cart-fulfillment" value="entrega" id="cart-fulfillment-entrega">
+              <span>
+                <strong>Entrega</strong>
+                <small data-delivery-fee-label>R$ 7,00 no centro</small>
+              </span>
+            </label>
+          </div>
+          <p class="cart-drawer__delivery" id="cart-delivery-note" hidden>
+            Entrega: <strong>R$ 7,00</strong> região central · bairros mais afastados, consultar no WhatsApp
+          </p>
+          <p class="cart-drawer__delivery cart-drawer__delivery--pickup" id="cart-pickup-note" hidden>
+            Retirada em <strong>Rua dos Expedicionários, 237</strong> · Boa Esperança, MG
+          </p>
           <p class="cart-checkout__label">Dados para finalizar</p>
           <div class="cart-checkout__fields">
             <label class="order-field">Nome *<input type="text" id="cart-nome" placeholder="Nome" autocomplete="given-name"></label>
@@ -275,7 +322,7 @@
           </div>
           <label class="order-field">WhatsApp *<input type="tel" id="cart-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
           <p class="cart-drawer__error" id="cart-error" hidden></p>
-          <button type="button" class="btn btn--secondary" id="cart-checkout-btn">Finalizar no WhatsApp</button>
+          <button type="button" class="btn btn--secondary" id="cart-checkout-btn">Finalizar pedido</button>
         </div>
         <div class="cart-drawer__actions">
           <button type="button" class="btn btn--ghost" id="cart-continue">Continuar comprando</button>
@@ -312,6 +359,23 @@
                     <label class="order-field">Sobrenome *<input type="text" id="order-sobrenome" placeholder="Sobrenome" autocomplete="family-name"></label>
                   </div>
                   <label class="order-field">Telefone / WhatsApp *<input type="tel" id="order-phone" name="order-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
+                  <p class="cart-checkout__label cart-checkout__label--spaced">Como prefere receber?</p>
+                  <div class="fulfillment" role="radiogroup" aria-label="Entrega ou retirada">
+                    <label class="fulfillment__option">
+                      <input type="radio" name="order-fulfillment" value="retirada" id="order-fulfillment-retirada" checked>
+                      <span>
+                        <strong>Retirada</strong>
+                        <small>Buscar no local</small>
+                      </span>
+                    </label>
+                    <label class="fulfillment__option">
+                      <input type="radio" name="order-fulfillment" value="entrega" id="order-fulfillment-entrega">
+                      <span>
+                        <strong>Entrega</strong>
+                        <small data-delivery-fee-label>R$ 7,00 no centro</small>
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -320,14 +384,14 @@
         <div class="order-lightbox__actions">
           <p class="order-lightbox__error" id="order-error" hidden></p>
           <button type="button" class="btn btn--secondary" id="lightbox-add-cart">Adicionar ao carrinho</button>
-          <button type="button" class="btn btn--ghost" id="lightbox-order">Pedir só este no WhatsApp</button>
+          <button type="button" class="btn btn--ghost" id="lightbox-order">Finalizar este pedido</button>
         </div>
       </div>
     </div>
   </div>
 
   <script src="js/default-data.js?v=16"></script>
-  <script src="js/storage.js?v=20"></script>
-  <script src="script.js?v=23"></script>
+  <script src="js/storage.js?v=24"></script>
+  <script src="script.js?v=35"></script>
 </body>
 </html>

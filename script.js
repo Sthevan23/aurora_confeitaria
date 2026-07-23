@@ -22,7 +22,72 @@ let selectedFlavor = '';
 
 const CART_KEY = 'aurora_cart_v1';
 const CUSTOMER_KEY = 'aurora_customer_v1';
+const COUPON_KEY = 'aurora_coupon_v1';
+const FULFILLMENT_KEY = 'aurora_fulfillment_v1';
 let cartItems = loadCart();
+let appliedCoupon = loadAppliedCoupon();
+
+function getFulfillment() {
+  const saved = localStorage.getItem(FULFILLMENT_KEY);
+  return saved === 'entrega' ? 'entrega' : 'retirada';
+}
+
+function setFulfillment(value) {
+  const next = value === 'entrega' ? 'entrega' : 'retirada';
+  localStorage.setItem(FULFILLMENT_KEY, next);
+  syncFulfillmentUI(next);
+  return next;
+}
+
+function syncFulfillmentUI(value) {
+  const mode = value === 'entrega' ? 'entrega' : (value || getFulfillment());
+  const cartRet = document.getElementById('cart-fulfillment-retirada');
+  const cartEnt = document.getElementById('cart-fulfillment-entrega');
+  const orderRet = document.getElementById('order-fulfillment-retirada');
+  const orderEnt = document.getElementById('order-fulfillment-entrega');
+  if (cartRet) cartRet.checked = mode === 'retirada';
+  if (cartEnt) cartEnt.checked = mode === 'entrega';
+  if (orderRet) orderRet.checked = mode === 'retirada';
+  if (orderEnt) orderEnt.checked = mode === 'entrega';
+
+  const deliveryNote = document.getElementById('cart-delivery-note');
+  const pickupNote = document.getElementById('cart-pickup-note');
+  const checkoutOpen = !document.getElementById('cart-checkout')?.hidden;
+  const hasItems = cartItems.length > 0 && checkoutOpen;
+  if (deliveryNote) deliveryNote.hidden = !(hasItems && mode === 'entrega');
+  if (pickupNote) pickupNote.hidden = !(hasItems && mode === 'retirada');
+}
+
+function fulfillmentWhatsAppBlock(mode) {
+  const fee = formatDeliveryFeeText();
+  const note = getDeliveryNote();
+  if (mode === 'entrega') {
+    return (
+      `FORMA: Entrega\n` +
+      `Taxa região central: ${fee}\n` +
+      `${note}\n` +
+      `(Confirmar endereço no WhatsApp)`
+    );
+  }
+  return (
+    `FORMA: Retirada no local\n` +
+    `Endereço: Rua dos Expedicionários, 237, Boa Esperança MG`
+  );
+}
+
+function getDeliveryFee() {
+  const n = Number(Storage.getSettings()?.deliveryFee);
+  return Number.isFinite(n) && n >= 0 ? n : 7;
+}
+
+function getDeliveryNote() {
+  const note = String(Storage.getSettings()?.deliveryNote || '').trim();
+  return note || 'Bairros mais afastados: consultar';
+}
+
+function formatDeliveryFeeText() {
+  return Storage.formatCurrency(getDeliveryFee());
+}
 
 function loadCart() {
   try {
@@ -32,6 +97,27 @@ function loadCart() {
   } catch {
     return [];
   }
+}
+
+function loadAppliedCoupon() {
+  try {
+    const raw = localStorage.getItem(COUPON_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== 'object' || !parsed.code) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveAppliedCoupon(coupon) {
+  appliedCoupon = coupon;
+  if (!coupon) {
+    localStorage.removeItem(COUPON_KEY);
+  } else {
+    localStorage.setItem(COUPON_KEY, JSON.stringify(coupon));
+  }
+  renderCartUI();
 }
 
 function loadCustomer() {
@@ -115,6 +201,7 @@ function fillCustomerFields() {
     bindPhoneMask(cartPhone);
   }
 
+  syncFulfillmentUI(getFulfillment());
   updateCustomerSummary();
 
   const acc = document.getElementById('acc-customer');
@@ -139,6 +226,28 @@ function cartCount() {
 
 function cartTotal() {
   return cartItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+}
+
+function cartDiscount() {
+  if (!appliedCoupon) return 0;
+  return Storage.calcCouponDiscount(appliedCoupon, cartTotal());
+}
+
+function cartPayable() {
+  return Math.max(0, cartTotal() - cartDiscount());
+}
+
+function resolveLiveCoupon(coupon) {
+  if (!coupon?.code) return null;
+  const live = Storage.findCouponByCode(coupon.code);
+  if (!live) return null;
+  return {
+    code: live.code,
+    type: live.type,
+    value: live.value,
+    minOrder: live.minOrder || 0,
+    label: live.label || '',
+  };
 }
 
 function addToCart(item) {
@@ -171,6 +280,7 @@ function removeFromCart(key) {
 
 function clearCart() {
   cartItems = [];
+  saveAppliedCoupon(null);
   saveCart();
 }
 
@@ -193,15 +303,26 @@ function displayPrice(product, flavor) {
 
 function resolveProductPrice(product, flavor) {
   if (flavor && product.flavorPrices && product.flavorPrices[flavor] != null) {
-    return Number(product.flavorPrices[flavor]);
+    const flavorPrice = Number(product.flavorPrices[flavor]);
+    // Se o sabor usa o preço cheio e há promoção, mantém a promo
+    if (
+      product.promoActive &&
+      product.promoPrice != null &&
+      Number(product.price) > 0 &&
+      flavorPrice === Number(product.price)
+    ) {
+      return Number(product.promoPrice);
+    }
+    return flavorPrice;
   }
   return Storage.productDisplayPrice(product);
 }
 
 function imgSrc(path) {
   if (!path) path = 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg';
-  const clean = String(path).replace(/^\//, '');
-  if (/^https?:\/\//i.test(clean)) return clean;
+  const raw = String(path).trim();
+  if (/^(data:|blob:|https?:)/i.test(raw)) return raw;
+  const clean = raw.replace(/^\//, '');
   // No localhost, imagens vêm do site online (sem pasta local)
   if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '')) {
     return `https://auroraconfeitaria.com.br/${clean}`;
@@ -212,6 +333,8 @@ function imgSrc(path) {
 function getPublicAssetUrl(path) {
   const src = imgSrc(path);
   if (!src) return '';
+  // data/blob não serve no WhatsApp
+  if (/^(data:|blob:)/i.test(src)) return '';
   if (/^https?:\/\//i.test(src)) return src;
   try {
     return new URL(src, window.location.href).href;
@@ -235,10 +358,14 @@ function buildOrderWhatsAppMessage({ product, fullName, phone, flavor, unit }) {
   });
 }
 
-function buildCartWhatsAppMessage({ fullName, phone, items }) {
+function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment }) {
   const s = Storage.getSettings();
   const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
-  const total = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+  const coupon = appliedCoupon ? resolveLiveCoupon(appliedCoupon) : null;
+  const discount = coupon ? Storage.calcCouponDiscount(coupon, subtotal) : 0;
+  const total = Math.max(0, subtotal - discount);
+  const mode = fulfillment === 'entrega' || fulfillment === 'retirada' ? fulfillment : getFulfillment();
   const lines = items.map((item) => {
     const qty = Number(item.qty) || 1;
     const unit = Number(item.price) || 0;
@@ -259,6 +386,14 @@ function buildCartWhatsAppMessage({ fullName, phone, items }) {
     );
   }).join('\n');
 
+  const couponBlock = coupon && discount > 0
+    ? (
+      `CUPOM: ${coupon.code}\n` +
+      `Desconto: − ${Storage.formatCurrency(discount)}\n` +
+      `Subtotal: ${Storage.formatCurrency(subtotal)}\n`
+    )
+    : '';
+
   return (
     `PEDIDO RECEBIDO - ${storeName}\n\n` +
     `CLIENTE:\n` +
@@ -266,7 +401,10 @@ function buildCartWhatsAppMessage({ fullName, phone, items }) {
     `Telefone: ${formatPhoneBR(phone)}\n\n` +
     `ITENS DO PEDIDO (${items.length}):\n\n` +
     `${lines}\n` +
+    `${couponBlock}` +
     `TOTAL A PAGAR: ${Storage.formatCurrency(total)}\n` +
+    `--------------------------------\n` +
+    `${fulfillmentWhatsAppBlock(mode)}\n` +
     `--------------------------------\n\n` +
     `Aguardo confirmação de disponibilidade e pagamento.\n\n` +
     `Obrigado!`
@@ -318,7 +456,33 @@ function applySettings() {
 
   const orderPickup = document.getElementById('order-pickup');
   if (orderPickup) {
-    orderPickup.textContent = `Retire em ${address}.`;
+    orderPickup.textContent =
+      `Retire em ${address}. Entrega: ${formatDeliveryFeeText()} na região central · ${getDeliveryNote()}.`;
+  }
+
+  const contactDelivery = document.getElementById('contact-delivery-fee');
+  if (contactDelivery) {
+    contactDelivery.textContent = `${formatDeliveryFeeText()} — região central`;
+  }
+  const contactDeliveryNote = document.getElementById('contact-delivery-note');
+  if (contactDeliveryNote) {
+    contactDeliveryNote.textContent = getDeliveryNote();
+  }
+
+  const footerDelivery = document.getElementById('footer-delivery');
+  if (footerDelivery) {
+    footerDelivery.textContent =
+      `Pedidos pelo WhatsApp · Entrega ${formatDeliveryFeeText()} (centro) · ${getDeliveryNote()}`;
+  }
+
+  const feeLabel = formatDeliveryFeeText();
+  document.querySelectorAll('[data-delivery-fee-label]').forEach((el) => {
+    el.textContent = `${feeLabel} no centro`;
+  });
+  const cartDeliveryNote = document.getElementById('cart-delivery-note');
+  if (cartDeliveryNote) {
+    cartDeliveryNote.innerHTML =
+      `Entrega: <strong>${feeLabel}</strong> região central · ${getDeliveryNote()} no WhatsApp`;
   }
 
   const heroBg = document.getElementById('hero-bg');
@@ -340,14 +504,10 @@ function applySettings() {
   }
 
   const orderText = 'Olá, Aurora! Quero fazer um pedido 😊';
-  const orderMsg = 'Olá, Aurora! Quero fazer uma encomenda 😊';
-  const floatMsg = 'Olá, Aurora! Gostaria de fazer um pedido 😊';
+  const floatMsg = 'Olá, Aurora! Tenho uma dúvida 😊';
   const waBase = getStoreWhatsAppBase();
 
   [
-    ['header-whatsapp', `${waBase}?text=${encodeURIComponent(orderText)}`],
-    ['hero-whatsapp', `${waBase}?text=${encodeURIComponent(orderText)}`],
-    ['order-whatsapp-btn', `${waBase}?text=${encodeURIComponent(orderMsg)}`],
     ['contact-whatsapp-cta', `${waBase}?text=${encodeURIComponent(orderText)}`],
     ['footer-whatsapp', waBase],
     ['whatsapp-float', `${waBase}?text=${encodeURIComponent(floatMsg)}`],
@@ -476,7 +636,8 @@ function openLightbox(productId) {
   const product = getProducts().find((p) => p.id === productId);
   if (!product) return;
   selectedProduct = product;
-  selectedFlavor = Array.isArray(product.flavors) && product.flavors.length ? product.flavors[0] : '';
+  // Não pré-seleciona: cliente escolhe e o card recolhe com a configuração
+  selectedFlavor = '';
 
   document.getElementById('lightbox-img').src = imgSrc(product.image);
   document.getElementById('lightbox-img').alt = product.name;
@@ -491,21 +652,22 @@ function openLightbox(productId) {
   if (Array.isArray(product.flavors) && product.flavors.length) {
     flavorsBox.hidden = false;
     flavorsBox.innerHTML = `
-      <div class="order-acc is-open">
-        <div class="order-acc__head">
+      <div class="order-acc is-open" id="acc-flavor">
+        <button type="button" class="order-acc__head" id="acc-flavor-toggle">
           <span class="order-acc__title">Sabor</span>
-          <span class="order-acc__summary" id="flavor-summary">${selectedFlavor}</span>
+          <span class="order-acc__summary" id="flavor-summary">escolher</span>
           <span class="order-acc__chevron">▾</span>
-        </div>
+        </button>
         <div class="order-acc__body"><div class="order-acc__inner">
           <div class="flavor-options">
             ${product.flavors.map((f) => {
-              const fp = product.flavorPrices && product.flavorPrices[f] != null
-                ? ` — ${Storage.formatCurrency(product.flavorPrices[f])}`
+              const price = resolveProductPrice(product, f);
+              const fp = Number.isFinite(price) && price > 0
+                ? ` — ${Storage.formatCurrency(price)}`
                 : '';
               return `
-              <label class="${f === selectedFlavor ? 'is-active' : ''}">
-                <input type="radio" name="order-flavor" value="${f}" ${f === selectedFlavor ? 'checked' : ''}>
+              <label>
+                <input type="radio" name="order-flavor" value="${String(f).replace(/"/g, '&quot;')}">
                 <span>${f}${fp}</span>
               </label>`;
             }).join('')}
@@ -513,14 +675,25 @@ function openLightbox(productId) {
         </div></div>
       </div>
     `;
+    const flavorAcc = document.getElementById('acc-flavor');
+    document.getElementById('acc-flavor-toggle')?.addEventListener('click', () => {
+      flavorAcc?.classList.toggle('is-open');
+    });
     flavorsBox.querySelectorAll('input').forEach((input) => {
       input.addEventListener('change', () => {
         selectedFlavor = input.value;
         flavorsBox.querySelectorAll('label').forEach((l) => l.classList.remove('is-active'));
         input.closest('label').classList.add('is-active');
         const summary = document.getElementById('flavor-summary');
-        if (summary) summary.textContent = selectedFlavor;
+        if (summary) {
+          const p = resolveProductPrice(product, selectedFlavor);
+          summary.textContent = p > 0
+            ? `${selectedFlavor} · ${Storage.formatCurrency(p)}`
+            : selectedFlavor;
+        }
         document.getElementById('lightbox-price').innerHTML = displayPrice(product, selectedFlavor);
+        flavorAcc?.classList.remove('is-open');
+        flavorAcc?.classList.add('is-done');
       });
     });
   } else {
@@ -576,7 +749,14 @@ function addCurrentProductToCart() {
   });
 
   closeLightbox();
-  showCartToast(`${product.name} entrou no carrinho`);
+  const confLabel = selectedFlavor
+    ? `${product.name} (${selectedFlavor})`
+    : product.name;
+  if (window.matchMedia('(max-width: 860px)').matches) {
+    openCart();
+  } else {
+    showCartToast(`${confLabel} entrou no carrinho`);
+  }
 }
 
 function showCartToast(message) {
@@ -614,22 +794,81 @@ function continueShopping() {
 function renderCartUI() {
   const countEl = document.getElementById('cart-count');
   const itemsEl = document.getElementById('cart-items');
+  const subtotalEl = document.getElementById('cart-subtotal');
   const totalEl = document.getElementById('cart-total');
   const totalRow = document.getElementById('cart-total-row');
+  const finalRow = document.getElementById('cart-final-row');
+  const discountRow = document.getElementById('cart-discount-row');
+  const discountEl = document.getElementById('cart-discount');
+  const couponLabel = document.getElementById('cart-coupon-label');
+  const couponBox = document.getElementById('cart-coupon');
+  const couponInput = document.getElementById('cart-coupon-input');
+  const couponMsg = document.getElementById('cart-coupon-msg');
+  const couponRemove = document.getElementById('cart-coupon-remove');
   const checkout = document.getElementById('cart-checkout');
   const subtitle = document.getElementById('cart-subtitle');
   const continueBtn = document.getElementById('cart-continue');
   const goMenu = document.getElementById('cart-go-menu');
   const count = cartCount();
   const lines = cartItems.length;
+  const subtotal = cartTotal();
+
+  if (appliedCoupon) {
+    const live = resolveLiveCoupon(appliedCoupon);
+    if (!live) {
+      appliedCoupon = null;
+      localStorage.removeItem(COUPON_KEY);
+    } else {
+      appliedCoupon = live;
+      localStorage.setItem(COUPON_KEY, JSON.stringify(live));
+    }
+  }
+
+  const discount = cartDiscount();
+  const payable = Math.max(0, subtotal - discount);
 
   if (countEl) {
     countEl.textContent = String(count);
     countEl.hidden = count === 0;
   }
 
-  if (totalEl) totalEl.textContent = Storage.formatCurrency(cartTotal());
-  if (totalRow) totalRow.hidden = lines === 0;
+  if (subtotalEl) subtotalEl.textContent = Storage.formatCurrency(subtotal);
+  if (totalEl) totalEl.textContent = Storage.formatCurrency(payable);
+
+  const hasActiveCoupons = (Storage.getCoupons() || []).some(
+    (c) => c.active !== false && String(c.code || '').trim()
+  );
+
+  // Sem cupom ativo no painel = não mostra campo de cupom no site
+  if (!hasActiveCoupons && appliedCoupon) {
+    appliedCoupon = null;
+    localStorage.removeItem(COUPON_KEY);
+  }
+
+  const showDiscount = lines > 0 && discount > 0;
+  if (totalRow) totalRow.hidden = !showDiscount; // subtotal só com desconto
+  if (discountRow) {
+    discountRow.hidden = !showDiscount;
+    discountRow.style.display = showDiscount ? '' : 'none';
+  }
+  if (finalRow) finalRow.hidden = lines === 0;
+  if (couponBox) {
+    couponBox.hidden = lines === 0 || !hasActiveCoupons;
+    couponBox.style.display = (lines === 0 || !hasActiveCoupons) ? 'none' : '';
+  }
+  const deliveryNote = document.getElementById('cart-delivery-note');
+  const pickupNote = document.getElementById('cart-pickup-note');
+  if (deliveryNote) deliveryNote.hidden = true;
+  if (pickupNote) pickupNote.hidden = true;
+  syncFulfillmentUI(getFulfillment());
+
+  if (discountEl) discountEl.textContent = `− ${Storage.formatCurrency(discount)}`;
+  if (couponLabel) couponLabel.textContent = appliedCoupon?.code ? `(${appliedCoupon.code})` : '';
+  if (couponInput && document.activeElement !== couponInput) {
+    couponInput.value = appliedCoupon?.code || '';
+  }
+  if (couponRemove) couponRemove.hidden = !appliedCoupon;
+  if (couponMsg && !couponMsg.dataset.keep) couponMsg.hidden = true;
 
   if (subtitle) {
     subtitle.textContent = lines === 0
@@ -650,30 +889,48 @@ function renderCartUI() {
       </div>
     `;
     if (checkout) checkout.hidden = true;
+    if (totalRow) totalRow.hidden = true;
+    if (discountRow) {
+      discountRow.hidden = true;
+      discountRow.style.display = 'none';
+    }
+    if (finalRow) finalRow.hidden = true;
+    if (couponBox) {
+      couponBox.hidden = true;
+      couponBox.style.display = 'none';
+    }
+    if (deliveryNote) deliveryNote.hidden = true;
+    if (pickupNote) pickupNote.hidden = true;
     return;
   }
 
   if (checkout) checkout.hidden = false;
+  syncFulfillmentUI(getFulfillment());
 
   itemsEl.innerHTML = cartItems.map((item) => {
     const sub = (Number(item.price) || 0) * (Number(item.qty) || 0);
-    const meta = [item.size, item.flavor].filter(Boolean).join(' · ');
+    const flavorLine = item.flavor
+      ? `<p class="cart-item__meta"><strong>Sabor:</strong> ${item.flavor}</p>`
+      : '';
+    const sizeLine = item.size
+      ? `<p class="cart-item__meta">${item.size}</p>`
+      : '';
     return `
       <article class="cart-item" data-key="${item.key}">
         <img class="cart-item__img" src="${imgSrc(item.image)}" alt="${item.name}" loading="lazy">
         <div class="cart-item__info">
           <h3 class="cart-item__name">${item.name}</h3>
-          ${meta ? `<p class="cart-item__meta">${meta}</p>` : ''}
-          <p class="cart-item__price">${Storage.formatCurrency(item.price)} · subtotal ${Storage.formatCurrency(sub)}</p>
+          ${flavorLine}
+          ${sizeLine}
+          <p class="cart-item__price">${Storage.formatCurrency(item.price)}</p>
           <div class="cart-item__row">
             <div class="cart-qty" role="group" aria-label="Quantidade">
-              <button type="button" class="cart-qty__btn" data-cart-qty="-1" aria-label="Diminuir quantidade">−</button>
+              <button type="button" class="cart-qty__btn" data-cart-qty="-1" aria-label="Diminuir">−</button>
               <span class="cart-qty__value">${item.qty}</span>
-              <button type="button" class="cart-qty__btn cart-qty__btn--plus" data-cart-qty="1" aria-label="Aumentar quantidade">+</button>
+              <button type="button" class="cart-qty__btn cart-qty__btn--plus" data-cart-qty="1" aria-label="Aumentar">+</button>
             </div>
-            <button type="button" class="cart-item__remove" data-cart-remove aria-label="Remover item">
+            <button type="button" class="cart-item__remove" data-cart-remove aria-label="Remover">
               <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-              <span>Remover</span>
             </button>
           </div>
         </div>
@@ -694,9 +951,82 @@ function renderCartUI() {
   });
 }
 
+function applyCartCoupon() {
+  const input = document.getElementById('cart-coupon-input');
+  const msg = document.getElementById('cart-coupon-msg');
+  const code = (input?.value || '').trim().toUpperCase();
+  if (!code) {
+    if (msg) {
+      msg.textContent = 'Digite o código do cupom.';
+      msg.hidden = false;
+      msg.dataset.keep = '1';
+      msg.classList.add('is-error');
+    }
+    return;
+  }
+
+  const coupon = Storage.findCouponByCode(code);
+  if (!coupon) {
+    if (msg) {
+      msg.textContent = 'Cupom inválido ou inativo.';
+      msg.hidden = false;
+      msg.dataset.keep = '1';
+      msg.classList.add('is-error');
+    }
+    saveAppliedCoupon(null);
+    return;
+  }
+
+  const subtotal = cartTotal();
+  const minOrder = Number(coupon.minOrder) || 0;
+  if (subtotal < minOrder) {
+    if (msg) {
+      msg.textContent = `Pedido mínimo de ${Storage.formatCurrency(minOrder)} para este cupom.`;
+      msg.hidden = false;
+      msg.dataset.keep = '1';
+      msg.classList.add('is-error');
+    }
+    return;
+  }
+
+  const discount = Storage.calcCouponDiscount(coupon, subtotal);
+  if (!(discount > 0)) {
+    if (msg) {
+      msg.textContent = 'Este cupom não gerou desconto.';
+      msg.hidden = false;
+      msg.dataset.keep = '1';
+      msg.classList.add('is-error');
+    }
+    return;
+  }
+
+  saveAppliedCoupon({
+    code: coupon.code,
+    type: coupon.type,
+    value: coupon.value,
+    minOrder: coupon.minOrder || 0,
+    label: coupon.label || '',
+  });
+
+  if (msg) {
+    msg.textContent = `Cupom ${coupon.code} aplicado! − ${Storage.formatCurrency(discount)}`;
+    msg.hidden = false;
+    msg.dataset.keep = '1';
+    msg.classList.remove('is-error');
+  }
+}
+
 function openCart() {
   const drawer = document.getElementById('cart-drawer');
   if (!drawer) return;
+  // Fecha o menu hambúrguer se estiver aberto
+  const nav = document.getElementById('nav-menu');
+  const toggle = document.getElementById('nav-toggle');
+  if (nav?.classList.contains('is-open')) {
+    nav.classList.remove('is-open');
+    toggle?.classList.remove('is-open');
+    toggle?.setAttribute('aria-expanded', 'false');
+  }
   renderCartUI();
   fillCustomerFields();
   drawer.hidden = false;
@@ -715,8 +1045,9 @@ function closeCart() {
   }
 }
 
-function checkoutCart() {
+async function checkoutCart() {
   const error = document.getElementById('cart-error');
+  const btn = document.getElementById('cart-checkout-btn');
   const nome = document.getElementById('cart-nome')?.value.trim() || '';
   const sobrenome = document.getElementById('cart-sobrenome')?.value.trim() || '';
   const phoneInput = document.getElementById('cart-phone');
@@ -748,26 +1079,81 @@ function checkoutCart() {
 
   if (error) error.hidden = true;
   saveCustomer({ nome, sobrenome, phone });
+  const fulfillment = setFulfillment(
+    document.querySelector('input[name="cart-fulfillment"]:checked')?.value || getFulfillment()
+  );
   const fullName = `${nome} ${sobrenome}`;
-  const message = buildCartWhatsAppMessage({ fullName, phone, items: cartItems });
-  openWhatsAppChat(message);
+  const discount = cartDiscount();
+  const payable = cartPayable();
+  const couponCode = appliedCoupon?.code || '';
+  const itemsSnapshot = cartItems.map((item) => ({
+    productId: item.productId,
+    name: item.name,
+    price: item.price,
+    qty: item.qty,
+    detail: item.detail || [item.size, item.flavor].filter(Boolean).join(' · '),
+    flavor: item.flavor || '',
+    size: item.size || '',
+    image: item.image,
+  }));
 
-  Storage.createPublicOrder({
+  const notesParts = [
+    fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
+    itemsSnapshot.map((i) => {
+      const flavorBit = i.flavor ? ` (${i.flavor})` : '';
+      return `${i.qty}x ${i.name}${flavorBit}`;
+    }).join(', '),
+  ];
+  if (couponCode && discount > 0) {
+    notesParts.push(`Cupom ${couponCode}: − ${Storage.formatCurrency(discount)}`);
+  }
+
+  const prevLabel = btn?.textContent || '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Registrando pedido…';
+  }
+
+  const saved = await Storage.createPublicOrder({
     fullName,
     whatsapp: phone,
-    items: cartItems.map((item) => ({
+    items: itemsSnapshot.map((item) => ({
       productId: item.productId,
       name: item.name,
       price: item.price,
       qty: item.qty,
-      detail: item.detail || [item.size, item.flavor].filter(Boolean).join(' · '),
+      detail: item.detail,
     })),
-    total: cartTotal(),
-    notes: cartItems.map((i) => `${i.qty}x ${i.name}`).join(', '),
-  }).catch(() => {});
+    total: payable,
+    notes: notesParts.filter(Boolean).join(' | '),
+  }).catch(() => ({ ok: false, error: 'Falha ao gravar' }));
 
+  if (!saved?.ok) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || 'Finalizar pedido';
+    }
+    if (error) {
+      error.textContent = saved?.error || 'Não deu para registrar o pedido. Tente de novo.';
+      error.hidden = false;
+    }
+    return;
+  }
+
+  const message = buildCartWhatsAppMessage({
+    fullName,
+    phone,
+    items: itemsSnapshot,
+    fulfillment,
+  });
   clearCart();
   closeCart();
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = prevLabel || 'Finalizar pedido';
+  }
+  // Só abre o WhatsApp depois que o pedido já entrou no painel
+  openWhatsAppChat(message);
 }
 
 function getOrderPhoneInput() {
@@ -802,13 +1188,14 @@ function openWhatsAppChat(text) {
   if (!win) window.location.href = url;
 }
 
-function finalizeOrder() {
+async function finalizeOrder() {
   const nome = document.getElementById('order-nome')?.value.trim() || '';
   const sobrenome = document.getElementById('order-sobrenome')?.value.trim() || '';
   const phoneInput = getOrderPhoneInput();
   if (phoneInput) phoneInput.value = formatPhoneBR(phoneInput.value);
   const phone = normalizePhoneBR(phoneInput?.value || '');
   const error = document.getElementById('order-error');
+  const btn = document.getElementById('lightbox-order');
 
   if (!nome || !sobrenome) {
     error.textContent = 'Preencha nome e sobrenome.';
@@ -829,24 +1216,22 @@ function finalizeOrder() {
 
   error.hidden = true;
   saveCustomer({ nome, sobrenome, phone });
+  const fulfillment = setFulfillment(
+    document.querySelector('input[name="order-fulfillment"]:checked')?.value || getFulfillment()
+  );
   const product = selectedProduct;
   if (!product) return;
 
   const unit = resolveProductPrice(product, selectedFlavor);
   const detail = [product.size, selectedFlavor].filter(Boolean).join(' · ');
   const fullName = `${nome} ${sobrenome}`;
-  const message = buildOrderWhatsAppMessage({
-    product,
-    fullName,
-    phone,
-    flavor: selectedFlavor,
-    unit,
-  });
+  const prevLabel = btn?.textContent || '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Registrando pedido…';
+  }
 
-  // Abre o WhatsApp na hora (antes do await) para não ser bloqueado no celular
-  openWhatsAppChat(message);
-
-  Storage.createPublicOrder({
+  const saved = await Storage.createPublicOrder({
     fullName,
     whatsapp: phone,
     items: [{
@@ -857,10 +1242,39 @@ function finalizeOrder() {
       detail,
     }],
     total: unit,
-    notes: detail,
-  }).catch(() => {});
+    notes: [fulfillment === 'entrega' ? 'Entrega' : 'Retirada', detail].filter(Boolean).join(' | '),
+  }).catch(() => ({ ok: false, error: 'Falha ao gravar' }));
+
+  if (!saved?.ok) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || 'Finalizar este pedido';
+    }
+    error.textContent = saved?.error || 'Não deu para registrar o pedido. Tente de novo.';
+    error.hidden = false;
+    return;
+  }
+
+  const messageWithFulfillment = buildCartWhatsAppMessage({
+    fullName,
+    phone,
+    fulfillment,
+    items: [{
+      name: product.name,
+      size: product.size || '',
+      flavor: selectedFlavor || '',
+      price: unit,
+      qty: 1,
+      image: product.image,
+    }],
+  });
 
   closeLightbox();
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = prevLabel || 'Finalizar este pedido';
+  }
+  openWhatsAppChat(messageWithFulfillment);
 }
 
 function initHeader() {
@@ -930,6 +1344,26 @@ function initCart() {
   document.getElementById('cart-close-backdrop')?.addEventListener('click', closeCart);
   document.getElementById('cart-checkout-btn')?.addEventListener('click', checkoutCart);
   document.getElementById('cart-continue')?.addEventListener('click', continueShopping);
+  document.querySelectorAll('input[name="cart-fulfillment"], input[name="order-fulfillment"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.checked) setFulfillment(input.value);
+    });
+  });
+  document.getElementById('cart-coupon-apply')?.addEventListener('click', applyCartCoupon);
+  document.getElementById('cart-coupon-remove')?.addEventListener('click', () => {
+    const msg = document.getElementById('cart-coupon-msg');
+    if (msg) {
+      msg.hidden = true;
+      delete msg.dataset.keep;
+    }
+    saveAppliedCoupon(null);
+  });
+  document.getElementById('cart-coupon-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyCartCoupon();
+    }
+  });
   document.getElementById('cart-go-menu')?.addEventListener('click', (e) => {
     e.preventDefault();
     continueShopping();

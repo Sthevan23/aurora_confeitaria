@@ -171,6 +171,22 @@ function aurora_load_all(PDO $pdo): ?array {
     }
   }
 
+  $coupons = [];
+  if (aurora_table_exists($pdo, 'coupons')) {
+    $couponRows = $pdo->query('SELECT * FROM coupons ORDER BY created_at DESC')->fetchAll();
+    foreach ($couponRows as $row) {
+      $coupons[] = [
+        'id' => $row['id'],
+        'code' => strtoupper(trim((string) ($row['code'] ?? ''))),
+        'type' => ($row['type'] ?? '') === 'fixed' ? 'fixed' : 'percent',
+        'value' => (float) ($row['value'] ?? 0),
+        'minOrder' => (float) ($row['min_order'] ?? 0),
+        'active' => ((int) ($row['active'] ?? 1)) === 1,
+        'label' => $row['label'] ?? '',
+      ];
+    }
+  }
+
   $reviews = [];
   if (aurora_table_exists($pdo, 'reviews')) {
     $revRows = $pdo->query('SELECT * FROM reviews WHERE active = 1 ORDER BY created_at DESC')->fetchAll();
@@ -218,6 +234,8 @@ function aurora_load_all(PDO $pdo): ?array {
       'heroStory' => aurora_json_decode_field($settingsRow['hero_story'] ?? null, []),
       'sobreText1' => $settingsRow['sobre_text1'] ?? '',
       'sobreText2' => $settingsRow['sobre_text2'] ?? '',
+      'deliveryFee' => isset($settingsRow['delivery_fee']) ? (float) $settingsRow['delivery_fee'] : 7,
+      'deliveryNote' => $settingsRow['delivery_note'] ?? 'Bairros mais afastados: consultar',
     ],
     'auth' => [
       'email' => $admin['email'] ?? 'auroraconfeitaria2022@gmail.com',
@@ -231,6 +249,7 @@ function aurora_load_all(PDO $pdo): ?array {
     'faq' => $faq,
     'gallery' => $gallery,
     'finance' => $finance,
+    'coupons' => $coupons,
   ];
 }
 
@@ -261,9 +280,9 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       'INSERT INTO settings (
         id, name, tagline, logo, banner, sobre_image, whatsapp, instagram, instagram_user,
         facebook, email, address, hours, followers, posts, map_embed, hero_badge, hero_story,
-        sobre_text1, sobre_text2, data_version
+        sobre_text1, sobre_text2, delivery_fee, delivery_note, data_version
       ) VALUES (
-        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON DUPLICATE KEY UPDATE
         name=VALUES(name), tagline=VALUES(tagline), logo=VALUES(logo), banner=VALUES(banner),
@@ -271,8 +290,18 @@ function aurora_save_all(PDO $pdo, array $payload): void {
         instagram_user=VALUES(instagram_user), facebook=VALUES(facebook), email=VALUES(email),
         address=VALUES(address), hours=VALUES(hours), followers=VALUES(followers), posts=VALUES(posts),
         map_embed=VALUES(map_embed), hero_badge=VALUES(hero_badge), hero_story=VALUES(hero_story),
-        sobre_text1=VALUES(sobre_text1), sobre_text2=VALUES(sobre_text2), data_version=VALUES(data_version)'
+        sobre_text1=VALUES(sobre_text1), sobre_text2=VALUES(sobre_text2),
+        delivery_fee=VALUES(delivery_fee), delivery_note=VALUES(delivery_note),
+        data_version=VALUES(data_version)'
     );
+    $deliveryFee = isset($s['deliveryFee']) ? (float) $s['deliveryFee'] : 7;
+    if ($deliveryFee < 0) {
+      $deliveryFee = 0;
+    }
+    $deliveryNote = trim((string) ($s['deliveryNote'] ?? 'Bairros mais afastados: consultar'));
+    if ($deliveryNote === '') {
+      $deliveryNote = 'Bairros mais afastados: consultar';
+    }
     $stmt->execute([
       $s['name'] ?? '',
       $s['tagline'] ?? '',
@@ -293,6 +322,8 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       $heroStory,
       $s['sobreText1'] ?? '',
       $s['sobreText2'] ?? '',
+      $deliveryFee,
+      $deliveryNote,
       $version,
     ]);
 
@@ -449,6 +480,29 @@ function aurora_save_all(PDO $pdo, array $payload): void {
         $entryDate,
         $f['orderId'] ?? null,
       ]);
+    }
+
+    // Cupons
+    aurora_ensure_coupons_table($pdo);
+    if (aurora_table_exists($pdo, 'coupons')) {
+      $pdo->exec('DELETE FROM coupons');
+      $couponStmt = $pdo->prepare(
+        'INSERT INTO coupons (id, code, type, value, min_order, active, label) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      );
+      foreach ($payload['coupons'] ?? [] as $c) {
+        $code = strtoupper(trim((string) ($c['code'] ?? '')));
+        if ($code === '') continue;
+        $type = ($c['type'] ?? '') === 'fixed' ? 'fixed' : 'percent';
+        $couponStmt->execute([
+          $c['id'] ?? uniqid('cp', true),
+          $code,
+          $type,
+          (float) ($c['value'] ?? 0),
+          (float) ($c['minOrder'] ?? 0),
+          !empty($c['active']) ? 1 : 0,
+          $c['label'] ?? '',
+        ]);
+      }
     }
 
     // Reviews / FAQ

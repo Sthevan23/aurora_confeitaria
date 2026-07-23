@@ -16,6 +16,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/mysql_store.php';
 
 function public_payload(array $data): array {
+  $coupons = [];
+  foreach ($data['coupons'] ?? [] as $c) {
+    if (empty($c['active'])) continue;
+    $coupons[] = [
+      'code' => strtoupper(trim((string) ($c['code'] ?? ''))),
+      'type' => ($c['type'] ?? '') === 'fixed' ? 'fixed' : 'percent',
+      'value' => (float) ($c['value'] ?? 0),
+      'minOrder' => (float) ($c['minOrder'] ?? 0),
+      'label' => $c['label'] ?? '',
+    ];
+  }
+
   return [
     'version' => $data['version'] ?? 1,
     'settings' => $data['settings'] ?? new stdClass(),
@@ -24,6 +36,7 @@ function public_payload(array $data): array {
     'reviews' => $data['reviews'] ?? [],
     'faq' => $data['faq'] ?? [],
     'gallery' => $data['gallery'] ?? [],
+    'coupons' => $coupons,
   ];
 }
 
@@ -148,6 +161,24 @@ if ($method === 'POST') {
     }
 
     json_out(['ok' => true, 'data' => $stored]);
+  }
+
+  // Amplia coluna image (VARCHAR(500) cortava fotos / data-URL)
+  if (($body['action'] ?? '') === 'migrate_product_images') {
+    $authPass = (string) ($stored['auth']['password'] ?? '');
+    if ($password === '' || $authPass === '' || !hash_equals($authPass, $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    try {
+      $pdo->exec('ALTER TABLE `products` MODIFY `image` MEDIUMTEXT NULL');
+      $col = $pdo->query("SHOW COLUMNS FROM products LIKE 'image'")->fetch(PDO::FETCH_ASSOC);
+      json_out([
+        'ok' => true,
+        'columnType' => $col['Type'] ?? null,
+      ]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha no ALTER', 'detail' => $e->getMessage()], 500);
+    }
   }
 
   // Pedido público

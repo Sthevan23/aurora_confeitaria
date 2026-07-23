@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAllAdminPages();
   initFinanceiro();
   initSettings();
+  initCoupons();
   initModals();
   initOrderFilters();
   initButtons();
@@ -41,6 +42,7 @@ function renderAllAdminPages() {
   renderProducts();
   renderCategories();
   renderClients();
+  renderCoupons();
 }
 
 function updateSyncBadge() {
@@ -60,8 +62,43 @@ function updateSyncBadge() {
 
 /* --- Sidebar mobile --- */
 function initSidebar() {
-  document.getElementById('sidebar-toggle').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('open');
+  const sidebar = document.getElementById('sidebar');
+  const toggle = document.getElementById('sidebar-toggle');
+  let backdrop = document.getElementById('sidebar-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('button');
+    backdrop.type = 'button';
+    backdrop.id = 'sidebar-backdrop';
+    backdrop.className = 'sidebar-backdrop';
+    backdrop.setAttribute('aria-label', 'Fechar menu');
+    document.body.appendChild(backdrop);
+  }
+
+  const closeMenu = () => {
+    sidebar?.classList.remove('open');
+    backdrop.classList.remove('is-visible');
+    document.body.classList.remove('sidebar-open');
+  };
+  const openMenu = () => {
+    sidebar?.classList.add('open');
+    backdrop.classList.add('is-visible');
+    document.body.classList.add('sidebar-open');
+  };
+
+  toggle?.addEventListener('click', () => {
+    if (sidebar?.classList.contains('open')) closeMenu();
+    else openMenu();
+  });
+  backdrop.addEventListener('click', closeMenu);
+
+  document.querySelectorAll('.sidebar__link').forEach((link) => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth <= 900) closeMenu();
+    });
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 900) closeMenu();
   });
 
   const email = sessionStorage.getItem('admin_email');
@@ -76,6 +113,7 @@ const pageTitles = {
   categorias: 'Categorias',
   clientes: 'Clientes',
   financeiro: 'Financeiro',
+  cupons: 'Cupons',
   configuracoes: 'Configurações'
 };
 
@@ -99,8 +137,14 @@ function navigateTo(page) {
 
   document.getElementById('page-title').textContent = pageTitles[page] || page;
 
+  document.getElementById('sidebar')?.classList.remove('open');
+  document.getElementById('sidebar-backdrop')?.classList.remove('is-visible');
+  document.body.classList.remove('sidebar-open');
+
   if (page === 'financeiro') initFinanceiro();
+  if (page === 'cupons') renderCoupons();
   if (page === 'dashboard') renderDashboard();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function initLogout() {
@@ -398,15 +442,156 @@ function viewOrder(id) {
   `, { size: 'xl' });
 }
 
-function adminImageSrc(path) {
+function publicAssetUrl(path) {
   if (!path) return '';
-  if (/^(https?:|data:)/i.test(path)) return path;
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
   const clean = String(path).replace(/^\//, '');
-  if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '')) {
+  if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '') || location.protocol === 'file:') {
     return `https://auroraconfeitaria.com.br/${clean}`;
   }
-  if (/^(\/|\.\.\/)/i.test(path)) return path;
   return '../' + clean;
+}
+
+function adminImageSrc(path) {
+  return publicAssetUrl(path);
+}
+
+async function fileToJpegBlob(file, max = 1400, quality = 0.82) {
+  if (/heic|heif/i.test(file.type) || /\.heic$/i.test(file.name)) {
+    throw new Error('Foto HEIC do iPhone não funciona. No iPhone: Ajustes → Câmera → Formatos → Mais Compatível.');
+  }
+
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) {
+    if ((file.type === 'image/jpeg' || file.type === 'image/jpg') && file.size < 2 * 1024 * 1024) {
+      return file;
+    }
+    throw new Error('Não foi possível ler a imagem. Use JPG ou PNG.');
+  }
+
+  let { width, height } = bitmap;
+  if (width > max || height > max) {
+    const scale = Math.min(max / width, max / height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  if (!blob) throw new Error('Falha ao compactar a foto');
+  return new File([blob], (file.name || 'foto').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+}
+
+async function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Falha ao ler a foto'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function isPublicImageOk(path) {
+  if (!path || /^(data:|blob:)/i.test(path)) return true;
+  const publicUrl = publicAssetUrl(path) + (path.includes('?') ? '&' : '?') + 't=' + Date.now();
+  const head = await fetch(publicUrl, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+  if (head && head.ok) return true;
+  const get = await fetch(publicUrl, { method: 'GET', cache: 'no-store' }).catch(() => null);
+  return Boolean(get && get.ok);
+}
+
+async function uploadAdminImage(file) {
+  const password = Storage.getAdminPassword();
+  if (!password) throw new Error('Faça login novamente');
+
+  // Compacta sempre — fica leve e aparece no site na hora
+  const normalized = await fileToJpegBlob(file, 1000, 0.72);
+
+  // 1) Tenta gravar arquivo em products/ (melhor para WhatsApp)
+  try {
+    const form = new FormData();
+    form.append('image', normalized, normalized.name || 'foto.jpg');
+    const apiBase = typeof Storage.getApiUrl === 'function'
+      ? Storage.getApiUrl().replace(/data\.php$/i, 'upload.php')
+      : 'https://auroraconfeitaria.com.br/api/upload.php';
+
+    const res = await fetch(apiBase, {
+      method: 'POST',
+      headers: { 'X-Admin-Password': password },
+      body: form,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.ok && json.path && await isPublicImageOk(json.path)) {
+      return json.path;
+    }
+    // Arquivo gravou mas não ficou público → usa dataUrl que o servidor já devolveu
+    if (res.ok && json.ok && typeof json.dataUrl === 'string' && json.dataUrl.startsWith('data:image/')) {
+      return json.dataUrl;
+    }
+  } catch {
+    // segue para fallback
+  }
+
+  // 2) Fallback garantido: salva a foto no banco (data URL) — aparece imediatamente no site
+  let dataUrl = await blobToDataUrl(normalized);
+  if (!dataUrl.startsWith('data:image/')) {
+    throw new Error('Falha ao preparar a foto');
+  }
+  // Compacta mais se ainda estiver grande (celular manda HEIC/PNG enorme)
+  if (dataUrl.length > 900000) {
+    const smaller = await fileToJpegBlob(file, 850, 0.62);
+    dataUrl = await blobToDataUrl(smaller);
+  }
+  if (dataUrl.length > 1400000) {
+    throw new Error('Foto ainda muito grande. Escolha outra com menos resolução.');
+  }
+  return dataUrl;
+}
+
+function bindImageUpload(fileInputId, pathInputId, previewId) {
+  const fileInput = document.getElementById(fileInputId);
+  const pathInput = document.getElementById(pathInputId);
+  const preview = previewId ? document.getElementById(previewId) : null;
+  if (!fileInput || !pathInput) return;
+
+  const refreshPreview = () => {
+    if (!preview) return;
+    const src = pathInput.value.trim();
+    preview.src = src ? publicAssetUrl(src) : '';
+    preview.hidden = !src;
+  };
+  pathInput.addEventListener('input', refreshPreview);
+  refreshPreview();
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    fileInput.disabled = true;
+    try {
+      showToast('Enviando foto…', 'success');
+      const path = await uploadAdminImage(file);
+      pathInput.value = path;
+      refreshPreview();
+      showToast('Foto pronta! Salve o produto para publicar no site.', 'success');
+    } catch (err) {
+      showToast(err.message || 'Falha ao enviar foto', 'error');
+      if (preview && !pathInput.value.trim()) {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+      }
+    } finally {
+      fileInput.disabled = false;
+      fileInput.value = '';
+    }
+  });
 }
 
 function onlyDigits(value) {
@@ -624,64 +809,45 @@ function renderProducts() {
   `).join('');
 }
 
-async function uploadAdminImage(file) {
-  const password = Storage.getAdminPassword();
-  if (!password) throw new Error('Faça login novamente');
-  const form = new FormData();
-  form.append('image', file);
-  const apiBase = typeof Storage.getApiUrl === 'function'
-    ? Storage.getApiUrl().replace(/data\.php$/i, 'upload.php')
-    : '../api/upload.php';
-  const res = await fetch(apiBase, {
-    method: 'POST',
-    headers: { 'X-Admin-Password': password },
-    body: form,
-  });
-  const json = await res.json();
-  if (!res.ok || !json.ok) throw new Error(json.error || 'Falha no upload');
-  return json.path;
+function formatFlavorsForEditor(product) {
+  const flavors = Array.isArray(product?.flavors) ? product.flavors : [];
+  const prices = product?.flavorPrices && typeof product.flavorPrices === 'object'
+    ? product.flavorPrices
+    : {};
+  if (!flavors.length) return '';
+  return flavors.map((f) => {
+    const price = prices[f];
+    return price != null && price !== '' ? `${f} = ${price}` : f;
+  }).join('\n');
 }
 
-function bindImageUpload(fileInputId, pathInputId, previewId) {
-  const fileInput = document.getElementById(fileInputId);
-  const pathInput = document.getElementById(pathInputId);
-  const preview = previewId ? document.getElementById(previewId) : null;
-  if (!fileInput || !pathInput) return;
-
-  const refreshPreview = () => {
-    if (!preview) return;
-    const src = pathInput.value.trim();
-    preview.src = src ? (src.startsWith('http') ? src : '../' + src.replace(/^\//, '')) : '';
-    preview.hidden = !src;
-  };
-  pathInput.addEventListener('input', refreshPreview);
-  refreshPreview();
-
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    try {
-      showToast('Enviando foto…', 'success');
-      const path = await uploadAdminImage(file);
-      pathInput.value = path;
-      refreshPreview();
-      showToast('Foto enviada!', 'success');
-    } catch (err) {
-      // Sem PHP local: usa preview local (não sobe para Hostinger até ter PHP)
-      const url = URL.createObjectURL(file);
-      if (preview) {
-        preview.src = url;
-        preview.hidden = false;
+function parseFlavorsFromEditor(raw) {
+  const flavors = [];
+  const flavorPrices = {};
+  String(raw || '')
+    .split(/\n|,/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const match = line.match(/^(.+?)\s*[=:]\s*R?\$?\s*([\d]+(?:[.,]\d+)?)\s*$/i);
+      if (match) {
+        const name = match[1].trim();
+        const price = parseFloat(match[2].replace(',', '.'));
+        if (!name) return;
+        flavors.push(name);
+        if (Number.isFinite(price) && price >= 0) flavorPrices[name] = price;
+        return;
       }
-      showToast(err.message || 'Upload só funciona na Hostinger (PHP). Use o caminho da foto em products/.', 'error');
-    }
-  });
+      flavors.push(line);
+    });
+  return { flavors, flavorPrices };
 }
 
 function openProductModal(product = null) {
   const categories = Storage.getCategories();
   const isEdit = !!product;
   const img = product?.image || '';
+  const previewSrc = img ? publicAssetUrl(img) : '';
 
   openModal(isEdit ? 'Editar Produto' : 'Novo Produto', `
     <form id="product-form">
@@ -708,8 +874,9 @@ function openProductModal(product = null) {
       <div class="form-group">
         <label>Foto do produto</label>
         <input type="text" id="prod-image" value="${img}" placeholder="products/foto.jpg" required>
-        <input type="file" id="prod-image-file" accept="image/*" style="margin-top:0.5rem">
-        <img id="prod-preview" alt="" style="margin-top:0.75rem;max-height:160px;border-radius:12px;object-fit:cover;width:100%" ${img ? `src="../${img.replace(/^\//, '')}"` : 'hidden'}>
+        <input type="file" id="prod-image-file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp" style="margin-top:0.5rem">
+        <small style="display:block;margin-top:0.35rem;color:#888">Use JPG ou PNG. Fotos HEIC do iPhone não funcionam.</small>
+        <img id="prod-preview" alt="" style="margin-top:0.75rem;max-height:160px;border-radius:12px;object-fit:cover;width:100%" ${previewSrc ? `src="${escapeHtml(previewSrc)}"` : 'hidden'}>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -722,8 +889,9 @@ function openProductModal(product = null) {
         </div>
       </div>
       <div class="form-group">
-        <label>Sabores (separados por vírgula)</label>
-        <textarea id="prod-flavors" rows="2">${(product?.flavors || []).join(', ')}</textarea>
+        <label>Sabores e preços (um por linha)</label>
+        <textarea id="prod-flavors" rows="5" placeholder="Ninho com Nutella = 28&#10;Ferrero = 34">${formatFlavorsForEditor(product)}</textarea>
+        <small style="display:block;margin-top:6px;color:var(--texto-claro)">Formato: <strong>Nome do sabor = preço</strong>. No pedido do WhatsApp aparece o sabor escolhido e o valor.</small>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -790,39 +958,86 @@ function openProductModal(product = null) {
     refreshSizePreview();
   });
 
-  document.getElementById('product-form').addEventListener('submit', (e) => {
+  document.getElementById('product-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const products = Storage.getProducts();
-    const promoPriceRaw = document.getElementById('prod-promo-price').value;
-    const data = {
-      name: document.getElementById('prod-name').value.trim(),
-      description: document.getElementById('prod-desc').value.trim(),
-      price: parseFloat(document.getElementById('prod-price').value) || 0,
-      priceFrom: document.getElementById('prod-price-from').checked,
-      categoryId: document.getElementById('prod-category').value,
-      image: document.getElementById('prod-image').value.trim() || 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg',
-      featured: document.getElementById('prod-featured').checked,
-      bestSeller: document.getElementById('prod-bestseller').checked,
-      promoActive: document.getElementById('prod-promo').checked,
-      promoPrice: promoPriceRaw === '' ? null : parseFloat(promoPriceRaw),
-      promoLabel: document.getElementById('prod-promo-label').value.trim() || 'Promoção',
-      size: formatProductSize(document.getElementById('prod-size').value),
-      flavors: document.getElementById('prod-flavors').value.split(',').map(s => s.trim()).filter(Boolean),
-      active: document.getElementById('prod-active').checked
-    };
-
-    if (isEdit) {
-      const idx = products.findIndex(p => p.id === product.id);
-      products[idx] = { ...products[idx], ...data };
-    } else {
-      products.push({ id: Storage.generateId('p'), slug: '', ...data });
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalLabel = submitBtn?.textContent || '';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Salvando na nuvem…';
     }
 
-    Storage.saveProducts(products);
-    closeModal();
-    renderProducts();
-    renderDashboard();
-    showToast(isEdit ? 'Produto atualizado no site!' : 'Produto criado!', 'success');
+    try {
+      const products = Storage.getProducts();
+      const promoPriceRaw = document.getElementById('prod-promo-price').value;
+      const imageValue = document.getElementById('prod-image').value.trim();
+      if (!imageValue) {
+        showToast('Escolha uma foto do produto.', 'error');
+        return;
+      }
+      if (imageValue.startsWith('data:image/') && imageValue.length > 1400000) {
+        showToast('Foto ainda muito grande. Escolha outra ou aguarde compactar de novo.', 'error');
+        return;
+      }
+
+      const name = document.getElementById('prod-name').value.trim();
+      const slug = name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '') || 'produto';
+
+      const parsedFlavors = parseFlavorsFromEditor(document.getElementById('prod-flavors').value);
+      const data = {
+        name,
+        description: document.getElementById('prod-desc').value.trim(),
+        price: parseFloat(document.getElementById('prod-price').value) || 0,
+        priceFrom: document.getElementById('prod-price-from').checked,
+        categoryId: document.getElementById('prod-category').value,
+        image: imageValue || 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg',
+        featured: document.getElementById('prod-featured').checked,
+        bestSeller: document.getElementById('prod-bestseller').checked,
+        promoActive: document.getElementById('prod-promo').checked,
+        promoPrice: promoPriceRaw === '' ? null : parseFloat(promoPriceRaw),
+        promoLabel: document.getElementById('prod-promo-label').value.trim() || 'Promoção',
+        size: formatProductSize(document.getElementById('prod-size').value),
+        flavors: parsedFlavors.flavors,
+        flavorPrices: parsedFlavors.flavorPrices,
+        active: document.getElementById('prod-active').checked,
+      };
+
+      if (isEdit) {
+        const idx = products.findIndex(p => p.id === product.id);
+        products[idx] = { ...products[idx], ...data };
+      } else {
+        products.push({
+          id: Storage.generateId('p'),
+          slug: `${slug}-${Date.now().toString(36).slice(-4)}`,
+          ...data,
+        });
+      }
+
+      showToast('Enviando produto… pode levar alguns segundos.', 'success');
+      const ok = await Storage.saveProductsAsync(products);
+      renderProducts();
+      renderDashboard();
+
+      if (!ok) {
+        showToast('Produto ficou só neste celular — não subiu pro site. Verifique a internet e tente Salvar de novo.', 'error');
+        return;
+      }
+
+      closeModal();
+      showToast(isEdit ? 'Produto atualizado no site!' : 'Produto publicado no site!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Falha ao salvar produto.', 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+      }
+    }
   });
 }
 
@@ -1021,6 +1236,161 @@ function deleteClient(id) {
   showToast('Cliente excluído.', 'success');
 }
 
+/* --- Cupons --- */
+let couponsBound = false;
+
+function initCoupons() {
+  if (couponsBound) return;
+  couponsBound = true;
+  document.getElementById('coupon-add-btn')?.addEventListener('click', () => openCouponModal());
+  renderCoupons();
+}
+
+function renderCoupons() {
+  const tbody = document.querySelector('#coupons-table tbody');
+  const empty = document.getElementById('coupons-empty');
+  if (!tbody) return;
+  const coupons = Storage.getCoupons();
+  if (empty) empty.hidden = coupons.length > 0;
+  tbody.innerHTML = coupons.map((c) => {
+    const typeLabel = c.type === 'fixed' ? 'Valor fixo' : 'Porcentagem';
+    const valueLabel = c.type === 'fixed'
+      ? Storage.formatCurrency(c.value)
+      : `${Number(c.value) || 0}%`;
+    return `
+      <tr>
+        <td><strong>${escapeHtml(c.code || '')}</strong>${c.label ? `<br><small>${escapeHtml(c.label)}</small>` : ''}</td>
+        <td>${typeLabel}</td>
+        <td>${valueLabel}</td>
+        <td>${Number(c.minOrder) > 0 ? Storage.formatCurrency(c.minOrder) : '—'}</td>
+        <td>${c.active !== false ? '<span class="badge badge--novo">Ativo</span>' : '<span class="badge">Inativo</span>'}</td>
+        <td>
+          <button type="button" class="btn--icon" data-coupon-edit="${c.id}" title="Editar"><i class="fas fa-pen"></i></button>
+          <button type="button" class="btn--icon delete" data-coupon-del="${c.id}" title="Excluir"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('[data-coupon-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const coupon = Storage.getCoupons().find((x) => x.id === btn.dataset.couponEdit);
+      if (coupon) openCouponModal(coupon);
+    });
+  });
+  tbody.querySelectorAll('[data-coupon-del]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Excluir este cupom?')) return;
+      const next = Storage.getCoupons().filter((x) => x.id !== btn.dataset.couponDel);
+      const ok = await Storage.saveCouponsAsync(next);
+      renderCoupons();
+      if (ok) showToast('Cupom excluído.', 'success');
+      else showToast('Não foi possível salvar no servidor. Tente de novo.', 'error');
+    });
+  });
+}
+
+function openCouponModal(coupon = null) {
+  const isEdit = Boolean(coupon);
+  openModal(isEdit ? 'Editar cupom' : 'Novo cupom', `
+    <form id="coupon-form" class="settings-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Código *</label>
+          <input type="text" id="coupon-code" required maxlength="40" value="${escapeHtml(coupon?.code || '')}" placeholder="Ex: AURORA10" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Nome / descrição</label>
+          <input type="text" id="coupon-label" value="${escapeHtml(coupon?.label || '')}" placeholder="Ex: 10% de desconto">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo *</label>
+          <select id="coupon-type">
+            <option value="percent" ${(coupon?.type || 'percent') === 'percent' ? 'selected' : ''}>Porcentagem (%)</option>
+            <option value="fixed" ${coupon?.type === 'fixed' ? 'selected' : ''}>Valor fixo (R$)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor *</label>
+          <input type="number" id="coupon-value" required min="0" step="0.01" value="${coupon?.value ?? ''}" placeholder="10">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Pedido mínimo (R$)</label>
+          <input type="number" id="coupon-min" min="0" step="0.01" value="${coupon?.minOrder ?? 0}" placeholder="0">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:0.35rem">
+          <label style="display:flex;gap:0.5rem;align-items:center;cursor:pointer">
+            <input type="checkbox" id="coupon-active" ${coupon?.active !== false ? 'checked' : ''}>
+            Cupom ativo no site
+          </label>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" data-close-modal>Cancelar</button>
+        <button type="submit" class="btn btn--primary">${isEdit ? 'Salvar' : 'Criar cupom'}</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('coupon-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = document.getElementById('coupon-code').value.trim().toUpperCase();
+    const type = document.getElementById('coupon-type').value === 'fixed' ? 'fixed' : 'percent';
+    const value = parseFloat(document.getElementById('coupon-value').value);
+    const minOrder = parseFloat(document.getElementById('coupon-min').value) || 0;
+    const label = document.getElementById('coupon-label').value.trim();
+    const active = document.getElementById('coupon-active').checked;
+
+    if (!code || !(value > 0)) {
+      showToast('Informe o código e um valor válido.', 'error');
+      return;
+    }
+    if (type === 'percent' && value > 100) {
+      showToast('Porcentagem máxima é 100%.', 'error');
+      return;
+    }
+
+    const list = Storage.getCoupons();
+    const duplicate = list.find((c) => c.code.toUpperCase() === code && c.id !== coupon?.id);
+    if (duplicate) {
+      showToast('Já existe um cupom com esse código.', 'error');
+      return;
+    }
+
+    const data = { code, type, value, minOrder, label, active };
+    if (isEdit) {
+      const idx = list.findIndex((c) => c.id === coupon.id);
+      if (idx >= 0) list[idx] = { ...list[idx], ...data };
+    } else {
+      list.unshift({ id: Storage.generateId('cp'), ...data });
+    }
+
+    const submitBtn = e.target.querySelector('[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Salvando...';
+    }
+
+    const ok = await Storage.saveCouponsAsync(list);
+    if (!ok) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = isEdit ? 'Salvar' : 'Criar cupom';
+      }
+      showToast('Não foi possível salvar no servidor. Confira a conexão e tente de novo.', 'error');
+      return;
+    }
+
+    closeModal();
+    renderCoupons();
+    showToast(isEdit ? 'Cupom atualizado!' : 'Cupom criado!', 'success');
+  });
+}
+
 /* --- Financeiro (restrito ao admin logado) --- */
 let revenueChart = null;
 let finPeriod = 'all';
@@ -1189,15 +1559,23 @@ function initSettings() {
   document.getElementById('set-instagram-user').value = s.instagramUser || '';
   document.getElementById('set-address').value = s.address || '';
   document.getElementById('set-hours').value = s.hours || '';
+  document.getElementById('set-delivery-fee').value =
+    s.deliveryFee != null && s.deliveryFee !== '' ? Number(s.deliveryFee) : 7;
+  document.getElementById('set-delivery-note').value =
+    s.deliveryNote || 'Bairros mais afastados: consultar';
   document.getElementById('set-sobre1').value = s.sobreText1 || '';
   document.getElementById('set-sobre2').value = s.sobreText2 || '';
 
   bindImageUpload('set-banner-file', 'set-banner');
   bindImageUpload('set-sobre-file', 'set-sobre-image');
 
-  document.getElementById('settings-form').addEventListener('submit', (e) => {
+  document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    Storage.saveSettings({
+    const feeRaw = String(document.getElementById('set-delivery-fee').value || '').replace(',', '.');
+    let deliveryFee = Number(feeRaw);
+    if (!Number.isFinite(deliveryFee) || deliveryFee < 0) deliveryFee = 7;
+
+    const payload = {
       name: document.getElementById('set-name').value.trim(),
       tagline: document.getElementById('set-tagline').value.trim(),
       banner: document.getElementById('set-banner').value.trim(),
@@ -1208,9 +1586,21 @@ function initSettings() {
       instagramUser: document.getElementById('set-instagram-user').value.trim(),
       address: document.getElementById('set-address').value.trim(),
       hours: document.getElementById('set-hours').value.trim(),
+      deliveryFee,
+      deliveryNote: document.getElementById('set-delivery-note').value.trim() || 'Bairros mais afastados: consultar',
       sobreText1: document.getElementById('set-sobre1').value.trim(),
       sobreText2: document.getElementById('set-sobre2').value.trim(),
-    });
+    };
+
+    Storage.saveSettings(payload);
+    if (typeof Storage.saveAsync === 'function') {
+      const data = Storage.getAll();
+      const ok = await Storage.saveAsync(data);
+      if (!ok) {
+        showToast('Salvo no celular, mas não sincronizou na nuvem. Tente de novo.', 'error');
+        return;
+      }
+    }
     showToast('Site atualizado!', 'success');
   });
 
@@ -1250,6 +1640,9 @@ function initButtons() {
 function initModals() {
   document.querySelector('#modal .modal__close').addEventListener('click', closeModal);
   document.querySelector('#modal .modal__overlay').addEventListener('click', closeModal);
+  document.getElementById('modal')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close-modal]')) closeModal();
+  });
 }
 
 function openModal(title, bodyHtml, options = {}) {
