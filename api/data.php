@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * API Aurora — MySQL Hostinger
  * Banco: u586160337_aurora_doces

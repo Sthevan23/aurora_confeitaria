@@ -446,9 +446,17 @@ function publicAssetUrl(path) {
   if (!path) return '';
   if (/^(https?:|data:|blob:)/i.test(path)) return path;
   const clean = String(path).replace(/^\//, '');
-  if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '') || location.protocol === 'file:') {
+  const host = (location.hostname || '').toLowerCase();
+  const local =
+    location.protocol === 'file:' ||
+    !host ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    (host !== 'auroraconfeitaria.com.br' && host !== 'www.auroraconfeitaria.com.br');
+  if (local) {
     return `https://auroraconfeitaria.com.br/${clean}`;
   }
+  // No admin online: ../products/...
   return '../' + clean;
 }
 
@@ -456,24 +464,52 @@ function adminImageSrc(path) {
   return publicAssetUrl(path);
 }
 
-async function fileToJpegBlob(file, max = 1400, quality = 0.82) {
+const ADMIN_FALLBACK_IMG = 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg';
+
+function adminImgTag(path, alt, className = 'table__img') {
+  const src = adminImageSrc(path) || adminImageSrc(ADMIN_FALLBACK_IMG);
+  const fallback = adminImageSrc(ADMIN_FALLBACK_IMG);
+  return `<img src="${src}" alt="${escapeHtml(alt || '')}" class="${className}" loading="lazy" onerror="this.onerror=null;this.src='${fallback}'">`;
+}
+
+/** Foto do card do site: 3:4 (retrato), tamanho fixo — sempre cabe no MySQL e aparece. */
+const PRODUCT_IMG = {
+  width: 720,
+  height: 960, // 3:4 — igual ao .product-card__img
+  quality: 0.78,
+  maxDataUrl: 900000,
+};
+
+/**
+ * Recorta no centro (cover) e redimensiona para WxH em JPG.
+ */
+async function fileToProductJpeg(file, width = PRODUCT_IMG.width, height = PRODUCT_IMG.height, quality = PRODUCT_IMG.quality) {
   if (/heic|heif/i.test(file.type) || /\.heic$/i.test(file.name)) {
     throw new Error('Foto HEIC do iPhone não funciona. No iPhone: Ajustes → Câmera → Formatos → Mais Compatível.');
   }
 
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) {
-    if ((file.type === 'image/jpeg' || file.type === 'image/jpg') && file.size < 2 * 1024 * 1024) {
-      return file;
-    }
     throw new Error('Não foi possível ler a imagem. Use JPG ou PNG.');
   }
 
-  let { width, height } = bitmap;
-  if (width > max || height > max) {
-    const scale = Math.min(max / width, max / height);
-    width = Math.round(width * scale);
-    height = Math.round(height * scale);
+  const sw = bitmap.width;
+  const sh = bitmap.height;
+  const targetRatio = width / height;
+  const srcRatio = sw / Math.max(sh, 1);
+
+  let sx = 0;
+  let sy = 0;
+  let sWidth = sw;
+  let sHeight = sh;
+  if (srcRatio > targetRatio) {
+    // mais larga → corta laterais
+    sWidth = Math.round(sh * targetRatio);
+    sx = Math.round((sw - sWidth) / 2);
+  } else if (srcRatio < targetRatio) {
+    // mais alta → corta topo/base
+    sHeight = Math.round(sw / targetRatio);
+    sy = Math.round((sh - sHeight) / 2);
   }
 
   const canvas = document.createElement('canvas');
@@ -482,12 +518,12 @@ async function fileToJpegBlob(file, max = 1400, quality = 0.82) {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, width, height);
-  ctx.drawImage(bitmap, 0, 0, width, height);
+  ctx.drawImage(bitmap, sx, sy, sWidth, sHeight, 0, 0, width, height);
   bitmap.close?.();
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
   if (!blob) throw new Error('Falha ao compactar a foto');
-  return new File([blob], (file.name || 'foto').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  return new File([blob], 'produto.jpg', { type: 'image/jpeg' });
 }
 
 async function blobToDataUrl(blob) {
@@ -508,51 +544,48 @@ async function isPublicImageOk(path) {
   return Boolean(get && get.ok);
 }
 
+/**
+ * Prepara a foto para o produto.
+ * Sempre grava data URL no tamanho certo (3:4) — assim a foto aparece no site
+ * na hora, sem depender da pasta products/ da Hostinger.
+ */
 async function uploadAdminImage(file) {
-  const password = Storage.getAdminPassword();
-  if (!password) throw new Error('Faça login novamente');
+  if (!Storage.getAdminPassword()) throw new Error('Faça login novamente');
 
-  // Compacta sempre — fica leve e aparece no site na hora
-  const normalized = await fileToJpegBlob(file, 1000, 0.72);
+  // 1) Formato do card (3:4) + tamanho fixo
+  let normalized = await fileToProductJpeg(file);
+  let dataUrl = await blobToDataUrl(normalized);
 
-  // 1) Tenta gravar arquivo em products/ (melhor para WhatsApp)
+  // 2) Se ainda grande, compacta mais (mantém 3:4)
+  if (dataUrl.length > PRODUCT_IMG.maxDataUrl) {
+    normalized = await fileToProductJpeg(file, 600, 800, 0.68);
+    dataUrl = await blobToDataUrl(normalized);
+  }
+  if (dataUrl.length > PRODUCT_IMG.maxDataUrl) {
+    normalized = await fileToProductJpeg(file, 480, 640, 0.62);
+    dataUrl = await blobToDataUrl(normalized);
+  }
+  if (!dataUrl.startsWith('data:image/') || dataUrl.length > 1400000) {
+    throw new Error('Foto ainda muito grande. Escolha outra JPG/PNG.');
+  }
+
+  // 3) Tenta espelhar em products/ (WhatsApp) em segundo plano — não bloqueia
   try {
+    const password = Storage.getAdminPassword();
     const form = new FormData();
-    form.append('image', normalized, normalized.name || 'foto.jpg');
+    form.append('image', normalized, 'produto.jpg');
     const apiBase = typeof Storage.getApiUrl === 'function'
       ? Storage.getApiUrl().replace(/data\.php$/i, 'upload.php')
       : 'https://auroraconfeitaria.com.br/api/upload.php';
-
-    const res = await fetch(apiBase, {
+    fetch(apiBase, {
       method: 'POST',
       headers: { 'X-Admin-Password': password },
       body: form,
-    });
-    const json = await res.json().catch(() => ({}));
-    if (res.ok && json.ok && json.path && await isPublicImageOk(json.path)) {
-      return json.path;
-    }
-    // Arquivo gravou mas não ficou público → usa dataUrl que o servidor já devolveu
-    if (res.ok && json.ok && typeof json.dataUrl === 'string' && json.dataUrl.startsWith('data:image/')) {
-      return json.dataUrl;
-    }
+    }).catch(() => {});
   } catch {
-    // segue para fallback
+    // ok
   }
 
-  // 2) Fallback garantido: salva a foto no banco (data URL) — aparece imediatamente no site
-  let dataUrl = await blobToDataUrl(normalized);
-  if (!dataUrl.startsWith('data:image/')) {
-    throw new Error('Falha ao preparar a foto');
-  }
-  // Compacta mais se ainda estiver grande (celular manda HEIC/PNG enorme)
-  if (dataUrl.length > 900000) {
-    const smaller = await fileToJpegBlob(file, 850, 0.62);
-    dataUrl = await blobToDataUrl(smaller);
-  }
-  if (dataUrl.length > 1400000) {
-    throw new Error('Foto ainda muito grande. Escolha outra com menos resolução.');
-  }
   return dataUrl;
 }
 
@@ -565,8 +598,17 @@ function bindImageUpload(fileInputId, pathInputId, previewId) {
   const refreshPreview = () => {
     if (!preview) return;
     const src = pathInput.value.trim();
-    preview.src = src ? publicAssetUrl(src) : '';
-    preview.hidden = !src;
+    if (!src) {
+      preview.hidden = true;
+      preview.removeAttribute('src');
+      return;
+    }
+    preview.onerror = () => {
+      preview.onerror = null;
+      preview.hidden = true;
+    };
+    preview.src = publicAssetUrl(src);
+    preview.hidden = false;
   };
   pathInput.addEventListener('input', refreshPreview);
   refreshPreview();
@@ -576,11 +618,11 @@ function bindImageUpload(fileInputId, pathInputId, previewId) {
     if (!file) return;
     fileInput.disabled = true;
     try {
-      showToast('Enviando foto…', 'success');
+      showToast('Ajustando foto (tamanho e enquadramento)…', 'success');
       const path = await uploadAdminImage(file);
       pathInput.value = path;
       refreshPreview();
-      showToast('Foto pronta! Salve o produto para publicar no site.', 'success');
+      showToast('Foto pronta! Clique em Salvar para publicar no site.', 'success');
     } catch (err) {
       showToast(err.message || 'Falha ao enviar foto', 'error');
       if (preview && !pathInput.value.trim()) {
@@ -793,7 +835,7 @@ function renderProducts() {
 
   tbody.innerHTML = products.map(p => `
     <tr>
-      <td><img src="${adminImageSrc(p.image)}" alt="${escapeHtml(p.name)}" class="table__img"></td>
+      <td>${adminImgTag(p.image, p.name)}</td>
       <td><strong>${escapeHtml(p.name)}</strong></td>
       <td>${Storage.getCategoryName(p.categoryId)}</td>
       <td>${p.size ? `<span class="badge badge--info">${escapeHtml(p.size)}</span>` : '—'}</td>
@@ -847,7 +889,8 @@ function openProductModal(product = null) {
   const categories = Storage.getCategories();
   const isEdit = !!product;
   const img = product?.image || '';
-  const previewSrc = img ? publicAssetUrl(img) : '';
+  // data URL não vai no HTML (muito grande) — preenchemos via JS abaixo
+  const pathAttr = img && !/^data:/i.test(img) ? escapeHtml(img) : '';
 
   openModal(isEdit ? 'Editar Produto' : 'Novo Produto', `
     <form id="product-form">
@@ -873,10 +916,12 @@ function openProductModal(product = null) {
       </div>
       <div class="form-group">
         <label>Foto do produto</label>
-        <input type="text" id="prod-image" value="${img}" placeholder="products/foto.jpg" required>
-        <input type="file" id="prod-image-file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp" style="margin-top:0.5rem">
-        <small style="display:block;margin-top:0.35rem;color:#888">Use JPG ou PNG. Fotos HEIC do iPhone não funcionam.</small>
-        <img id="prod-preview" alt="" style="margin-top:0.75rem;max-height:160px;border-radius:12px;object-fit:cover;width:100%" ${previewSrc ? `src="${escapeHtml(previewSrc)}"` : 'hidden'}>
+        <input type="hidden" id="prod-image" value="${pathAttr}">
+        <input type="file" id="prod-image-file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp">
+        <small style="display:block;margin-top:0.35rem;color:#888">JPG ou PNG. A foto é cortada no formato do card (3:4) e no tamanho certo sozinha.</small>
+        <div class="prod-photo-preview-wrap">
+          <img id="prod-preview" class="prod-photo-preview" alt="Prévia" hidden>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -936,6 +981,16 @@ function openProductModal(product = null) {
       </div>
     </form>
   `);
+
+  const prodImageInput = document.getElementById('prod-image');
+  const prodPreview = document.getElementById('prod-preview');
+  if (img && prodImageInput) {
+    prodImageInput.value = img;
+    if (prodPreview) {
+      prodPreview.src = publicAssetUrl(img);
+      prodPreview.hidden = false;
+    }
+  }
 
   bindImageUpload('prod-image-file', 'prod-image', 'prod-preview');
 

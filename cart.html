@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Seu carrinho — Aurora Confeitaria Artesanal">
+  <title>Carrinho | Aurora Confeitaria</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css?v=32">
+</head>
+<body class="cart-page">
+  <header class="header header--solid" id="header">
+    <div class="container header__inner">
+      <a class="cart-page__back" href="index.html#produtos" aria-label="Voltar ao cardápio">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+        <span>Cardápio</span>
+      </a>
+      <span class="brand-logo brand-logo--header" aria-label="Aurora">
+        <span class="brand-logo__name">Aurora</span>
+      </span>
+      <a class="header__cart header__cart--link is-active" href="cart.html" aria-label="Carrinho">
+        <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
+        <span class="header__cart-meta">
+          <span class="header__cart-count" id="cart-count" hidden>0</span>
+          <span class="header__cart-total" id="header-cart-total" hidden></span>
+        </span>
+      </a>
+    </div>
+  </header>
+
+  <main class="cart-page__main container">
+    <header class="cart-page__head">
+      <p class="cart-page__eyebrow">Seu pedido</p>
+      <h1 class="cart-page__title">Carrinho</h1>
+      <p class="cart-page__subtitle" id="cart-page-subtitle">Nenhum item ainda</p>
+    </header>
+
+    <div class="cart-page__layout">
+      <section class="cart-page__list" aria-label="Itens do carrinho">
+        <div id="cart-page-items"></div>
+        <div class="cart-page__empty" id="cart-page-empty" hidden>
+          <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
+          <h2>Carrinho vazio</h2>
+          <p>Escolha seus doces no cardápio e adicione aqui.</p>
+          <a class="btn btn--secondary" href="index.html#produtos">Ver cardápio</a>
+        </div>
+      </section>
+
+      <aside class="cart-page__summary" id="cart-page-summary" hidden>
+        <div class="cart-summary">
+          <h2 class="cart-summary__title">Resumo</h2>
+
+          <div class="cart-summary__row">
+            <span>Subtotal</span>
+            <strong id="cart-page-subtotal">R$ 0,00</strong>
+          </div>
+          <div class="cart-summary__row cart-summary__row--muted" id="cart-page-discount-row" hidden>
+            <span>Desconto <em id="cart-page-coupon-label"></em></span>
+            <strong id="cart-page-discount">− R$ 0,00</strong>
+          </div>
+          <div class="cart-summary__row cart-summary__row--muted" id="cart-page-fee-row" hidden>
+            <span>Taxa de entrega (centro)</span>
+            <strong id="cart-page-fee">R$ 0,00</strong>
+          </div>
+          <div class="cart-summary__row cart-summary__row--total">
+            <span>Total</span>
+            <strong id="cart-page-total">R$ 0,00</strong>
+          </div>
+          <p class="cart-summary__note" id="cart-page-fee-note" hidden></p>
+
+          <div class="cart-coupon" id="cart-page-coupon" hidden>
+            <label class="order-field" for="cart-page-coupon-input">Cupom de desconto</label>
+            <div class="cart-coupon__row">
+              <input type="text" id="cart-page-coupon-input" placeholder="Ex: AURORA10" autocomplete="off" maxlength="40">
+              <button type="button" class="btn btn--ghost" id="cart-page-coupon-apply">Aplicar</button>
+            </div>
+            <p class="cart-coupon__msg" id="cart-page-coupon-msg" hidden></p>
+            <button type="button" class="cart-coupon__remove" id="cart-page-coupon-remove" hidden>Remover cupom</button>
+          </div>
+
+          <div class="cart-checkout cart-checkout--page">
+            <p class="cart-checkout__label">Como prefere receber?</p>
+            <div class="fulfillment" role="radiogroup" aria-label="Entrega ou retirada">
+              <label class="fulfillment__option">
+                <input type="radio" name="cart-page-fulfillment" value="retirada" id="cart-page-fulfillment-retirada" checked>
+                <span>
+                  <strong>Retirada</strong>
+                  <small>Buscar no local</small>
+                </span>
+              </label>
+              <label class="fulfillment__option">
+                <input type="radio" name="cart-page-fulfillment" value="entrega" id="cart-page-fulfillment-entrega">
+                <span>
+                  <strong>Entrega</strong>
+                  <small id="cart-page-delivery-label">Frete no centro</small>
+                </span>
+              </label>
+            </div>
+
+            <p class="cart-checkout__label cart-checkout__label--spaced">Seus dados</p>
+            <div class="cart-checkout__fields">
+              <label class="order-field">Nome *<input type="text" id="cart-page-nome" placeholder="Nome" autocomplete="given-name"></label>
+              <label class="order-field">Sobrenome *<input type="text" id="cart-page-sobrenome" placeholder="Sobrenome" autocomplete="family-name"></label>
+            </div>
+            <label class="order-field">WhatsApp *<input type="tel" id="cart-page-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
+
+            <p class="cart-drawer__error" id="cart-page-error" hidden></p>
+            <button type="button" class="btn btn--secondary cart-summary__cta" id="cart-page-checkout">
+              Finalizar pedido pelo WhatsApp
+            </button>
+            <a class="btn btn--ghost" href="index.html#produtos">Continuar comprando</a>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div class="cart-feedback" id="cart-feedback" hidden aria-live="polite"></div>
+
+  <script src="js/default-data.js?v=16"></script>
+  <script src="js/storage.js?v=25"></script>
+  <script src="js/cart-shared.js?v=1"></script>
+  <script src="js/cart-page.js?v=3"></script>
+</body>
+</html>

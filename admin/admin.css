@@ -1498,3 +1498,25 @@ body.sidebar-open {
   }
 }
 
+/* Prévia da foto do produto — mesmo formato 3:4 do card do site */
+.prod-photo-preview-wrap {
+  margin-top: 0.75rem;
+  width: min(180px, 45vw);
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f3e9e4;
+  border: 1px solid rgba(93, 64, 55, 0.12);
+}
+
+.prod-photo-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.prod-photo-preview[hidden] {
+  display: none;
+}
+

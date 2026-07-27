@@ -1,7 +1,8 @@
 <?php
 /**
  * Upload de imagens — Hostinger
- * Grava ao lado das fotos que já funcionam em /products.
+ * Só aceita path público se gravar ao lado das fotos que já abrem em /products.
+ * Se a pasta pública não existir, devolve dataUrl para salvar no MySQL.
  */
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -79,64 +80,10 @@ if ($file['size'] > 8 * 1024 * 1024) {
   exit;
 }
 
-$docRoot = rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), "/\\");
-$siteRoot = dirname(__DIR__);
-$candidates = [];
-if ($docRoot !== '') {
-  $candidates[] = $docRoot . DIRECTORY_SEPARATOR . 'products';
-}
-$candidates[] = $siteRoot . DIRECTORY_SEPARATOR . 'products';
-$homeGuess = dirname($siteRoot) . DIRECTORY_SEPARATOR . 'public_html' . DIRECTORY_SEPARATOR . 'products';
-if (!in_array($homeGuess, $candidates, true)) {
-  $candidates[] = $homeGuess;
-}
-$candidates = array_values(array_unique($candidates));
-
-// Âncora: pasta onde já existe foto pública conhecida
-$anchorName = '9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg';
-$anchorDirs = [];
-$otherDirs = [];
-foreach ($candidates as $candidate) {
-  if (!is_dir($candidate)) {
-    @mkdir($candidate, 0755, true);
-  }
-  if (!(is_dir($candidate) && is_writable($candidate))) {
-    continue;
-  }
-  if (is_file($candidate . DIRECTORY_SEPARATOR . $anchorName)) {
-    $anchorDirs[] = $candidate;
-  } else {
-    $otherDirs[] = $candidate;
-  }
-}
-$writableDirs = array_values(array_unique(array_merge($anchorDirs, $otherDirs)));
-
-if (!$writableDirs) {
-  http_response_code(500);
-  echo json_encode([
-    'error' => 'Pasta products sem permissão de escrita no servidor',
-    'tried' => $candidates,
-    'docRoot' => $docRoot,
-  ]);
-  exit;
-}
-
-// Nome estável estilo UUID (os up-* sumiam no Hostinger)
-$savedAs = sprintf(
-  '%s-%s-%s-%s-%s.jpg',
-  bin2hex(random_bytes(4)),
-  bin2hex(random_bytes(2)),
-  bin2hex(random_bytes(2)),
-  bin2hex(random_bytes(2)),
-  bin2hex(random_bytes(6))
-);
-$bytes = 0;
-$savedDirs = [];
-
 /**
- * Tenta reencode para JPG (mais compatível na Hostinger)
+ * Tenta reencode para JPG 3:4 (igual ao card do site)
  */
-function aurora_image_to_jpeg(string $src, string $dest, string $mime): bool {
+function aurora_image_to_jpeg(string $src, string $dest, string $mime, int $outW = 720, int $outH = 960): bool {
   if (!function_exists('imagecreatetruecolor')) {
     return false;
   }
@@ -156,90 +103,152 @@ function aurora_image_to_jpeg(string $src, string $dest, string $mime): bool {
 
   $w = imagesx($img);
   $h = imagesy($img);
-  $max = 1600;
-  if ($w > $max || $h > $max) {
-    $scale = min($max / max($w, 1), $max / max($h, 1));
-    $nw = max(1, (int) round($w * $scale));
-    $nh = max(1, (int) round($h * $scale));
-    $resized = imagecreatetruecolor($nw, $nh);
-    $white = imagecolorallocate($resized, 255, 255, 255);
-    imagefilledrectangle($resized, 0, 0, $nw, $nh, $white);
-    imagecopyresampled($resized, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
-    imagedestroy($img);
-    $img = $resized;
-  } else {
-    $canvas = imagecreatetruecolor($w, $h);
-    $white = imagecolorallocate($canvas, 255, 255, 255);
-    imagefilledrectangle($canvas, 0, 0, $w, $h, $white);
-    imagecopy($canvas, $img, 0, 0, 0, 0, $w, $h);
-    imagedestroy($img);
-    $img = $canvas;
+  $targetRatio = $outW / max($outH, 1);
+  $srcRatio = $w / max($h, 1);
+
+  $sx = 0;
+  $sy = 0;
+  $sWidth = $w;
+  $sHeight = $h;
+  if ($srcRatio > $targetRatio) {
+    $sWidth = (int) round($h * $targetRatio);
+    $sx = (int) round(($w - $sWidth) / 2);
+  } elseif ($srcRatio < $targetRatio) {
+    $sHeight = (int) round($w / $targetRatio);
+    $sy = (int) round(($h - $sHeight) / 2);
   }
 
-  $ok = imagejpeg($img, $dest, 85);
+  $canvas = imagecreatetruecolor($outW, $outH);
+  $white = imagecolorallocate($canvas, 255, 255, 255);
+  imagefilledrectangle($canvas, 0, 0, $outW, $outH, $white);
+  imagecopyresampled($canvas, $img, 0, 0, $sx, $sy, $outW, $outH, $sWidth, $sHeight);
   imagedestroy($img);
+
+  $ok = imagejpeg($canvas, $dest, 82);
+  imagedestroy($canvas);
   return $ok && is_file($dest);
 }
 
-$primary = $writableDirs[0];
-$primaryDestJpg = $primary . DIRECTORY_SEPARATOR . $savedAs;
-
-$wrote = false;
-if (aurora_image_to_jpeg($tmp, $primaryDestJpg, $mime)) {
-  $wrote = true;
-  $bytes = filesize($primaryDestJpg) ?: 0;
-  $savedDirs[] = $primary;
-} else {
-  $ext = $allowed[$mime];
-  $savedAs = preg_replace('/\.jpg$/i', '.' . $ext, $savedAs);
-  $dest = $primary . DIRECTORY_SEPARATOR . $savedAs;
-  if (move_uploaded_file($tmp, $dest) || @copy($tmp, $dest)) {
-    $wrote = true;
-    $bytes = filesize($dest) ?: 0;
-    $savedDirs[] = $primary;
+function aurora_tmp_jpeg_bytes(string $src, string $mime): ?string {
+  $tmpOut = tempnam(sys_get_temp_dir(), 'aurora_img_');
+  if ($tmpOut === false) {
+    return null;
   }
+  $dest = $tmpOut . '.jpg';
+  @unlink($tmpOut);
+  if (!aurora_image_to_jpeg($src, $dest, $mime)) {
+    // Sem GD: devolve bytes originais se já for jpeg
+    if ($mime === 'image/jpeg') {
+      $raw = file_get_contents($src);
+      return $raw !== false ? $raw : null;
+    }
+    return null;
+  }
+  $bytes = file_get_contents($dest);
+  @unlink($dest);
+  return $bytes !== false ? $bytes : null;
 }
 
-if (!$wrote) {
+$docRoot = rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), "/\\");
+$siteRoot = dirname(__DIR__);
+$candidates = [];
+if ($docRoot !== '') {
+  $candidates[] = $docRoot . DIRECTORY_SEPARATOR . 'products';
+}
+$candidates[] = $siteRoot . DIRECTORY_SEPARATOR . 'products';
+$homeGuess = dirname($siteRoot) . DIRECTORY_SEPARATOR . 'public_html' . DIRECTORY_SEPARATOR . 'products';
+if (!in_array($homeGuess, $candidates, true)) {
+  $candidates[] = $homeGuess;
+}
+$candidates = array_values(array_unique($candidates));
+
+// Âncora: pasta onde já existe foto pública conhecida (só essa é segura)
+$anchorName = '9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg';
+$anchorDirs = [];
+foreach ($candidates as $candidate) {
+  if (!is_dir($candidate)) {
+    @mkdir($candidate, 0755, true);
+  }
+  if (!(is_dir($candidate) && is_writable($candidate))) {
+    continue;
+  }
+  if (is_file($candidate . DIRECTORY_SEPARATOR . $anchorName)) {
+    $anchorDirs[] = $candidate;
+  }
+}
+$anchorDirs = array_values(array_unique($anchorDirs));
+
+$savedAs = sprintf(
+  '%s-%s-%s-%s-%s.jpg',
+  bin2hex(random_bytes(4)),
+  bin2hex(random_bytes(2)),
+  bin2hex(random_bytes(2)),
+  bin2hex(random_bytes(2)),
+  bin2hex(random_bytes(6))
+);
+
+$jpegBytes = aurora_tmp_jpeg_bytes($tmp, $mime);
+if ($jpegBytes === null || strlen($jpegBytes) < 32) {
   http_response_code(500);
-  echo json_encode(['error' => 'Falha ao salvar a imagem', 'dir' => $primary]);
+  echo json_encode(['error' => 'Falha ao processar a imagem']);
   exit;
 }
 
-@chmod($primary . DIRECTORY_SEPARATOR . $savedAs, 0644);
+$dataUrl = 'data:image/jpeg;base64,' . base64_encode($jpegBytes);
 
-$srcFile = $primary . DIRECTORY_SEPARATOR . $savedAs;
-foreach ($writableDirs as $dir) {
+// Sem pasta pública âncora → só dataUrl (aparece no site via MySQL)
+if (!$anchorDirs) {
+  echo json_encode([
+    'ok' => true,
+    'path' => null,
+    'url' => null,
+    'bytes' => strlen($jpegBytes),
+    'dirs' => 0,
+    'anchor' => false,
+    'dataUrl' => $dataUrl,
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+
+$primary = $anchorDirs[0];
+$dest = $primary . DIRECTORY_SEPARATOR . $savedAs;
+if (@file_put_contents($dest, $jpegBytes) === false) {
+  // Fallback: dataUrl ainda funciona
+  echo json_encode([
+    'ok' => true,
+    'path' => null,
+    'url' => null,
+    'bytes' => strlen($jpegBytes),
+    'dirs' => 0,
+    'anchor' => false,
+    'dataUrl' => $dataUrl,
+    'warn' => 'Não deu para gravar em products/ — use dataUrl',
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+@chmod($dest, 0644);
+
+$savedDirs = [$primary];
+foreach ($anchorDirs as $dir) {
   if ($dir === $primary) {
     continue;
   }
   $copyTo = $dir . DIRECTORY_SEPARATOR . $savedAs;
-  if (@copy($srcFile, $copyTo)) {
+  if (@file_put_contents($copyTo, $jpegBytes) !== false) {
     @chmod($copyTo, 0644);
     $savedDirs[] = $dir;
   }
 }
 
-if (!is_file($srcFile) || filesize($srcFile) < 1) {
-  http_response_code(500);
-  echo json_encode(['error' => 'Arquivo não ficou gravado no servidor']);
-  exit;
-}
-
 $path = 'products/' . $savedAs;
-$jpegBytes = file_get_contents($srcFile);
-$dataUrl = 'data:image/jpeg;base64,' . base64_encode($jpegBytes !== false ? $jpegBytes : '');
-
-// Se a pasta âncora não foi usada, avisa — arquivo pode não ser público
-$usedAnchor = in_array($primary, $anchorDirs, true);
 
 echo json_encode([
   'ok' => true,
   'path' => $path,
   'url' => '/' . $path,
-  'bytes' => $bytes,
+  'bytes' => filesize($dest) ?: strlen($jpegBytes),
   'dirs' => count($savedDirs),
-  'anchor' => $usedAnchor,
+  'anchor' => true,
   'dir' => $primary,
   'dataUrl' => $dataUrl,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

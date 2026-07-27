@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
   <header class="header" id="header">
@@ -28,11 +28,14 @@
         <a href="#encomendas">Encomendas</a>
         <a href="#contato">Contato</a>
       </nav>
-      <button type="button" class="header__cart" id="cart-open" aria-label="Abrir carrinho">
+      <a class="header__cart header__cart--link" href="cart.html" id="cart-open" aria-label="Abrir carrinho">
         <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
-        <span>Carrinho</span>
-        <span class="header__cart-count" id="cart-count" hidden>0</span>
-      </button>
+        <span class="header__cart-label">Carrinho</span>
+        <span class="header__cart-meta">
+          <span class="header__cart-count" id="cart-count" hidden>0</span>
+          <span class="header__cart-total" id="header-cart-total" hidden></span>
+        </span>
+      </a>
     </div>
   </header>
 
@@ -333,8 +336,10 @@
   </div>
 
   <div class="order-lightbox" id="order-lightbox" hidden>
-    <button type="button" class="order-lightbox__close" id="lightbox-close" aria-label="Fechar">×</button>
-    <div class="order-lightbox__panel">
+    <button type="button" class="order-lightbox__backdrop" id="lightbox-backdrop" aria-label="Fechar"></button>
+    <div class="order-lightbox__panel order-lightbox__panel--product">
+      <div class="order-lightbox__handle" aria-hidden="true"></div>
+      <button type="button" class="order-lightbox__close" id="lightbox-close" aria-label="Fechar">×</button>
       <div class="order-lightbox__media">
         <img id="lightbox-img" src="" alt="">
       </div>
@@ -342,56 +347,38 @@
         <div class="order-lightbox__scroll">
           <span class="order-lightbox__category" id="lightbox-category"></span>
           <h3 class="order-lightbox__title" id="lightbox-title"></h3>
-          <p class="order-lightbox__price" id="lightbox-price"></p>
+          <p class="order-lightbox__price" id="lightbox-unit-price"></p>
           <p class="order-lightbox__desc" id="lightbox-desc"></p>
           <div id="lightbox-flavors" hidden></div>
-          <div class="order-acc is-open" id="acc-customer">
-            <button type="button" class="order-acc__head" id="acc-customer-toggle">
-              <span class="order-acc__title">Seus dados</span>
-              <span class="order-acc__summary">obrigatório</span>
-              <span class="order-acc__chevron">▾</span>
-            </button>
-            <div class="order-acc__body">
-              <div class="order-acc__inner">
-                <div class="customer-fields">
-                  <div class="customer-fields__row">
-                    <label class="order-field">Nome *<input type="text" id="order-nome" placeholder="Nome" autocomplete="given-name"></label>
-                    <label class="order-field">Sobrenome *<input type="text" id="order-sobrenome" placeholder="Sobrenome" autocomplete="family-name"></label>
-                  </div>
-                  <label class="order-field">Telefone / WhatsApp *<input type="tel" id="order-phone" name="order-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
-                  <p class="cart-checkout__label cart-checkout__label--spaced">Como prefere receber?</p>
-                  <div class="fulfillment" role="radiogroup" aria-label="Entrega ou retirada">
-                    <label class="fulfillment__option">
-                      <input type="radio" name="order-fulfillment" value="retirada" id="order-fulfillment-retirada" checked>
-                      <span>
-                        <strong>Retirada</strong>
-                        <small>Buscar no local</small>
-                      </span>
-                    </label>
-                    <label class="fulfillment__option">
-                      <input type="radio" name="order-fulfillment" value="entrega" id="order-fulfillment-entrega">
-                      <span>
-                        <strong>Entrega</strong>
-                        <small data-delivery-fee-label>R$ 7,00 no centro</small>
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
+          <label class="order-field order-field--notes">
+            Observações
+            <textarea id="lightbox-notes" rows="3" maxlength="240" placeholder="Ex: Pouco doce, sem cobertura, bem gelado…"></textarea>
+          </label>
+          <div class="order-qty-row">
+            <span class="order-qty-row__label">Quantidade</span>
+            <div class="qty-stepper" id="lightbox-qty-stepper">
+              <button type="button" class="qty-stepper__btn" id="lightbox-qty-minus" aria-label="Diminuir">−</button>
+              <span class="qty-stepper__value" id="lightbox-qty-value">1</span>
+              <button type="button" class="qty-stepper__btn qty-stepper__btn--plus" id="lightbox-qty-plus" aria-label="Aumentar">+</button>
             </div>
           </div>
         </div>
         <div class="order-lightbox__actions">
           <p class="order-lightbox__error" id="order-error" hidden></p>
-          <button type="button" class="btn btn--secondary" id="lightbox-add-cart">Adicionar ao carrinho</button>
-          <button type="button" class="btn btn--ghost" id="lightbox-order">Finalizar este pedido</button>
+          <button type="button" class="btn btn--secondary order-lightbox__add" id="lightbox-add-cart">
+            <span class="order-lightbox__add-label">Adicionar ao carrinho</span>
+            <strong class="order-lightbox__add-total" id="lightbox-line-total"></strong>
+          </button>
         </div>
       </div>
     </div>
   </div>
 
+  <div class="cart-feedback" id="cart-feedback" hidden aria-live="polite"></div>
+
   <script src="js/default-data.js?v=16"></script>
-  <script src="js/storage.js?v=24"></script>
-  <script src="script.js?v=35"></script>
+  <script src="js/storage.js?v=25"></script>
+  <script src="js/cart-shared.js?v=1"></script>
+  <script src="script.js?v=43"></script>
 </body>
 </html>
