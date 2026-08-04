@@ -28,11 +28,18 @@ function public_payload(array $data): array {
     ];
   }
 
+  // Produtos: mantém paths; data-URL enorme já é convertida gradualmente no loader
+  $products = [];
+  foreach ($data['products'] ?? [] as $p) {
+    if (!is_array($p)) continue;
+    $products[] = $p;
+  }
+
   return [
     'version' => $data['version'] ?? 1,
     'settings' => $data['settings'] ?? new stdClass(),
     'categories' => $data['categories'] ?? [],
-    'products' => $data['products'] ?? [],
+    'products' => $products,
     'reviews' => $data['reviews'] ?? [],
     'faq' => $data['faq'] ?? [],
     'gallery' => $data['gallery'] ?? [],
@@ -40,14 +47,13 @@ function public_payload(array $data): array {
   ];
 }
 
-function get_password(): string {
-  $header = $_SERVER['HTTP_X_ADMIN_PASSWORD'] ?? '';
-  if ($header !== '') {
-    return (string) $header;
-  }
-  $input = json_decode(file_get_contents('php://input'), true);
-  if (is_array($input) && !empty($input['password'])) {
-    return (string) $input['password'];
+function get_password_header(): string {
+  return (string) ($_SERVER['HTTP_X_ADMIN_PASSWORD'] ?? '');
+}
+
+function get_password_from_body(array $body): string {
+  if (!empty($body['password'])) {
+    return (string) $body['password'];
   }
   return '';
 }
@@ -74,7 +80,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
-  // Health / probe do front
+  // Health / probe do front — leve
   if (isset($_GET['ping'])) {
     try {
       $cfg = require __DIR__ . '/config.php';
@@ -99,9 +105,11 @@ if ($method === 'GET') {
   }
 
   $pdo = db_or_fail();
+  $password = get_password_header();
+  $wantFull = isset($_GET['full']) || $action === 'full';
 
   try {
-    $data = aurora_load_all($pdo);
+    $data = aurora_load_all($pdo, $wantFull ? 'full' : 'public');
   } catch (Throwable $e) {
     json_out(['error' => 'Falha ao ler MySQL', 'detail' => $e->getMessage()], 500);
   }
@@ -110,18 +118,18 @@ if ($method === 'GET') {
     json_out(['empty' => true, 'db' => 'mysql']);
   }
 
-  $password = $_SERVER['HTTP_X_ADMIN_PASSWORD'] ?? '';
-  $wantFull = isset($_GET['full']) || $action === 'full';
-
   if ($wantFull) {
     $auth = aurora_get_auth($pdo);
     $ok = $auth['password'] !== '' && hash_equals($auth['password'], (string) $password);
     if (!$ok) {
       json_out(['error' => 'Senha inválida'], 401);
     }
+    header('Cache-Control: no-store');
     json_out($data);
   }
 
+  // Catálogo público: cache curto no navegador/CDN
+  header('Cache-Control: public, max-age=45');
   json_out(public_payload($data));
 }
 
@@ -134,16 +142,17 @@ if ($method === 'POST') {
   }
 
   $pdo = db_or_fail();
-  $password = get_password();
+  $password = get_password_header() ?: get_password_from_body($body);
+  $actionName = (string) ($body['action'] ?? '');
 
-  try {
-    $stored = aurora_load_all($pdo);
-  } catch (Throwable $e) {
-    json_out(['error' => 'Falha ao ler MySQL', 'detail' => $e->getMessage()], 500);
-  }
+  // Login — carrega tudo 1x
+  if ($actionName === 'login') {
+    try {
+      $stored = aurora_load_all($pdo, 'full');
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao ler MySQL', 'detail' => $e->getMessage()], 500);
+    }
 
-  // Login
-  if (($body['action'] ?? '') === 'login') {
     $email = trim((string) ($body['email'] ?? ''));
     $pass = (string) ($body['password'] ?? '');
 
@@ -163,27 +172,21 @@ if ($method === 'POST') {
     json_out(['ok' => true, 'data' => $stored]);
   }
 
-  // Amplia coluna image (VARCHAR(500) cortava fotos / data-URL)
-  if (($body['action'] ?? '') === 'migrate_product_images') {
-    $authPass = (string) ($stored['auth']['password'] ?? '');
-    if ($password === '' || $authPass === '' || !hash_equals($authPass, $password)) {
-      json_out(['error' => 'Senha inválida'], 401);
+  // Pedido / fidelidade — sem carregar produtos/imagens
+  if ($actionName === 'loyalty_status') {
+    if (!aurora_db_ready($pdo)) {
+      json_out(['error' => 'Sistema ainda não inicializado no MySQL.'], 503);
     }
+    $phone = (string) ($body['phone'] ?? $body['whatsapp'] ?? '');
     try {
-      $pdo->exec('ALTER TABLE `products` MODIFY `image` MEDIUMTEXT NULL');
-      $col = $pdo->query("SHOW COLUMNS FROM products LIKE 'image'")->fetch(PDO::FETCH_ASSOC);
-      json_out([
-        'ok' => true,
-        'columnType' => $col['Type'] ?? null,
-      ]);
+      json_out(['ok' => true, 'loyalty' => aurora_loyalty_stats_safe($pdo, $phone)]);
     } catch (Throwable $e) {
-      json_out(['error' => 'Falha no ALTER', 'detail' => $e->getMessage()], 500);
+      json_out(['error' => 'Falha ao consultar fidelidade', 'detail' => $e->getMessage()], 500);
     }
   }
 
-  // Pedido público
-  if (($body['action'] ?? '') === 'create_order') {
-    if ($stored === null) {
+  if ($actionName === 'create_order') {
+    if (!aurora_db_ready($pdo)) {
       json_out(['error' => 'Sistema ainda não inicializado no MySQL.'], 503);
     }
 
@@ -202,13 +205,64 @@ if ($method === 'POST') {
     }
   }
 
+  // Extrai data-URLs restantes para arquivos (admin)
+  if ($actionName === 'extract_data_images') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    $limit = max(1, min(50, (int) ($body['limit'] ?? 20)));
+    try {
+      $stmt = $pdo->query(
+        "SELECT id, image FROM products WHERE image LIKE 'data:image%' LIMIT " . $limit
+      );
+      $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+      $upd = $pdo->prepare('UPDATE products SET image = ? WHERE id = ?');
+      $converted = 0;
+      foreach ($rows as $row) {
+        $path = aurora_save_data_url_file((string) ($row['image'] ?? ''));
+        if ($path) {
+          $upd->execute([$path, $row['id']]);
+          $converted++;
+        }
+      }
+      $left = (int) $pdo->query(
+        "SELECT COUNT(*) FROM products WHERE image LIKE 'data:image%'"
+      )->fetchColumn();
+      json_out(['ok' => true, 'converted' => $converted, 'remaining' => $left]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao extrair imagens', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  if ($actionName === 'migrate_product_images') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    try {
+      $pdo->exec('ALTER TABLE `products` MODIFY `image` MEDIUMTEXT NULL');
+      $col = $pdo->query("SHOW COLUMNS FROM products LIKE 'image'")->fetch(PDO::FETCH_ASSOC);
+      json_out([
+        'ok' => true,
+        'columnType' => $col['Type'] ?? null,
+      ]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha no ALTER', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
   // Salvamento completo (admin)
   $payload = $body['data'] ?? $body;
   if (!is_array($payload) || !isset($payload['settings'])) {
     json_out(['error' => 'Dados incompletos'], 400);
   }
 
-  if ($stored === null) {
+  $auth = aurora_get_auth($pdo);
+  $authPass = (string) ($auth['password'] ?? '');
+  $hasData = aurora_db_ready($pdo) && $authPass !== '';
+
+  if (!$hasData) {
     if ($password === '' && !empty($payload['auth']['password'])) {
       $password = (string) $payload['auth']['password'];
     }
@@ -222,21 +276,35 @@ if ($method === 'POST') {
       ];
     }
   } else {
-    $authPass = (string) ($stored['auth']['password'] ?? '');
     if ($password === '' || !hash_equals($authPass, $password)) {
       json_out(['error' => 'Senha inválida para salvar'], 401);
     }
     if (empty($payload['auth'])) {
-      $payload['auth'] = $stored['auth'];
+      $payload['auth'] = [
+        'email' => $auth['email'] ?? '',
+        'password' => $authPass,
+      ];
     }
+  }
+
+  // Antes de salvar: se vier data-URL, tenta virar arquivo
+  if (!empty($payload['products']) && is_array($payload['products'])) {
+    foreach ($payload['products'] as &$prod) {
+      $img = (string) ($prod['image'] ?? '');
+      if (str_starts_with($img, 'data:image')) {
+        $path = aurora_save_data_url_file($img);
+        if ($path) $prod['image'] = $path;
+      }
+    }
+    unset($prod);
   }
 
   try {
     aurora_save_all($pdo, $payload);
-    json_out(['ok' => true, 'db' => 'mysql']);
+    json_out(['ok' => true]);
   } catch (Throwable $e) {
-    json_out(['error' => 'Falha ao gravar no MySQL', 'detail' => $e->getMessage()], 500);
+    json_out(['error' => 'Falha ao salvar', 'detail' => $e->getMessage()], 500);
   }
 }
 
-json_out(['error' => 'Método não permitido'], 405);
+json_out(['error' => 'Método não suportado'], 405);

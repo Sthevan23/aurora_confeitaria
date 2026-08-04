@@ -13,7 +13,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sessionStorage.getItem('admin_logged') !== 'true') return;
 
   await Storage.initCloud({ full: true });
-  Storage.startCloudPolling(5000);
+  Storage.startCloudPolling(45000);
+  // Converte fotos data-URL antigas para arquivo (alivia Hostinger)
+  try {
+    const password = Storage.getAdminPassword();
+    if (password) {
+      fetch(Storage.getApiUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({ action: 'extract_data_images', limit: 20 }),
+      }).catch(() => {});
+    }
+  } catch { /* ignore */ }
   updateSyncBadge();
 
   initSidebar();
@@ -546,17 +560,14 @@ async function isPublicImageOk(path) {
 
 /**
  * Prepara a foto para o produto.
- * Sempre grava data URL no tamanho certo (3:4) — assim a foto aparece no site
- * na hora, sem depender da pasta products/ da Hostinger.
+ * Prefere gravar em products/ (path leve). Só usa data-URL se o upload falhar.
  */
 async function uploadAdminImage(file) {
   if (!Storage.getAdminPassword()) throw new Error('Faça login novamente');
 
-  // 1) Formato do card (3:4) + tamanho fixo
   let normalized = await fileToProductJpeg(file);
   let dataUrl = await blobToDataUrl(normalized);
 
-  // 2) Se ainda grande, compacta mais (mantém 3:4)
   if (dataUrl.length > PRODUCT_IMG.maxDataUrl) {
     normalized = await fileToProductJpeg(file, 600, 800, 0.68);
     dataUrl = await blobToDataUrl(normalized);
@@ -569,21 +580,26 @@ async function uploadAdminImage(file) {
     throw new Error('Foto ainda muito grande. Escolha outra JPG/PNG.');
   }
 
-  // 3) Tenta espelhar em products/ (WhatsApp) em segundo plano — não bloqueia
+  const password = Storage.getAdminPassword();
+  const form = new FormData();
+  form.append('image', normalized, 'produto.jpg');
+  const apiBase = typeof Storage.getApiUrl === 'function'
+    ? Storage.getApiUrl().replace(/data\.php$/i, 'upload.php')
+    : 'https://auroraconfeitaria.com.br/api/upload.php';
+
   try {
-    const password = Storage.getAdminPassword();
-    const form = new FormData();
-    form.append('image', normalized, 'produto.jpg');
-    const apiBase = typeof Storage.getApiUrl === 'function'
-      ? Storage.getApiUrl().replace(/data\.php$/i, 'upload.php')
-      : 'https://auroraconfeitaria.com.br/api/upload.php';
-    fetch(apiBase, {
+    const res = await fetch(apiBase, {
       method: 'POST',
       headers: { 'X-Admin-Password': password },
       body: form,
-    }).catch(() => {});
+    });
+    const result = await res.json().catch(() => ({}));
+    if (res.ok && result.ok && result.path) {
+      const ok = await isPublicImageOk(result.path);
+      if (ok) return result.path;
+    }
   } catch {
-    // ok
+    // cai no dataUrl
   }
 
   return dataUrl;
@@ -1198,16 +1214,35 @@ function deleteCategory(id) {
 }
 
 /* --- Clientes --- */
+function loyaltyBadgeHtml(loyalty) {
+  const goal = loyalty.goal || 15;
+  const progress = loyalty.progress || 0;
+  const tip = loyalty.bonus
+    ? `${loyalty.total} pedidos (${loyalty.siteTotal || 0} site + ${loyalty.bonus} fora)`
+    : `${loyalty.total} pedidos no total`;
+  if (loyalty.eligible) {
+    return `<span class="loyalty-pill loyalty-pill--ok" title="${escapeHtml(tip)}">${loyalty.total} · Brinde!</span>`;
+  }
+  if (!loyalty.total) {
+    return `<span class="loyalty-pill loyalty-pill--muted">0/${goal}</span>`;
+  }
+  return `<span class="loyalty-pill" title="${escapeHtml(tip)}">${progress}/${goal}</span>`;
+}
+
 function renderClients() {
   const clients = Storage.getClients();
+  const orders = Storage.getOrders();
   const tbody = document.querySelector('#clients-table tbody');
 
-  tbody.innerHTML = clients.map(c => `
+  tbody.innerHTML = clients.map(c => {
+    const loyalty = Storage.computeLoyaltyFromOrders(orders, c.phone);
+    return `
     <tr>
-      <td><strong>${c.name}</strong></td>
-      <td>${c.email}</td>
-      <td>${c.phone}</td>
-      <td>${c.address}</td>
+      <td><strong>${escapeHtml(c.name)}</strong></td>
+      <td>${escapeHtml(c.email || '')}</td>
+      <td>${escapeHtml(c.phone || '')}</td>
+      <td>${loyaltyBadgeHtml(loyalty)}</td>
+      <td>${escapeHtml(c.address || '')}</td>
       <td>
         <div class="table__actions">
           <button class="btn--icon edit" onclick="editClient('${c.id}')" title="Editar"><i class="fas fa-edit"></i></button>
@@ -1215,31 +1250,44 @@ function renderClients() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function openClientModal(client = null) {
   const isEdit = !!client;
+  const orders = Storage.getOrders();
+  const phonePreview = onlyDigits(client?.phone || '');
+  const loyaltyNow = phonePreview
+    ? Storage.computeLoyaltyFromOrders(orders, phonePreview)
+    : { siteTotal: 0, bonus: 0, total: Number(client?.loyaltyBonus) || 0 };
+  const siteTotal = loyaltyNow.siteTotal || 0;
+  const loyaltyTotal = Math.max(siteTotal, Number(loyaltyNow.total) || 0);
 
   openModal(isEdit ? 'Editar Cliente' : 'Novo Cliente', `
     <form id="client-form">
       <div class="form-group">
         <label>Nome</label>
-        <input type="text" id="cli-name" value="${client?.name || ''}" required>
+        <input type="text" id="cli-name" value="${escapeHtml(client?.name || '')}" required>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>E-mail (opcional)</label>
-          <input type="email" id="cli-email" value="${client?.email || ''}">
+          <input type="email" id="cli-email" value="${escapeHtml(client?.email || '')}">
         </div>
         <div class="form-group">
           <label>WhatsApp</label>
-          <input type="tel" id="cli-phone" value="${client?.phone || ''}" placeholder="37999887766" required>
+          <input type="tel" id="cli-phone" value="${escapeHtml(client?.phone || '')}" placeholder="37999887766" required>
         </div>
       </div>
       <div class="form-group">
         <label>Endereço</label>
-        <input type="text" id="cli-address" value="${client?.address || ''}">
+        <input type="text" id="cli-address" value="${escapeHtml(client?.address || '')}">
+      </div>
+      <div class="form-group">
+        <label>Pedidos na fidelidade</label>
+        <input type="number" id="cli-loyalty-total" min="0" max="999" step="1" value="${loyaltyTotal}">
+        <p class="form-hint">Pedidos pelo site: <strong id="cli-loyalty-site">${siteTotal}</strong>. Ajuste o total se ela comprou fora do site.</p>
       </div>
       <div class="modal__actions">
         <button type="button" class="btn btn--secondary" onclick="closeModal()">Cancelar</button>
@@ -1248,14 +1296,36 @@ function openClientModal(client = null) {
     </form>
   `);
 
-  document.getElementById('client-form').addEventListener('submit', (e) => {
+  const phoneInput = document.getElementById('cli-phone');
+  const totalInput = document.getElementById('cli-loyalty-total');
+  const siteEl = document.getElementById('cli-loyalty-site');
+
+  const refreshSiteHint = () => {
+    const phone = onlyDigits(phoneInput?.value || '');
+    const site = phone
+      ? (Storage.computeLoyaltyFromOrders(Storage.getOrders(), phone, 0).siteTotal || 0)
+      : 0;
+    if (siteEl) siteEl.textContent = String(site);
+    return site;
+  };
+
+  phoneInput?.addEventListener('change', refreshSiteHint);
+  phoneInput?.addEventListener('blur', refreshSiteHint);
+
+  document.getElementById('client-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const clients = Storage.getClients();
+    const phone = onlyDigits(document.getElementById('cli-phone').value);
+    const site = refreshSiteHint();
+    const desiredTotal = Math.max(0, Math.min(999, parseInt(totalInput?.value || '0', 10) || 0));
+    const loyaltyBonus = Math.max(0, desiredTotal - site);
+
     const data = {
       name: document.getElementById('cli-name').value.trim(),
       email: document.getElementById('cli-email').value.trim(),
-      phone: onlyDigits(document.getElementById('cli-phone').value),
-      address: document.getElementById('cli-address').value.trim()
+      phone,
+      address: document.getElementById('cli-address').value.trim(),
+      loyaltyBonus,
     };
 
     if (!data.phone) {
@@ -1274,7 +1344,20 @@ function openClientModal(client = null) {
     closeModal();
     renderClients();
     renderDashboard();
-    showToast(isEdit ? 'Cliente atualizado!' : 'Cliente criado!', 'success');
+
+    if (typeof Storage.saveAsync === 'function') {
+      const ok = await Storage.saveAsync(Storage.getAll());
+      if (!ok) {
+        showToast('Salvo aqui, mas não sincronizou na nuvem. Tente de novo.', 'error');
+        return;
+      }
+    }
+    showToast(
+      isEdit
+        ? `Cliente atualizado! Fidelidade: ${desiredTotal}/15`
+        : `Cliente criado! Fidelidade: ${desiredTotal}/15`,
+      'success'
+    );
   });
 }
 

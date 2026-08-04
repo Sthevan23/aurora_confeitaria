@@ -240,6 +240,64 @@
       input.value = applied?.code || '';
     }
     if (removeBtn) removeBtn.hidden = !applied;
+
+    scheduleLoyaltyRefresh();
+  }
+
+  let loyaltyTimer = null;
+  let loyaltyReq = 0;
+
+  function paintLoyalty(loyalty) {
+    const box = document.getElementById('cart-page-loyalty');
+    const count = document.getElementById('cart-page-loyalty-count');
+    const fill = document.getElementById('cart-page-loyalty-fill');
+    const msg = document.getElementById('cart-page-loyalty-msg');
+    if (!box) return;
+
+    if (!loyalty || !loyalty.phone || loyalty.total < 0) {
+      box.hidden = true;
+      return;
+    }
+
+    const goal = loyalty.goal || 15;
+    const progress = Number(loyalty.progress) || 0;
+    const pct = Math.min(100, Math.round((progress / goal) * 100));
+    box.hidden = false;
+    box.classList.toggle('is-eligible', !!loyalty.eligible);
+    if (count) count.textContent = `${progress}/${goal}`;
+    if (fill) fill.style.width = `${pct}%`;
+    if (msg) {
+      if (loyalty.eligible) {
+        msg.textContent = `Brinde liberado: ${loyalty.gift || '1 brinde surpresa da Aurora'}!`;
+      } else if (loyalty.total === 0) {
+        msg.textContent = `A cada ${goal} pedidos neste WhatsApp, você ganha um brinde.`;
+      } else {
+        msg.textContent = `${loyalty.total} pedido${loyalty.total === 1 ? '' : 's'} neste número · faltam ${loyalty.remaining} para o brinde.`;
+      }
+    }
+  }
+
+  function scheduleLoyaltyRefresh() {
+    clearTimeout(loyaltyTimer);
+    loyaltyTimer = setTimeout(refreshLoyalty, 450);
+  }
+
+  async function refreshLoyalty() {
+    const phone = onlyDigits(document.getElementById('cart-page-phone')?.value || '');
+    const box = document.getElementById('cart-page-loyalty');
+    if (phone.length < 10) {
+      if (box) box.hidden = true;
+      return;
+    }
+    const req = ++loyaltyReq;
+    try {
+      const loyalty = await Storage.getLoyaltyStatus(phone);
+      if (req !== loyaltyReq) return;
+      paintLoyalty(loyalty);
+    } catch {
+      if (req !== loyaltyReq) return;
+      if (box) box.hidden = true;
+    }
   }
 
   function renderAll() {
@@ -392,7 +450,12 @@
       return;
     }
 
-    const message = Cart.buildWhatsAppMessage({ fullName, phone, fulfillment });
+    const message = Cart.buildWhatsAppMessage({
+      fullName,
+      phone,
+      fulfillment,
+      loyalty: saved.loyalty || null,
+    });
     Cart.clear();
     if (btn) {
       btn.disabled = false;
@@ -432,6 +495,19 @@
         });
       });
     });
+
+    const phoneEl = document.getElementById('cart-page-phone');
+    bindPhoneMask(phoneEl);
+    phoneEl?.addEventListener('input', scheduleLoyaltyRefresh);
+    phoneEl?.addEventListener('blur', () => {
+      scheduleLoyaltyRefresh();
+      Cart.saveCustomer({
+        nome: document.getElementById('cart-page-nome')?.value || '',
+        sobrenome: document.getElementById('cart-page-sobrenome')?.value || '',
+        phone: phoneEl.value || '',
+      });
+    });
+    refreshLoyalty();
   }
 
   document.addEventListener('DOMContentLoaded', boot);

@@ -18,7 +18,7 @@ const FILTERS = ['all', 'cat-copos', 'cat-sandu', 'cat-cookies', 'cat-potes', 'c
 
 let activeFilter = 'all';
 let selectedProduct = null;
-let selectedFlavor = '';
+let selectedFlavors = [];
 
 const CART_KEY = 'aurora_cart_v1';
 const CUSTOMER_KEY = 'aurora_customer_v1';
@@ -439,7 +439,7 @@ function buildOrderWhatsAppMessage({ product, fullName, phone, flavor, unit }) {
   });
 }
 
-function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment }) {
+function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty }) {
   const s = Storage.getSettings();
   const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
   const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
@@ -477,6 +477,21 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment }) {
     )
     : '';
 
+  let loyaltyBlock = '';
+  if (loyalty && loyalty.eligible) {
+    const gift = loyalty.gift || '1 brinde surpresa da Aurora';
+    loyaltyBlock =
+      `FIDELIDADE AURORA\n` +
+      `Cliente completou ${loyalty.total || loyalty.goal} pedidos e ganhou: ${gift}\n` +
+      `(Favor confirmar o brinde neste atendimento)\n` +
+      `--------------------------------\n`;
+  } else if (loyalty && loyalty.total > 0) {
+    loyaltyBlock =
+      `Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos` +
+      (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde\n` : '\n') +
+      `--------------------------------\n`;
+  }
+
   return (
     `PEDIDO RECEBIDO - ${storeName}\n\n` +
     `CLIENTE:\n` +
@@ -487,6 +502,7 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment }) {
     `${couponBlock}` +
     `TOTAL A PAGAR: ${Storage.formatCurrency(total)}\n` +
     `--------------------------------\n` +
+    `${loyaltyBlock}` +
     `${fulfillmentWhatsAppBlock(mode)}\n` +
     `--------------------------------\n\n` +
     `Aguardo confirmação de disponibilidade e pagamento.\n\n` +
@@ -718,24 +734,167 @@ function renderGallery() {
   `).join('');
 }
 
+function syncFlavorSlots(qty) {
+  const n = Math.max(1, Number(qty) || 1);
+  const next = selectedFlavors.slice(0, n);
+  while (next.length < n) next.push('');
+  selectedFlavors = next;
+}
+
+function productFlavorList(product) {
+  const list = Array.isArray(product?.flavors)
+    ? product.flavors.map((f) => String(f || '').trim()).filter(Boolean)
+    : [];
+  if (list.length) return list;
+  const prices = product?.flavorPrices;
+  if (prices && typeof prices === 'object') {
+    return Object.keys(prices).map((f) => String(f || '').trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function productHasFlavors(product) {
+  return productFlavorList(product).length > 0;
+}
+
+function allLightboxFlavorsSelected(product) {
+  if (!productHasFlavors(product)) return true;
+  const qty = Math.max(1, lightboxQty);
+  syncFlavorSlots(qty);
+  return selectedFlavors.slice(0, qty).every(Boolean);
+}
+
+function lightboxLineTotal(product) {
+  const qty = Math.max(1, lightboxQty);
+  if (!productHasFlavors(product)) {
+    return resolveProductPrice(product, '') * qty;
+  }
+  syncFlavorSlots(qty);
+  let sum = 0;
+  for (let i = 0; i < qty; i++) {
+    sum += resolveProductPrice(product, selectedFlavors[i] || '');
+  }
+  return sum;
+}
+
+function flavorSummaryText(product) {
+  const qty = Math.max(1, lightboxQty);
+  syncFlavorSlots(qty);
+  const picked = selectedFlavors.slice(0, qty).filter(Boolean);
+  if (!picked.length) return 'obrigatório';
+  if (picked.length < qty) return `${picked.length}/${qty} escolhidos`;
+  if (qty === 1) {
+    const p = resolveProductPrice(product, picked[0]);
+    return p > 0 ? `${picked[0]} · ${Storage.formatCurrency(p)}` : picked[0];
+  }
+  const unique = [...new Set(picked)];
+  if (unique.length === 1) return `${qty}× ${unique[0]}`;
+  return picked.join(' · ');
+}
+
 function updateLightboxTotals() {
   const product = selectedProduct;
   const unitEl = document.getElementById('lightbox-unit-price');
   const totalEl = document.getElementById('lightbox-line-total');
   if (!product) return;
-  const unit = resolveProductPrice(product, selectedFlavor);
-  const line = unit * Math.max(1, lightboxQty);
-  if (unitEl) unitEl.innerHTML = displayPrice(product, selectedFlavor);
+  const previewFlavor = selectedFlavors.find(Boolean) || '';
+  const line = lightboxLineTotal(product);
+  if (unitEl) unitEl.innerHTML = displayPrice(product, previewFlavor);
   if (totalEl) {
-    totalEl.textContent = unit > 0 ? Storage.formatCurrency(line) : 'Consultar';
+    totalEl.textContent = line > 0 ? Storage.formatCurrency(line) : 'Consultar';
   }
+}
+
+function renderLightboxFlavors() {
+  const product = selectedProduct;
+  const flavorsBox = document.getElementById('lightbox-flavors');
+  if (!flavorsBox) return;
+
+  const flavors = productFlavorList(product);
+  if (!flavors.length) {
+    flavorsBox.hidden = true;
+    flavorsBox.innerHTML = '';
+    return;
+  }
+
+  const qty = Math.max(1, lightboxQty);
+  syncFlavorSlots(qty);
+  // Só ativa escolha por unidade a partir de 2 und. no mesmo pedido
+  const multi = qty >= 2;
+  const allDone = allLightboxFlavorsSelected(product);
+
+  const unitsHtml = Array.from({ length: qty }, (_, unitIdx) => {
+    const current = selectedFlavors[unitIdx] || '';
+    const options = flavors.map((f) => {
+      const price = resolveProductPrice(product, f);
+      const fp = Number.isFinite(price) && price > 0
+        ? ` — ${Storage.formatCurrency(price)}`
+        : '';
+      const active = current === f;
+      const safe = String(f).replace(/"/g, '&quot;');
+      const label = String(f).replace(/</g, '&lt;');
+      return `
+        <label class="${active ? 'is-active' : ''}">
+          <input type="radio" name="order-flavor-${unitIdx}" value="${safe}" ${active ? 'checked' : ''}>
+          <span>${label}${fp}</span>
+        </label>`;
+    }).join('');
+
+    return `
+      <div class="flavor-unit" data-unit="${unitIdx}">
+        ${multi ? `<p class="flavor-unit__label">Unidade ${unitIdx + 1}</p>` : ''}
+        <div class="flavor-options">${options}</div>
+      </div>`;
+  }).join('');
+
+  flavorsBox.hidden = false;
+  flavorsBox.innerHTML = `
+    <div class="order-acc ${allDone && !multi ? '' : 'is-open'} ${allDone ? 'is-done' : ''}" id="acc-flavor">
+      <button type="button" class="order-acc__head" id="acc-flavor-toggle">
+        <span class="order-acc__title">${multi ? 'Escolha o sabor de cada unidade *' : 'Escolha o sabor *'}</span>
+        <span class="order-acc__summary" id="flavor-summary">${flavorSummaryText(product)}</span>
+        <span class="order-acc__chevron">▾</span>
+      </button>
+      <div class="order-acc__body"><div class="order-acc__inner">
+        ${multi ? '<p class="flavor-units__hint">Pode ser o mesmo sabor ou sabores diferentes.</p>' : ''}
+        <div class="flavor-units">${unitsHtml}</div>
+      </div></div>
+    </div>
+  `;
+
+  const flavorAcc = document.getElementById('acc-flavor');
+  document.getElementById('acc-flavor-toggle')?.addEventListener('click', () => {
+    flavorAcc?.classList.toggle('is-open');
+  });
+
+  flavorsBox.querySelectorAll('.flavor-unit').forEach((unitEl) => {
+    const unitIdx = Number(unitEl.dataset.unit) || 0;
+    unitEl.querySelectorAll('input[type="radio"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        selectedFlavors[unitIdx] = input.value;
+        unitEl.querySelectorAll('label').forEach((l) => l.classList.remove('is-active'));
+        input.closest('label')?.classList.add('is-active');
+        const summary = document.getElementById('flavor-summary');
+        if (summary) summary.textContent = flavorSummaryText(product);
+        updateLightboxTotals();
+
+        const done = allLightboxFlavorsSelected(product);
+        flavorAcc?.classList.toggle('is-done', done);
+        if (done && !multi) {
+          flavorAcc?.classList.remove('is-open');
+        } else if (multi) {
+          flavorAcc?.classList.add('is-open');
+        }
+      });
+    });
+  });
 }
 
 function openLightbox(productId) {
   const product = getProducts().find((p) => p.id === productId);
   if (!product) return;
   selectedProduct = product;
-  selectedFlavor = '';
+  selectedFlavors = [];
   lightboxQty = 1;
 
   const lbImg = document.getElementById('lightbox-img');
@@ -752,7 +911,6 @@ function openLightbox(productId) {
   if (notes) notes.value = '';
   const qtyValue = document.getElementById('lightbox-qty-value');
   if (qtyValue) qtyValue.textContent = '1';
-  updateLightboxTotals();
 
   const addBtn = document.getElementById('lightbox-add-cart');
   if (addBtn) {
@@ -762,58 +920,8 @@ function openLightbox(productId) {
     if (label) label.textContent = 'Adicionar ao carrinho';
   }
 
-  const flavorsBox = document.getElementById('lightbox-flavors');
-  if (Array.isArray(product.flavors) && product.flavors.length) {
-    flavorsBox.hidden = false;
-    flavorsBox.innerHTML = `
-      <div class="order-acc is-open" id="acc-flavor">
-        <button type="button" class="order-acc__head" id="acc-flavor-toggle">
-          <span class="order-acc__title">Escolha o sabor *</span>
-          <span class="order-acc__summary" id="flavor-summary">obrigatório</span>
-          <span class="order-acc__chevron">▾</span>
-        </button>
-        <div class="order-acc__body"><div class="order-acc__inner">
-          <div class="flavor-options">
-            ${product.flavors.map((f) => {
-              const price = resolveProductPrice(product, f);
-              const fp = Number.isFinite(price) && price > 0
-                ? ` — ${Storage.formatCurrency(price)}`
-                : '';
-              return `
-              <label>
-                <input type="radio" name="order-flavor" value="${String(f).replace(/"/g, '&quot;')}">
-                <span>${String(f).replace(/</g, '&lt;')}${fp}</span>
-              </label>`;
-            }).join('')}
-          </div>
-        </div></div>
-      </div>
-    `;
-    const flavorAcc = document.getElementById('acc-flavor');
-    document.getElementById('acc-flavor-toggle')?.addEventListener('click', () => {
-      flavorAcc?.classList.toggle('is-open');
-    });
-    flavorsBox.querySelectorAll('input[name="order-flavor"]').forEach((input) => {
-      input.addEventListener('change', () => {
-        selectedFlavor = input.value;
-        flavorsBox.querySelectorAll('label').forEach((l) => l.classList.remove('is-active'));
-        input.closest('label').classList.add('is-active');
-        const summary = document.getElementById('flavor-summary');
-        if (summary) {
-          const p = resolveProductPrice(product, selectedFlavor);
-          summary.textContent = p > 0
-            ? `${selectedFlavor} · ${Storage.formatCurrency(p)}`
-            : selectedFlavor;
-        }
-        updateLightboxTotals();
-        flavorAcc?.classList.remove('is-open');
-        flavorAcc?.classList.add('is-done');
-      });
-    });
-  } else {
-    flavorsBox.hidden = true;
-    flavorsBox.innerHTML = '';
-  }
+  renderLightboxFlavors();
+  updateLightboxTotals();
 
   const lb = document.getElementById('order-lightbox');
   lb.hidden = false;
@@ -837,30 +945,56 @@ function addCurrentProductToCart() {
   const addBtn = document.getElementById('lightbox-add-cart');
   if (!product) return;
 
-  if (product.flavors?.length && !selectedFlavor) {
+  const qty = Math.max(1, lightboxQty);
+  if (productHasFlavors(product) && !allLightboxFlavorsSelected(product)) {
     if (error) {
-      error.textContent = 'Escolha um sabor.';
+      error.textContent = qty > 1
+        ? 'Escolha o sabor de cada unidade.'
+        : 'Escolha um sabor.';
       error.hidden = false;
     }
+    document.getElementById('acc-flavor')?.classList.add('is-open');
     return;
   }
 
   if (error) error.hidden = true;
 
   const notes = document.getElementById('lightbox-notes')?.value.trim() || '';
-  const unit = resolveProductPrice(product, selectedFlavor);
-  const detail = [product.size, selectedFlavor].filter(Boolean).join(' · ');
-  addToCart({
-    productId: product.id,
-    name: product.name,
-    price: unit,
-    qty: Math.max(1, lightboxQty),
-    flavor: selectedFlavor || '',
-    size: product.size || '',
-    detail,
-    image: product.image,
-    notes,
-  });
+
+  if (productHasFlavors(product)) {
+    const counts = new Map();
+    selectedFlavors.slice(0, qty).forEach((flavor) => {
+      counts.set(flavor, (counts.get(flavor) || 0) + 1);
+    });
+    counts.forEach((n, flavor) => {
+      const unit = resolveProductPrice(product, flavor);
+      const detail = [product.size, flavor].filter(Boolean).join(' · ');
+      addToCart({
+        productId: product.id,
+        name: product.name,
+        price: unit,
+        qty: n,
+        flavor,
+        size: product.size || '',
+        detail,
+        image: product.image,
+        notes,
+      });
+    });
+  } else {
+    const unit = resolveProductPrice(product, '');
+    addToCart({
+      productId: product.id,
+      name: product.name,
+      price: unit,
+      qty,
+      flavor: '',
+      size: product.size || '',
+      detail: product.size || '',
+      image: product.image,
+      notes,
+    });
+  }
 
   if (addBtn) {
     addBtn.classList.add('is-added');
@@ -1285,6 +1419,7 @@ async function checkoutCart() {
     phone,
     items: itemsSnapshot,
     fulfillment,
+    loyalty: saved.loyalty || null,
   });
   clearCart();
   closeCart();
@@ -1366,8 +1501,10 @@ async function finalizeOrder() {
     phoneInput?.focus();
     return;
   }
-  if (selectedProduct?.flavors?.length && !selectedFlavor) {
-    error.textContent = 'Escolha um sabor.';
+  if (selectedProduct?.flavors?.length && !allLightboxFlavorsSelected(selectedProduct)) {
+    error.textContent = lightboxQty > 1
+      ? 'Escolha o sabor de cada unidade.'
+      : 'Escolha um sabor.';
     error.hidden = false;
     return;
   }
@@ -1380,8 +1517,9 @@ async function finalizeOrder() {
   const product = selectedProduct;
   if (!product) return;
 
-  const unit = resolveProductPrice(product, selectedFlavor);
-  const detail = [product.size, selectedFlavor].filter(Boolean).join(' · ');
+  const flavor = selectedFlavors[0] || '';
+  const unit = resolveProductPrice(product, flavor);
+  const detail = [product.size, flavor].filter(Boolean).join(' · ');
   const fullName = `${nome} ${sobrenome}`;
   const prevLabel = btn?.textContent || '';
   if (btn) {
@@ -1417,10 +1555,11 @@ async function finalizeOrder() {
     fullName,
     phone,
     fulfillment,
+    loyalty: saved.loyalty || null,
     items: [{
       name: product.name,
       size: product.size || '',
-      flavor: selectedFlavor || '',
+      flavor: flavor || '',
       price: unit,
       qty: 1,
       image: product.image,
@@ -1479,12 +1618,14 @@ function initLightbox() {
     lightboxQty = Math.max(1, lightboxQty - 1);
     const el = document.getElementById('lightbox-qty-value');
     if (el) el.textContent = String(lightboxQty);
+    renderLightboxFlavors();
     updateLightboxTotals();
   });
   document.getElementById('lightbox-qty-plus')?.addEventListener('click', () => {
     lightboxQty = Math.min(99, lightboxQty + 1);
     const el = document.getElementById('lightbox-qty-value');
     if (el) el.textContent = String(lightboxQty);
+    renderLightboxFlavors();
     updateLightboxTotals();
   });
 
@@ -1651,8 +1792,8 @@ async function boot() {
     console.error('Sem conexão com a API MySQL Hostinger:', Storage.getApiUrl?.());
     document.body.insertAdjacentHTML(
       'afterbegin',
-      `<div style="position:fixed;inset:auto 1rem 1rem;z-index:9999;background:#3d2610;color:#fff;padding:0.9rem 1.1rem;border-radius:999px;font:600 0.9rem Manrope,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.2)">
-        Sem conexão com o banco Hostinger. Confira a API online.
+      `<div style="position:fixed;inset:auto 1rem 1rem;z-index:9999;background:#3d2610;color:#fff;padding:0.9rem 1.1rem;border-radius:999px;font:600 0.9rem Manrope,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:min(520px,calc(100vw - 2rem))">
+        Servidor Hostinger indisponível agora. Os produtos voltam quando a API responder — tente atualizar em alguns minutos.
       </div>`
     );
   }

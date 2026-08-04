@@ -29,7 +29,10 @@ function aurora_db_ready(PDO $pdo): bool {
   return aurora_table_exists($pdo, 'settings') && aurora_table_exists($pdo, 'products');
 }
 
-function aurora_load_all(PDO $pdo): ?array {
+/**
+ * @param 'full'|'public' $mode
+ */
+function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
   if (!aurora_db_ready($pdo)) {
     return null;
   }
@@ -38,8 +41,6 @@ function aurora_load_all(PDO $pdo): ?array {
   if (!$settingsRow) {
     return null;
   }
-
-  $admin = $pdo->query('SELECT email, password_hash FROM admins ORDER BY id ASC LIMIT 1')->fetch();
 
   $categories = [];
   $catRows = $pdo->query('SELECT id, name, slug FROM categories ORDER BY sort_order ASC, name ASC')->fetchAll();
@@ -69,6 +70,11 @@ function aurora_load_all(PDO $pdo): ?array {
     $pid = $row['product_id'];
     if (!isset($priceMap[$pid])) $priceMap[$pid] = [];
     $priceMap[$pid][$row['flavor']] = (float) $row['price'];
+  }
+
+  // Converte até 3 data-URLs por request (alivia API aos poucos)
+  if ($mode === 'public') {
+    aurora_maybe_extract_data_images($pdo, 3);
   }
 
   $products = [];
@@ -109,6 +115,90 @@ function aurora_load_all(PDO $pdo): ?array {
     $gallery[] = $row['image'];
   }
 
+  $coupons = [];
+  if (aurora_table_exists($pdo, 'coupons')) {
+    $couponRows = $pdo->query('SELECT * FROM coupons ORDER BY created_at DESC')->fetchAll();
+    foreach ($couponRows as $row) {
+      $coupons[] = [
+        'id' => $row['id'],
+        'code' => strtoupper(trim((string) ($row['code'] ?? ''))),
+        'type' => ($row['type'] ?? '') === 'fixed' ? 'fixed' : 'percent',
+        'value' => (float) ($row['value'] ?? 0),
+        'minOrder' => (float) ($row['min_order'] ?? 0),
+        'active' => ((int) ($row['active'] ?? 1)) === 1,
+        'label' => $row['label'] ?? '',
+      ];
+    }
+  }
+
+  $reviews = [];
+  if (aurora_table_exists($pdo, 'reviews')) {
+    $revRows = $pdo->query('SELECT * FROM reviews WHERE active = 1 ORDER BY created_at DESC')->fetchAll();
+    foreach ($revRows as $row) {
+      $reviews[] = [
+        'id' => $row['id'],
+        'author' => $row['author'],
+        'text' => $row['text'],
+        'rating' => (int) ($row['rating'] ?? 5),
+      ];
+    }
+  }
+
+  $faq = [];
+  if (aurora_table_exists($pdo, 'faq')) {
+    $faqRows = $pdo->query('SELECT * FROM faq WHERE active = 1 ORDER BY sort_order ASC')->fetchAll();
+    foreach ($faqRows as $row) {
+      $faq[] = [
+        'id' => $row['id'],
+        'question' => $row['question'],
+        'answer' => $row['answer'],
+      ];
+    }
+  }
+
+  $settings = [
+    'name' => $settingsRow['name'] ?? '',
+    'tagline' => $settingsRow['tagline'] ?? '',
+    'logo' => $settingsRow['logo'] ?? '',
+    'banner' => $settingsRow['banner'] ?? '',
+    'sobreImage' => $settingsRow['sobre_image'] ?? '',
+    'whatsapp' => $settingsRow['whatsapp'] ?? '',
+    'instagram' => $settingsRow['instagram'] ?? '',
+    'instagramUser' => $settingsRow['instagram_user'] ?? '',
+    'facebook' => $settingsRow['facebook'] ?? '',
+    'email' => $settingsRow['email'] ?? '',
+    'address' => $settingsRow['address'] ?? '',
+    'hours' => $settingsRow['hours'] ?? '',
+    'followers' => $settingsRow['followers'] ?? '',
+    'posts' => $settingsRow['posts'] ?? '',
+    'mapEmbed' => $settingsRow['map_embed'] ?? '',
+    'heroBadge' => $settingsRow['hero_badge'] ?? '',
+    'heroStory' => aurora_json_decode_field($settingsRow['hero_story'] ?? null, []),
+    'sobreText1' => $settingsRow['sobre_text1'] ?? '',
+    'sobreText2' => $settingsRow['sobre_text2'] ?? '',
+    'deliveryFee' => isset($settingsRow['delivery_fee']) ? (float) $settingsRow['delivery_fee'] : 7,
+    'deliveryNote' => $settingsRow['delivery_note'] ?? 'Bairros mais afastados: consultar',
+  ];
+
+  if ($mode === 'public') {
+    return [
+      'version' => (int) ($settingsRow['data_version'] ?? 16),
+      'settings' => $settings,
+      'categories' => $categories,
+      'products' => $products,
+      'reviews' => $reviews,
+      'faq' => $faq,
+      'gallery' => $gallery,
+      'coupons' => $coupons,
+      'clients' => [],
+      'orders' => [],
+      'finance' => [],
+      'auth' => ['email' => '', 'password' => ''],
+    ];
+  }
+
+  $admin = $pdo->query('SELECT email, password_hash FROM admins ORDER BY id ASC LIMIT 1')->fetch();
+
   $clients = [];
   if (aurora_table_exists($pdo, 'clients')) {
     $clientRows = $pdo->query('SELECT * FROM clients ORDER BY created_at DESC')->fetchAll();
@@ -119,6 +209,7 @@ function aurora_load_all(PDO $pdo): ?array {
         'email' => $row['email'] ?? '',
         'phone' => $row['phone'] ?? '',
         'address' => $row['address'] ?? '',
+        'loyaltyBonus' => (int) ($row['loyalty_bonus'] ?? 0),
       ];
     }
   }
@@ -171,72 +262,9 @@ function aurora_load_all(PDO $pdo): ?array {
     }
   }
 
-  $coupons = [];
-  if (aurora_table_exists($pdo, 'coupons')) {
-    $couponRows = $pdo->query('SELECT * FROM coupons ORDER BY created_at DESC')->fetchAll();
-    foreach ($couponRows as $row) {
-      $coupons[] = [
-        'id' => $row['id'],
-        'code' => strtoupper(trim((string) ($row['code'] ?? ''))),
-        'type' => ($row['type'] ?? '') === 'fixed' ? 'fixed' : 'percent',
-        'value' => (float) ($row['value'] ?? 0),
-        'minOrder' => (float) ($row['min_order'] ?? 0),
-        'active' => ((int) ($row['active'] ?? 1)) === 1,
-        'label' => $row['label'] ?? '',
-      ];
-    }
-  }
-
-  $reviews = [];
-  if (aurora_table_exists($pdo, 'reviews')) {
-    $revRows = $pdo->query('SELECT * FROM reviews WHERE active = 1 ORDER BY created_at DESC')->fetchAll();
-    foreach ($revRows as $row) {
-      $reviews[] = [
-        'id' => $row['id'],
-        'author' => $row['author'],
-        'text' => $row['text'],
-        'rating' => (int) ($row['rating'] ?? 5),
-      ];
-    }
-  }
-
-  $faq = [];
-  if (aurora_table_exists($pdo, 'faq')) {
-    $faqRows = $pdo->query('SELECT * FROM faq WHERE active = 1 ORDER BY sort_order ASC')->fetchAll();
-    foreach ($faqRows as $row) {
-      $faq[] = [
-        'id' => $row['id'],
-        'question' => $row['question'],
-        'answer' => $row['answer'],
-      ];
-    }
-  }
-
   return [
     'version' => (int) ($settingsRow['data_version'] ?? 16),
-    'settings' => [
-      'name' => $settingsRow['name'] ?? '',
-      'tagline' => $settingsRow['tagline'] ?? '',
-      'logo' => $settingsRow['logo'] ?? '',
-      'banner' => $settingsRow['banner'] ?? '',
-      'sobreImage' => $settingsRow['sobre_image'] ?? '',
-      'whatsapp' => $settingsRow['whatsapp'] ?? '',
-      'instagram' => $settingsRow['instagram'] ?? '',
-      'instagramUser' => $settingsRow['instagram_user'] ?? '',
-      'facebook' => $settingsRow['facebook'] ?? '',
-      'email' => $settingsRow['email'] ?? '',
-      'address' => $settingsRow['address'] ?? '',
-      'hours' => $settingsRow['hours'] ?? '',
-      'followers' => $settingsRow['followers'] ?? '',
-      'posts' => $settingsRow['posts'] ?? '',
-      'mapEmbed' => $settingsRow['map_embed'] ?? '',
-      'heroBadge' => $settingsRow['hero_badge'] ?? '',
-      'heroStory' => aurora_json_decode_field($settingsRow['hero_story'] ?? null, []),
-      'sobreText1' => $settingsRow['sobre_text1'] ?? '',
-      'sobreText2' => $settingsRow['sobre_text2'] ?? '',
-      'deliveryFee' => isset($settingsRow['delivery_fee']) ? (float) $settingsRow['delivery_fee'] : 7,
-      'deliveryNote' => $settingsRow['delivery_note'] ?? 'Bairros mais afastados: consultar',
-    ],
+    'settings' => $settings,
     'auth' => [
       'email' => $admin['email'] ?? 'auroraconfeitaria2022@gmail.com',
       'password' => $admin['password_hash'] ?? '',
@@ -251,6 +279,86 @@ function aurora_load_all(PDO $pdo): ?array {
     'finance' => $finance,
     'coupons' => $coupons,
   ];
+}
+
+/**
+ * Grava data-URL em products/ e devolve path relativo, ou null.
+ */
+function aurora_save_data_url_file(string $dataUrl): ?string {
+  if (!preg_match('#^data:image/(jpeg|jpg|png|webp|gif);base64,#i', $dataUrl, $m)) {
+    return null;
+  }
+  $raw = base64_decode(substr($dataUrl, strpos($dataUrl, ',') + 1), true);
+  if ($raw === false || strlen($raw) < 32) return null;
+
+  $siteRoot = dirname(__DIR__);
+  $dir = $siteRoot . DIRECTORY_SEPARATOR . 'products';
+  if (!is_dir($dir)) {
+    @mkdir($dir, 0755, true);
+  }
+  if (!is_dir($dir) || !is_writable($dir)) return null;
+
+  $name = sprintf(
+    '%s-%s-%s-%s-%s.jpg',
+    bin2hex(random_bytes(4)),
+    bin2hex(random_bytes(2)),
+    bin2hex(random_bytes(2)),
+    bin2hex(random_bytes(2)),
+    bin2hex(random_bytes(6))
+  );
+  $dest = $dir . DIRECTORY_SEPARATOR . $name;
+
+  // Preferir JPG via GD quando possível
+  $tmp = tempnam(sys_get_temp_dir(), 'aurora_durl_');
+  if ($tmp === false) return null;
+  file_put_contents($tmp, $raw);
+  $mime = 'image/' . strtolower($m[1] === 'jpg' ? 'jpeg' : $m[1]);
+  if ($mime === 'image/jpg') $mime = 'image/jpeg';
+
+  $wrote = false;
+  if (function_exists('imagecreatetruecolor')) {
+    // reusa lógica simples: grava bytes crus se jpeg, senão tenta GD
+    if ($mime === 'image/jpeg') {
+      $wrote = @file_put_contents($dest, $raw) !== false;
+    } else {
+      $img = null;
+      if ($mime === 'image/png' && function_exists('imagecreatefrompng')) $img = @imagecreatefrompng($tmp);
+      elseif ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) $img = @imagecreatefromwebp($tmp);
+      elseif ($mime === 'image/gif' && function_exists('imagecreatefromgif')) $img = @imagecreatefromgif($tmp);
+      if ($img) {
+        $wrote = @imagejpeg($img, $dest, 82);
+        imagedestroy($img);
+      }
+    }
+  }
+  if (!$wrote) {
+    $wrote = @file_put_contents($dest, $raw) !== false;
+  }
+  @unlink($tmp);
+  if (!$wrote || !is_file($dest)) return null;
+  @chmod($dest, 0644);
+  return 'products/' . $name;
+}
+
+function aurora_maybe_extract_data_images(PDO $pdo, int $limit = 3): void {
+  static $ran = false;
+  if ($ran) return;
+  $ran = true;
+  try {
+    $stmt = $pdo->query(
+      "SELECT id, image FROM products
+       WHERE image LIKE 'data:image%'
+       LIMIT " . max(1, min(10, $limit))
+    );
+    $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    $upd = $pdo->prepare('UPDATE products SET image = ? WHERE id = ?');
+    foreach ($rows as $row) {
+      $path = aurora_save_data_url_file((string) ($row['image'] ?? ''));
+      if ($path) $upd->execute([$path, $row['id']]);
+    }
+  } catch (Throwable $e) {
+    // silencioso — não derruba o site
+  }
 }
 
 function aurora_get_auth(PDO $pdo): array {
@@ -409,17 +517,40 @@ function aurora_save_all(PDO $pdo, array $payload): void {
 
     // Clientes
     $pdo->exec('DELETE FROM clients');
-    $clientStmt = $pdo->prepare(
-      'INSERT INTO clients (id, name, email, phone, address) VALUES (?, ?, ?, ?, ?)'
-    );
-    foreach ($payload['clients'] ?? [] as $c) {
-      $clientStmt->execute([
-        $c['id'] ?? uniqid('c', true),
-        $c['name'] ?? '',
-        $c['email'] ?? '',
-        $c['phone'] ?? '',
-        $c['address'] ?? '',
-      ]);
+    $hasLoyaltyBonus = false;
+    try {
+      $col = $pdo->query("SHOW COLUMNS FROM clients LIKE 'loyalty_bonus'")->fetch();
+      $hasLoyaltyBonus = !empty($col);
+    } catch (Throwable $e) {
+      $hasLoyaltyBonus = false;
+    }
+    if ($hasLoyaltyBonus) {
+      $clientStmt = $pdo->prepare(
+        'INSERT INTO clients (id, name, email, phone, address, loyalty_bonus) VALUES (?, ?, ?, ?, ?, ?)'
+      );
+      foreach ($payload['clients'] ?? [] as $c) {
+        $clientStmt->execute([
+          $c['id'] ?? uniqid('c', true),
+          $c['name'] ?? '',
+          $c['email'] ?? '',
+          $c['phone'] ?? '',
+          $c['address'] ?? '',
+          max(0, (int) ($c['loyaltyBonus'] ?? 0)),
+        ]);
+      }
+    } else {
+      $clientStmt = $pdo->prepare(
+        'INSERT INTO clients (id, name, email, phone, address) VALUES (?, ?, ?, ?, ?)'
+      );
+      foreach ($payload['clients'] ?? [] as $c) {
+        $clientStmt->execute([
+          $c['id'] ?? uniqid('c', true),
+          $c['name'] ?? '',
+          $c['email'] ?? '',
+          $c['phone'] ?? '',
+          $c['address'] ?? '',
+        ]);
+      }
     }
 
     // Pedidos + itens
@@ -543,26 +674,33 @@ function aurora_save_all(PDO $pdo, array $payload): void {
   }
 }
 
-function aurora_upsert_client(PDO $pdo, array $client): void {
-  if (empty($client['id']) && empty($client['phone'])) return;
+function aurora_upsert_client(PDO $pdo, array $client): ?string {
+  if (empty($client['id']) && empty($client['phone'])) return null;
 
-  $id = $client['id'] ?? ('c_' . uniqid());
+  $id = (string) ($client['id'] ?? ('c_' . uniqid()));
   $phone = preg_replace('/\D+/', '', (string) ($client['phone'] ?? ''));
 
   if ($phone !== '') {
-    $find = $pdo->prepare('SELECT id FROM clients WHERE phone = ? LIMIT 1');
-    $find->execute([$phone]);
-    $existing = $find->fetchColumn();
-    if ($existing) {
-      $upd = $pdo->prepare('UPDATE clients SET name = ?, email = ?, phone = ?, address = ? WHERE id = ?');
-      $upd->execute([
-        $client['name'] ?? '',
-        $client['email'] ?? '',
-        $phone,
-        $client['address'] ?? '',
-        $existing,
-      ]);
-      return;
+    // Também tenta achar por variantes do WhatsApp (com/sem 55 e 9)
+    $variants = function_exists('aurora_phone_match_keys')
+      ? aurora_phone_match_keys($phone)
+      : array_values(array_unique(array_filter([$phone])));
+    if ($variants) {
+      $placeholders = implode(',', array_fill(0, count($variants), '?'));
+      $find = $pdo->prepare("SELECT id FROM clients WHERE phone IN ($placeholders) LIMIT 1");
+      $find->execute($variants);
+      $existing = $find->fetchColumn();
+      if ($existing) {
+        $upd = $pdo->prepare('UPDATE clients SET name = ?, email = ?, phone = ?, address = ? WHERE id = ?');
+        $upd->execute([
+          $client['name'] ?? '',
+          $client['email'] ?? '',
+          $phone,
+          $client['address'] ?? '',
+          $existing,
+        ]);
+        return (string) $existing;
+      }
     }
   }
 
@@ -577,12 +715,21 @@ function aurora_upsert_client(PDO $pdo, array $client): void {
     $phone,
     $client['address'] ?? '',
   ]);
+  return $id;
 }
 
 function aurora_create_order(PDO $pdo, array $order, ?array $client = null): array {
+  $resolvedClientId = null;
   if (is_array($client)) {
-    aurora_upsert_client($pdo, $client);
+    $resolvedClientId = aurora_upsert_client($pdo, $client);
   }
+
+  $phone = preg_replace('/\D+/', '', (string) ($order['clientWhatsapp'] ?? ''));
+  $total = (float) ($order['total'] ?? 0);
+  $name = trim((string) ($order['clientName'] ?? ''));
+  $clientId = $resolvedClientId
+    ?: (string) ($order['clientId'] ?? ($client['id'] ?? ''));
+  if ($clientId === '') $clientId = null;
 
   $orderId = (string) ($order['id'] ?? '');
   if ($orderId !== '') {
@@ -590,13 +737,15 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
     $chk->execute([$orderId]);
     $existingNumber = $chk->fetchColumn();
     if ($existingNumber) {
-      return ['ok' => true, 'orderNumber' => $existingNumber, 'duplicated' => true];
+      return [
+        'ok' => true,
+        'orderNumber' => $existingNumber,
+        'duplicated' => true,
+        'loyalty' => aurora_loyalty_stats_safe($pdo, $phone),
+      ];
     }
   }
 
-  $phone = preg_replace('/\D+/', '', (string) ($order['clientWhatsapp'] ?? ''));
-  $total = (float) ($order['total'] ?? 0);
-  $name = trim((string) ($order['clientName'] ?? ''));
   if ($phone !== '') {
     $dup = $pdo->prepare(
       "SELECT number FROM orders
@@ -609,14 +758,23 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
     $dup->execute([$phone, $name, $total]);
     $dupNumber = $dup->fetchColumn();
     if ($dupNumber) {
-      return ['ok' => true, 'orderNumber' => $dupNumber, 'duplicated' => true];
+      return [
+        'ok' => true,
+        'orderNumber' => $dupNumber,
+        'duplicated' => true,
+        'loyalty' => aurora_loyalty_stats_safe($pdo, $phone),
+      ];
     }
   }
 
   $year = (int) date('Y');
   $max = 0;
-  $nums = $pdo->query('SELECT number FROM orders')->fetchAll(PDO::FETCH_COLUMN);
-  foreach ($nums as $number) {
+  $like = sprintf('PED-%d-%%', $year);
+  $numStmt = $pdo->prepare(
+    'SELECT number FROM orders WHERE number LIKE ? ORDER BY number DESC LIMIT 50'
+  );
+  $numStmt->execute([$like]);
+  foreach ($numStmt->fetchAll(PDO::FETCH_COLUMN) as $number) {
     if (preg_match('/PED-(\d{4})-(\d+)/i', (string) $number, $m) && (int) $m[1] === $year) {
       $max = max($max, (int) $m[2]);
     }
@@ -634,7 +792,7 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
     $ins->execute([
       $orderId,
       $orderNumber,
-      $order['clientId'] ?? ($client['id'] ?? null),
+      $clientId,
       $name,
       $phone,
       $total,
@@ -650,7 +808,7 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
         $orderId,
         $item['productId'] ?? $item['id'] ?? null,
         $item['name'] ?? $item['productName'] ?? 'Item',
-        $item['flavor'] ?? '',
+        $item['flavor'] ?? ($item['detail'] ?? ''),
         (int) ($item['qty'] ?? 1),
         (float) ($item['price'] ?? 0),
       ]);
@@ -662,5 +820,151 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
     throw $e;
   }
 
-  return ['ok' => true, 'orderNumber' => $orderNumber];
+  return [
+    'ok' => true,
+    'orderNumber' => $orderNumber,
+    'loyalty' => aurora_loyalty_stats_safe($pdo, $phone),
+  ];
+}
+
+function aurora_loyalty_stats_safe(PDO $pdo, string $phone): array {
+  try {
+    return aurora_loyalty_stats($pdo, $phone);
+  } catch (Throwable $e) {
+    $goal = aurora_loyalty_goal();
+    return [
+      'phone' => aurora_normalize_phone($phone),
+      'total' => 0,
+      'siteTotal' => 0,
+      'bonus' => 0,
+      'progress' => 0,
+      'goal' => $goal,
+      'remaining' => $goal,
+      'rewards' => 0,
+      'eligible' => false,
+      'gift' => aurora_loyalty_gift(),
+    ];
+  }
+}
+
+/**
+ * Fidelidade Aurora — 15 pedidos (não cancelados) = 1 brinde.
+ * Chave: WhatsApp do cliente.
+ */
+function aurora_loyalty_goal(): int {
+  return 15;
+}
+
+function aurora_loyalty_gift(): string {
+  return '1 brinde surpresa da Aurora';
+}
+
+function aurora_normalize_phone($phone): string {
+  return preg_replace('/\D+/', '', (string) $phone);
+}
+
+/**
+ * Gera chaves de comparação para o mesmo WhatsApp BR
+ * (com/sem 55, com/sem o 9º dígito após o DDD).
+ */
+function aurora_phone_match_keys(string $phone): array {
+  $phone = aurora_normalize_phone($phone);
+  if ($phone === '' || strlen($phone) < 10) return [];
+
+  $keys = [];
+  $add = static function (string $p) use (&$keys): void {
+    if ($p !== '' && strlen($p) >= 10) $keys[$p] = true;
+  };
+
+  $add($phone);
+  $local = (str_starts_with($phone, '55') && strlen($phone) >= 12) ? substr($phone, 2) : $phone;
+  $add($local);
+  $add(str_starts_with($phone, '55') ? $phone : ('55' . $phone));
+  $add(str_starts_with($local, '55') ? $local : ('55' . $local));
+
+  // Com / sem o 9 após o DDD (celular BR)
+  if (strlen($local) === 11 && $local[2] === '9') {
+    $noNine = substr($local, 0, 2) . substr($local, 3);
+    $add($noNine);
+    $add('55' . $noNine);
+  } elseif (strlen($local) === 10) {
+    $withNine = substr($local, 0, 2) . '9' . substr($local, 2);
+    $add($withNine);
+    $add('55' . $withNine);
+  }
+
+  return array_keys($keys);
+}
+
+function aurora_phone_variants(string $phone): array {
+  return aurora_phone_match_keys($phone);
+}
+
+function aurora_phones_equivalent(string $a, string $b): bool {
+  $ka = aurora_phone_match_keys($a);
+  $kb = aurora_phone_match_keys($b);
+  if (!$ka || !$kb) return false;
+  return (bool) array_intersect($ka, $kb);
+}
+
+function aurora_loyalty_stats(PDO $pdo, string $phone): array {
+  $goal = aurora_loyalty_goal();
+  $gift = aurora_loyalty_gift();
+  $variants = aurora_phone_match_keys($phone);
+  if (!$variants) {
+    return [
+      'phone' => '',
+      'total' => 0,
+      'siteTotal' => 0,
+      'bonus' => 0,
+      'progress' => 0,
+      'goal' => $goal,
+      'remaining' => $goal,
+      'rewards' => 0,
+      'eligible' => false,
+      'gift' => $gift,
+    ];
+  }
+
+  // Contagem por variantes do WhatsApp (SQL — sem varrer a tabela inteira em PHP)
+  $placeholders = implode(',', array_fill(0, count($variants), '?'));
+  $stmt = $pdo->prepare(
+    "SELECT COUNT(*) FROM orders
+     WHERE status <> 'cancelado'
+       AND client_whatsapp IN ($placeholders)"
+  );
+  $stmt->execute($variants);
+  $siteTotal = (int) $stmt->fetchColumn();
+
+  $bonus = 0;
+  try {
+    $bStmt = $pdo->prepare(
+      "SELECT MAX(loyalty_bonus) FROM clients WHERE phone IN ($placeholders)"
+    );
+    $bStmt->execute($variants);
+    $bonus = max(0, (int) $bStmt->fetchColumn());
+  } catch (Throwable $e) {
+    $bonus = 0;
+  }
+
+  $total = $siteTotal + $bonus;
+
+  $rewards = intdiv($total, $goal);
+  $mod = $total % $goal;
+  $eligible = $total > 0 && $mod === 0;
+  $progress = $eligible ? $goal : $mod;
+  $remaining = $eligible ? 0 : ($goal - $progress);
+
+  return [
+    'phone' => $variants[0],
+    'total' => $total,
+    'siteTotal' => $siteTotal,
+    'bonus' => $bonus,
+    'progress' => $progress,
+    'goal' => $goal,
+    'remaining' => $remaining,
+    'rewards' => $rewards,
+    'eligible' => $eligible,
+    'gift' => $gift,
+  ];
 }

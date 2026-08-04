@@ -79,7 +79,7 @@
   </div>
 
   <script src="../js/default-data.js?v=16"></script>
-  <script src="../js/storage.js?v=20"></script>
+  <script src="../js/storage.js?v=31"></script>
   <script>
     if (sessionStorage.getItem('admin_logged') === 'true') {
       window.location.href = 'index.html';
@@ -105,17 +105,22 @@
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
 
       try {
-        const ok = await Storage.loginAsync(email, password);
+        const result = await Storage.loginAsync(email, password);
+        const ok = result === true || result?.ok === true;
         if (ok) {
           sessionStorage.setItem('admin_logged', 'true');
           sessionStorage.setItem('admin_email', email);
           window.location.href = 'index.html';
           return;
         }
-        errorEl.textContent = 'E-mail ou senha incorretos.';
+        if (result?.reason === 'offline') {
+          errorEl.textContent = 'Servidor Hostinger indisponível agora (503). Aguarde alguns minutos e tente de novo — não é a senha.';
+        } else {
+          errorEl.textContent = 'E-mail ou senha incorretos.';
+        }
         errorEl.style.display = 'block';
       } catch (err) {
-        errorEl.textContent = 'Erro de conexão. Tente de novo.';
+        errorEl.textContent = 'Erro de conexão com o servidor. Tente de novo em alguns minutos.';
         errorEl.style.display = 'block';
       } finally {
         btn.disabled = false;

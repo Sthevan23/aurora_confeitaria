@@ -80,6 +80,20 @@ function aurora_ensure_schema(PDO $pdo): void {
 
     // Cupons: cria a tabela se ainda não existir (bancos antigos sem migrate)
     aurora_ensure_coupons_table($pdo);
+
+    // Fidelidade: pedidos fora do site (ajuste manual)
+    $clientsExists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients' LIMIT 1"
+    )->fetchColumn();
+    if ($clientsExists) {
+      aurora_ensure_column(
+        $pdo,
+        'clients',
+        'loyalty_bonus',
+        "INT NOT NULL DEFAULT 0 COMMENT 'Pedidos fora do site (ajuste fidelidade)'"
+      );
+    }
   } catch (Throwable $e) {
     // Não derruba o site se o ALTER falhar (permissão etc.)
   }

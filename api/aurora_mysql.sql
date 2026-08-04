@@ -130,6 +130,7 @@ CREATE TABLE `clients` (
   `email` VARCHAR(190) DEFAULT NULL,
   `phone` VARCHAR(30) DEFAULT NULL,
   `address` VARCHAR(500) DEFAULT NULL,
+  `loyalty_bonus` INT NOT NULL DEFAULT 0 COMMENT 'Pedidos fora do site (ajuste fidelidade)',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_clients_phone` (`phone`)

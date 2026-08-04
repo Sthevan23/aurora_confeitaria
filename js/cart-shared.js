@@ -108,7 +108,8 @@ window.AuroraCart = (() => {
   }
 
   function payable() {
-    return Math.max(0, subtotal() - discount());
+    const fee = getFulfillment() === 'entrega' ? getDeliveryFee() : 0;
+    return Math.max(0, subtotal() - discount() + fee);
   }
 
   function addItem(item) {
@@ -236,7 +237,7 @@ window.AuroraCart = (() => {
     );
   }
 
-  function buildWhatsAppMessage({ fullName, phone, fulfillment }) {
+  function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty }) {
     const s = typeof Storage !== 'undefined' ? Storage.getSettings() : {};
     const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
     const list = getItems();
@@ -245,8 +246,9 @@ window.AuroraCart = (() => {
     const disc = live && typeof Storage !== 'undefined'
       ? Storage.calcCouponDiscount(live, sub)
       : 0;
-    const total = Math.max(0, sub - disc);
     const mode = fulfillment === 'entrega' ? 'entrega' : 'retirada';
+    const fee = mode === 'entrega' ? getDeliveryFee() : 0;
+    const total = Math.max(0, sub - disc + fee);
 
     const lines = list.map((item) => {
       const qty = Number(item.qty) || 1;
@@ -261,12 +263,26 @@ window.AuroraCart = (() => {
       ? `\nCupom ${live.code}: − ${formatMoney(disc)}\nSubtotal: ${formatMoney(sub)}\n`
       : '';
 
+    let loyaltyBlock = '';
+    if (loyalty && loyalty.eligible) {
+      const gift = loyalty.gift || '1 brinde surpresa da Aurora';
+      loyaltyBlock =
+        `\n🎁 *Fidelidade Aurora*\n` +
+        `Cliente completou ${loyalty.total || loyalty.goal} pedidos e ganhou: *${gift}*\n` +
+        `(Favor confirmar o brinde neste atendimento)\n`;
+    } else if (loyalty && loyalty.total > 0) {
+      loyaltyBlock =
+        `\n⭐ Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos` +
+        (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde\n` : '\n');
+    }
+
     return (
       `*Novo Pedido — ${storeName}*\n\n` +
       `*Cliente:*\n${fullName}\n${formatPhoneBR(phone)}\n\n` +
       `*Itens:*\n${lines}\n` +
       `${couponBlock}\n` +
-      `*Total:* ${formatMoney(total)}\n\n` +
+      `*Total:* ${formatMoney(total)}\n` +
+      `${loyaltyBlock}\n` +
       `${fulfillmentBlock(mode)}\n\n` +
       `Aguardo confirmação 😊`
     );

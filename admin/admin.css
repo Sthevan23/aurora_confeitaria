@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    Dolce Amore — Painel Administrativo
    admin.css
    ============================================================ */
@@ -1518,5 +1518,34 @@ body.sidebar-open {
 
 .prod-photo-preview[hidden] {
   display: none;
+}
+
+.loyalty-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #fff1f4;
+  color: #ad1457;
+  white-space: nowrap;
+}
+
+.loyalty-pill--ok {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.loyalty-pill--muted {
+  background: #f5f0ed;
+  color: #8d6e63;
+}
+
+.form-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: #8d6e63;
+  line-height: 1.35;
 }
 

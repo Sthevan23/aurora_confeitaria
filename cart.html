@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=36">
 </head>
 <body class="cart-page">
   <header class="header header--solid" id="header">
@@ -71,6 +71,17 @@
           </div>
           <p class="cart-summary__note" id="cart-page-fee-note" hidden></p>
 
+          <div class="cart-loyalty" id="cart-page-loyalty" hidden>
+            <div class="cart-loyalty__head">
+              <span class="cart-loyalty__label">Fidelidade Aurora</span>
+              <strong class="cart-loyalty__count" id="cart-page-loyalty-count">0/15</strong>
+            </div>
+            <div class="cart-loyalty__bar" aria-hidden="true">
+              <span class="cart-loyalty__fill" id="cart-page-loyalty-fill"></span>
+            </div>
+            <p class="cart-loyalty__msg" id="cart-page-loyalty-msg"></p>
+          </div>
+
           <div class="cart-coupon" id="cart-page-coupon" hidden>
             <label class="order-field" for="cart-page-coupon-input">Cupom de desconto</label>
             <div class="cart-coupon__row">
@@ -121,8 +132,8 @@
   <div class="cart-feedback" id="cart-feedback" hidden aria-live="polite"></div>
 
   <script src="js/default-data.js?v=16"></script>
-  <script src="js/storage.js?v=25"></script>
-  <script src="js/cart-shared.js?v=1"></script>
-  <script src="js/cart-page.js?v=3"></script>
+  <script src="js/storage.js?v=31"></script>
+  <script src="js/cart-shared.js?v=3"></script>
+  <script src="js/cart-page.js?v=5"></script>
 </body>
 </html>

@@ -143,13 +143,16 @@ const Storage = (() => {
   }
 
   async function pullPublic() {
-    if (!(await probeCloud())) return false;
     try {
       const res = await fetchWithTimeout(API + '?t=' + Date.now());
-      if (!res.ok) return false;
+      if (!res.ok) {
+        cloudEnabled = false;
+        return false;
+      }
       const remote = await res.json();
       if (remote.empty || remote.error) return false;
       if (!remote.settings || !Array.isArray(remote.products)) return false;
+      cloudEnabled = true;
       const merged = {
         ...emptyStore(),
         version: remote.version || DATA_VERSION,
@@ -160,7 +163,6 @@ const Storage = (() => {
         faq: remote.faq || [],
         gallery: remote.gallery || [],
         coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
-        // admin-only ficam vazios no público
         clients: [],
         orders: [],
         finance: [],
@@ -171,13 +173,14 @@ const Storage = (() => {
       notifyUpdated();
       return true;
     } catch {
+      cloudEnabled = false;
       return false;
     }
   }
 
   async function pullFull() {
     const password = getAdminPassword();
-    if (!password || !(await probeCloud())) return false;
+    if (!password) return false;
     try {
       const res = await fetchWithTimeout(API + '?full=1&t=' + Date.now(), {
         headers: { 'X-Admin-Password': password },
@@ -185,6 +188,7 @@ const Storage = (() => {
       if (!res.ok) return false;
       const remote = await res.json();
       if (!remote || !remote.settings) return false;
+      cloudEnabled = true;
       const json = JSON.stringify(remote);
       if (json === lastRemoteJson) return true;
       setMemory(remote);
@@ -249,7 +253,10 @@ const Storage = (() => {
   }
 
   async function loginRemote(email, password) {
-    if (!(await probeCloud())) return false;
+    const reachable = await probeCloud();
+    if (!reachable) {
+      return { ok: false, reason: 'offline' };
+    }
     try {
       const res = await fetch(API, {
         method: 'POST',
@@ -257,14 +264,16 @@ const Storage = (() => {
         body: JSON.stringify({ action: 'login', email, password }),
       });
       const result = await res.json().catch(() => ({}));
-      if (!res.ok || !result.ok) return false;
+      if (!res.ok || !result.ok) {
+        return { ok: false, reason: 'auth', error: result.error || '' };
+      }
       setMemory(result.data);
       lastRemoteJson = JSON.stringify(result.data);
       setAdminPassword(password);
       cloudEnabled = true;
-      return true;
+      return { ok: true };
     } catch {
-      return false;
+      return { ok: false, reason: 'offline' };
     }
   }
 
@@ -273,13 +282,13 @@ const Storage = (() => {
     return false;
   }
 
-  function startCloudPolling(intervalMs = 5000) {
+  function startCloudPolling(intervalMs = 45000) {
     stopCloudPolling();
     if (!getAdminPassword()) return;
     pollTimer = setInterval(() => {
-      if (pushInFlight) return; // não sobrescreve enquanto salva
+      if (pushInFlight) return;
       pullFull();
-    }, intervalMs);
+    }, Math.max(15000, intervalMs));
   }
 
   function stopCloudPolling() {
@@ -563,6 +572,92 @@ const Storage = (() => {
     });
   }
 
+  function phoneMatchKeys(whatsapp) {
+    const phone = String(whatsapp || '').replace(/\D/g, '');
+    if (!phone || phone.length < 10) return new Set();
+    const keys = new Set();
+    const add = (p) => {
+      if (p && String(p).length >= 10) keys.add(String(p));
+    };
+    add(phone);
+    const local = phone.startsWith('55') && phone.length >= 12 ? phone.slice(2) : phone;
+    add(local);
+    add(phone.startsWith('55') ? phone : `55${phone}`);
+    add(local.startsWith('55') ? local : `55${local}`);
+    if (local.length === 11 && local[2] === '9') {
+      const noNine = local.slice(0, 2) + local.slice(3);
+      add(noNine);
+      add(`55${noNine}`);
+    } else if (local.length === 10) {
+      const withNine = `${local.slice(0, 2)}9${local.slice(2)}`;
+      add(withNine);
+      add(`55${withNine}`);
+    }
+    return keys;
+  }
+
+  function phonesEquivalent(a, b) {
+    const ka = phoneMatchKeys(a);
+    const kb = phoneMatchKeys(b);
+    if (!ka.size || !kb.size) return false;
+    for (const k of ka) {
+      if (kb.has(k)) return true;
+    }
+    return false;
+  }
+
+  function computeLoyaltyFromOrders(orders, whatsapp, bonusOverride) {
+    const goal = 15;
+    const gift = '1 brinde surpresa da Aurora';
+    const phone = String(whatsapp || '').replace(/\D/g, '');
+    if (!phone || phone.length < 10) {
+      return {
+        phone: '', total: 0, siteTotal: 0, bonus: 0, progress: 0, goal, remaining: goal,
+        rewards: 0, eligible: false, gift,
+      };
+    }
+    const siteTotal = (orders || []).filter((o) => {
+      if (String(o.status || '').toLowerCase() === 'cancelado') return false;
+      return phonesEquivalent(phone, o.clientWhatsapp || '');
+    }).length;
+
+    let bonus = 0;
+    if (typeof bonusOverride === 'number' && Number.isFinite(bonusOverride)) {
+      bonus = Math.max(0, Math.floor(bonusOverride));
+    } else {
+      const clients = getClients() || [];
+      const client = clients.find((c) => phonesEquivalent(phone, c.phone || ''));
+      bonus = Math.max(0, Math.floor(Number(client?.loyaltyBonus) || 0));
+    }
+
+    const total = siteTotal + bonus;
+    const rewards = Math.floor(total / goal);
+    const mod = total % goal;
+    const eligible = total > 0 && mod === 0;
+    const progress = eligible ? goal : mod;
+    const remaining = eligible ? 0 : (goal - progress);
+    return { phone, total, siteTotal, bonus, progress, goal, remaining, rewards, eligible, gift };
+  }
+
+  async function getLoyaltyStatus(whatsapp) {
+    const phone = String(whatsapp || '').replace(/\D/g, '');
+    if (!phone || phone.length < 10) {
+      return computeLoyaltyFromOrders([], phone);
+    }
+    if (location.protocol !== 'file:' || isLocalHost) {
+      try {
+        const res = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'loyalty_status', phone }),
+        });
+        const result = await res.json().catch(() => ({}));
+        if (res.ok && result.ok && result.loyalty) return result.loyalty;
+      } catch { /* fallback local */ }
+    }
+    return computeLoyaltyFromOrders(getOrders(), phone);
+  }
+
   async function createPublicOrder({ fullName, whatsapp, items, total, notes }) {
     const phone = String(whatsapp || '').replace(/\D/g, '');
     const name = String(fullName || '').trim();
@@ -575,7 +670,14 @@ const Storage = (() => {
     data.clients = data.clients || [];
 
     const duplicate = findRecentDuplicate(data.orders, phone, items, notes);
-    if (duplicate) return { ok: true, order: duplicate, duplicated: true };
+    if (duplicate) {
+      return {
+        ok: true,
+        order: duplicate,
+        duplicated: true,
+        loyalty: computeLoyaltyFromOrders(data.orders, phone),
+      };
+    }
 
     let client = data.clients.find((c) => String(c.phone || '').replace(/\D/g, '') === phone);
     if (!client) {
@@ -600,6 +702,7 @@ const Storage = (() => {
       source: 'site',
     };
 
+    let loyalty = null;
     if (location.protocol !== 'file:' || isLocalHost) {
       try {
         const res = await fetch(API, {
@@ -609,9 +712,11 @@ const Storage = (() => {
         });
         const result = await res.json().catch(() => ({}));
         if (!res.ok || !result.ok) {
-          return { ok: false, error: result.error || 'Falha ao gravar no MySQL' };
+          const detail = result.detail ? ` (${result.detail})` : '';
+          return { ok: false, error: (result.error || 'Falha ao gravar no MySQL') + detail };
         }
         if (result.orderNumber) order.number = result.orderNumber;
+        if (result.loyalty) loyalty = result.loyalty;
       } catch {
         return { ok: false, error: 'Sem conexão com a API Hostinger' };
       }
@@ -621,7 +726,8 @@ const Storage = (() => {
 
     data.orders.push(order);
     setMemory(data);
-    return { ok: true, order };
+    if (!loyalty) loyalty = computeLoyaltyFromOrders(data.orders, phone);
+    return { ok: true, order, loyalty };
   }
 
   return {
@@ -642,7 +748,7 @@ const Storage = (() => {
     initCloud, pullFull, pullPublic, pushToCloud, saveAsync,
     isCloudEnabled, setAdminPassword, getAdminPassword,
     startCloudPolling, stopCloudPolling, notifyUpdated,
-    createPublicOrder, getApiUrl,
+    createPublicOrder, getLoyaltyStatus, computeLoyaltyFromOrders, getApiUrl,
   };
 })();
 
