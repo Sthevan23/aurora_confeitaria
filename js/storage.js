@@ -1,9 +1,10 @@
 /**
  * storage.js — Aurora Confeitaria
- * Fonte única: MySQL via API Hostinger (sem dados locais / sem seed)
+ * Fonte: MySQL via API Hostinger + cache local do cardápio (fallback se API cair)
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v2';
   const DATA_VERSION = 16;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '');
@@ -25,6 +26,7 @@ const Storage = (() => {
   let memoryData = null;
   let pushInFlight = false;
   let pendingPushData = null;
+  let lastLoadFromCache = false;
 
   function emptyStore() {
     return {
@@ -63,10 +65,88 @@ const Storage = (() => {
     };
   }
 
+  function slimPublicCatalog(data) {
+    const products = (data.products || []).map((p) => {
+      const image = String(p.image || '');
+      return {
+        ...p,
+        // Não cacheia data-URL gigante (estoura localStorage)
+        image: image.startsWith('data:') ? '' : image,
+      };
+    });
+    return {
+      version: data.version || DATA_VERSION,
+      savedAt: Date.now(),
+      settings: data.settings || {},
+      categories: data.categories || [],
+      products,
+      reviews: data.reviews || [],
+      faq: data.faq || [],
+      gallery: (data.gallery || []).filter((g) => !String(g || '').startsWith('data:')),
+      coupons: data.coupons || [],
+    };
+  }
+
+  function savePublicCache(data) {
+    try {
+      localStorage.setItem(PUBLIC_CACHE_KEY, JSON.stringify(slimPublicCatalog(data)));
+    } catch {
+      try {
+        const slim = slimPublicCatalog(data);
+        slim.reviews = [];
+        slim.faq = [];
+        slim.gallery = [];
+        localStorage.setItem(PUBLIC_CACHE_KEY, JSON.stringify(slim));
+      } catch { /* ignore quota */ }
+    }
+  }
+
+  function loadPublicCache() {
+    try {
+      const raw = localStorage.getItem(PUBLIC_CACHE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.products) || !data.products.length) return null;
+      // Cache válido por 14 dias
+      if (data.savedAt && Date.now() - Number(data.savedAt) > 14 * 24 * 60 * 60 * 1000) {
+        return null;
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  function applyPublicCache(cached) {
+    if (!cached) return false;
+    setMemory({
+      ...emptyStore(),
+      version: cached.version || DATA_VERSION,
+      settings: { ...emptyStore().settings, ...(cached.settings || {}) },
+      categories: cached.categories || [],
+      products: cached.products || [],
+      reviews: cached.reviews || [],
+      faq: cached.faq || [],
+      gallery: cached.gallery || [],
+      coupons: cached.coupons || [],
+      clients: [],
+      orders: [],
+      finance: [],
+      auth: { email: '', password: '' },
+    });
+    lastLoadFromCache = true;
+    return true;
+  }
+
   function init() {
-    // Não usa default-data nem localStorage de catálogo
+    // Limpa store antigo completo (não usar como fonte)
     try { localStorage.removeItem(KEY); } catch { /* ignore */ }
-    if (!memoryData) memoryData = emptyStore();
+    const cached = loadPublicCache();
+    if (cached) {
+      applyPublicCache(cached);
+    } else if (!memoryData) {
+      memoryData = emptyStore();
+    }
     return memoryData;
   }
 
@@ -115,11 +195,15 @@ const Storage = (() => {
     return cloudEnabled;
   }
 
+  function wasLoadedFromCache() {
+    return lastLoadFromCache;
+  }
+
   function notifyUpdated() {
     window.dispatchEvent(new CustomEvent('storage-updated'));
   }
 
-  async function fetchWithTimeout(url, options = {}, ms = 12000) {
+  async function fetchWithTimeout(url, options = {}, ms = 15000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
     try {
@@ -143,15 +227,32 @@ const Storage = (() => {
   }
 
   async function pullPublic() {
+    lastLoadFromCache = false;
     try {
-      const res = await fetchWithTimeout(API + '?t=' + Date.now());
+      const res = await fetchWithTimeout(API + '?t=' + Date.now(), {}, 18000);
       if (!res.ok) {
         cloudEnabled = false;
+        if (applyPublicCache(loadPublicCache())) {
+          notifyUpdated();
+          return 'cache';
+        }
         return false;
       }
       const remote = await res.json();
-      if (remote.empty || remote.error) return false;
-      if (!remote.settings || !Array.isArray(remote.products)) return false;
+      if (remote.empty || remote.error) {
+        if (applyPublicCache(loadPublicCache())) {
+          notifyUpdated();
+          return 'cache';
+        }
+        return false;
+      }
+      if (!remote.settings || !Array.isArray(remote.products)) {
+        if (applyPublicCache(loadPublicCache())) {
+          notifyUpdated();
+          return 'cache';
+        }
+        return false;
+      }
       cloudEnabled = true;
       const merged = {
         ...emptyStore(),
@@ -169,11 +270,17 @@ const Storage = (() => {
         auth: { email: '', password: '' },
       };
       setMemory(merged);
+      savePublicCache(merged);
       lastRemoteJson = JSON.stringify(merged);
+      lastLoadFromCache = false;
       notifyUpdated();
       return true;
     } catch {
       cloudEnabled = false;
+      if (applyPublicCache(loadPublicCache())) {
+        notifyUpdated();
+        return 'cache';
+      }
       return false;
     }
   }
@@ -301,7 +408,15 @@ const Storage = (() => {
   async function initCloud({ full = false } = {}) {
     init();
     const ok = full ? await pullFull() : await pullPublic();
-    return !!(ok && cloudEnabled);
+    if (ok === true) {
+      lastLoadFromCache = false;
+      return true;
+    }
+    if (ok === 'cache' || (getProducts().length > 0)) {
+      lastLoadFromCache = true;
+      return 'cache';
+    }
+    return false;
   }
 
   function getApiUrl() {
@@ -746,7 +861,7 @@ const Storage = (() => {
     getDashboardStats, getMonthlyRevenue,
     getFinishedOrdersByPeriod, getProductSalesBreakdown, getSalesPeriodStats,
     initCloud, pullFull, pullPublic, pushToCloud, saveAsync,
-    isCloudEnabled, setAdminPassword, getAdminPassword,
+    isCloudEnabled, wasLoadedFromCache, setAdminPassword, getAdminPassword,
     startCloudPolling, stopCloudPolling, notifyUpdated,
     createPublicOrder, getLoyaltyStatus, computeLoyaltyFromOrders, getApiUrl,
   };

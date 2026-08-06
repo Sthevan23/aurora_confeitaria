@@ -1783,19 +1783,35 @@ function initParallax() {
 
 async function boot() {
   Storage.init();
-  let online = false;
+  let status = false;
   try {
-    online = await Storage.initCloud({ full: false });
+    status = await Storage.initCloud({ full: false });
   } catch { /* ignore */ }
 
-  if (!online) {
+  const hasProducts = (Storage.getProducts?.() || []).length > 0;
+  if (status !== true) {
     console.error('Sem conexão com a API MySQL Hostinger:', Storage.getApiUrl?.());
+    const msg = hasProducts || status === 'cache'
+      ? 'Servidor lento agora — mostrando o cardápio salvo. Pedidos podem falhar até normalizar.'
+      : 'Servidor Hostinger indisponível agora. Os produtos voltam quando a API responder — tente atualizar em alguns minutos.';
     document.body.insertAdjacentHTML(
       'afterbegin',
-      `<div style="position:fixed;inset:auto 1rem 1rem;z-index:9999;background:#3d2610;color:#fff;padding:0.9rem 1.1rem;border-radius:999px;font:600 0.9rem Manrope,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:min(520px,calc(100vw - 2rem))">
-        Servidor Hostinger indisponível agora. Os produtos voltam quando a API responder — tente atualizar em alguns minutos.
+      `<div id="aurora-api-banner" style="position:fixed;inset:auto 1rem 1rem;z-index:9999;background:#3d2610;color:#fff;padding:0.9rem 1.1rem;border-radius:999px;font:600 0.9rem Manrope,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:min(520px,calc(100vw - 2rem))">
+        ${msg}
       </div>`
     );
+    // Tenta de novo em background quando a Hostinger liberar
+    let tries = 0;
+    const retry = setInterval(async () => {
+      tries += 1;
+      const again = await Storage.pullPublic?.().catch(() => false);
+      if (again === true) {
+        clearInterval(retry);
+        document.getElementById('aurora-api-banner')?.remove();
+        window.dispatchEvent(new CustomEvent('storage-updated'));
+      }
+      if (tries >= 12) clearInterval(retry);
+    }, 20000);
   }
 
   applySettings();
