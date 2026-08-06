@@ -714,10 +714,13 @@ const Storage = (() => {
   }
 
   function productDisplayPrice(product) {
+    const list = Number(product.price || 0);
     if (product.promoActive && product.promoPrice != null && product.promoPrice >= 0) {
-      return Number(product.promoPrice);
+      const promo = Number(product.promoPrice);
+      // Promo só vale se for menor; senão mantém o mesmo valor do preço
+      if (promo < list) return promo;
     }
-    return Number(product.price || 0);
+    return list;
   }
 
   function getDashboardStats() {

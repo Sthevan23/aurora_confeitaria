@@ -350,8 +350,16 @@ function displayPrice(product, flavor) {
   const money = Storage.formatCurrency(sale);
   const hasFlavorPrice = flavor && product.flavorPrices && product.flavorPrices[flavor] != null;
   const label = product.priceFrom && !hasFlavorPrice ? `a partir de ${money}` : money;
-  if (!hasFlavorPrice && product.promoActive && product.promoPrice != null && Number(product.price) > 0) {
-    return `<s class="product-card__price-old">${Storage.formatCurrency(product.price)}</s> <span>${label}</span>`;
+  const list = Number(product.price) || 0;
+  // Só risca preço antigo se a promo for realmente menor (evita 29 riscado + 29 / valores diferentes)
+  if (
+    !hasFlavorPrice &&
+    product.promoActive &&
+    product.promoPrice != null &&
+    list > 0 &&
+    Number(product.promoPrice) < list
+  ) {
+    return `<s class="product-card__price-old">${Storage.formatCurrency(list)}</s> <span>${label}</span>`;
   }
   return label;
 }

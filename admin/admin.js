@@ -1077,8 +1077,15 @@ function openProductModal(product = null) {
         featured: document.getElementById('prod-featured').checked,
         bestSeller: document.getElementById('prod-bestseller').checked,
         promoActive: document.getElementById('prod-promo').checked,
-        promoPrice: promoPriceRaw === '' ? null : parseFloat(promoPriceRaw),
-        promoLabel: document.getElementById('prod-promo-label').value.trim() || 'Promoção',
+        promoPrice: (() => {
+          const on = document.getElementById('prod-promo').checked;
+          if (!on) return null;
+          const raw = promoPriceRaw === '' ? null : parseFloat(promoPriceRaw);
+          return Number.isFinite(raw) ? raw : null;
+        })(),
+        promoLabel: document.getElementById('prod-promo').checked
+          ? (document.getElementById('prod-promo-label').value.trim() || 'Promoção')
+          : '',
         size: formatProductSize(document.getElementById('prod-size').value),
         flavors: parsedFlavors.flavors,
         flavorPrices: parsedFlavors.flavorPrices,
