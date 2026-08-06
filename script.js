@@ -728,13 +728,17 @@ function renderProducts() {
 
   const notice = document.getElementById('products-notice');
   if (notice) {
-    const salgadosOff = products.some(
-      (p) => p.categoryId === 'cat-salgados' && p.available === false,
-    );
-    const showSalgadosNotice = activeFilter === 'cat-salgados' || (activeFilter === 'all' && salgadosOff);
-    if (showSalgadosNotice && salgadosOff) {
+    const messages = [];
+    const hasOff = (catId) => products.some((p) => p.categoryId === catId && p.available === false);
+    if ((activeFilter === 'cat-salgados' || activeFilter === 'all') && hasOff('cat-salgados')) {
+      messages.push('Salgados temporariamente indisponíveis.');
+    }
+    if ((activeFilter === 'cat-copos' || activeFilter === 'all') && hasOff('cat-copos')) {
+      messages.push('Copo da Felicidade indisponível hoje.');
+    }
+    if (messages.length) {
       notice.hidden = false;
-      notice.textContent = 'Salgados temporariamente indisponíveis. Voltam em breve.';
+      notice.textContent = `${messages.join(' ')} Voltam em breve.`;
     } else {
       notice.hidden = true;
       notice.textContent = '';
