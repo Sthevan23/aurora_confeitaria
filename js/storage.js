@@ -320,8 +320,7 @@ const Storage = (() => {
 
     // 1) Catálogo estático — não cai com 503 do PHP
     if (await pullStaticCatalog()) {
-      // 2) Tenta API em paralelo só para atualizar (não bloqueia UI)
-      refreshCatalogFromApiInBackground();
+      // Não bate na API a cada visita (economiza Hostinger)
       return true;
     }
 
@@ -520,13 +519,14 @@ const Storage = (() => {
     return false;
   }
 
-  function startCloudPolling(intervalMs = 45000) {
+  function startCloudPolling(intervalMs = 120000) {
     stopCloudPolling();
     if (!getAdminPassword()) return;
     pollTimer = setInterval(() => {
       if (pushInFlight) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       pullFull();
-    }, Math.max(15000, intervalMs));
+    }, Math.max(60000, intervalMs));
   }
 
   function stopCloudPolling() {

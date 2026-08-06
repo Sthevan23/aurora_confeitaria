@@ -3,7 +3,7 @@
  * PDO MySQL — Aurora / Hostinger
  */
 
-function aurora_db(): PDO {
+function aurora_db(bool $ensureSchema = true): PDO {
   static $pdo = null;
   if ($pdo instanceof PDO) {
     return $pdo;
@@ -31,13 +31,16 @@ function aurora_db(): PDO {
     PDO::ATTR_EMULATE_PREPARES => false,
   ]);
 
-  aurora_ensure_schema($pdo);
+  if ($ensureSchema) {
+    aurora_ensure_schema($pdo);
+  }
 
   return $pdo;
 }
 
 /**
  * Garante schema necessário para o painel (fotos + frete + cupons).
+ * Roda no máx. 1x por dia (arquivo flag) — evita ALTER/information_schema a cada request.
  */
 function aurora_ensure_schema(PDO $pdo): void {
   static $done = false;
@@ -45,6 +48,11 @@ function aurora_ensure_schema(PDO $pdo): void {
     return;
   }
   $done = true;
+
+  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_schema_ok_' . md5(__DIR__);
+  if (is_file($flag) && (time() - (int) @filemtime($flag)) < 86400) {
+    return;
+  }
 
   try {
     $productsExists = $pdo->query(
@@ -94,6 +102,8 @@ function aurora_ensure_schema(PDO $pdo): void {
         "INT NOT NULL DEFAULT 0 COMMENT 'Pedidos fora do site (ajuste fidelidade)'"
       );
     }
+
+    @file_put_contents($flag, (string) time());
   } catch (Throwable $e) {
     // Não derruba o site se o ALTER falhar (permissão etc.)
   }

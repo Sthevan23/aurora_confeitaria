@@ -13,19 +13,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sessionStorage.getItem('admin_logged') !== 'true') return;
 
   await Storage.initCloud({ full: true });
-  Storage.startCloudPolling(45000);
-  // Converte fotos data-URL antigas para arquivo (alivia Hostinger)
+  Storage.startCloudPolling(120000);
+  // Converte fotos pesadas só se a API estiver ok (não força a cada login)
   try {
     const password = Storage.getAdminPassword();
-    if (password) {
-      fetch(Storage.getApiUrl(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Password': password,
-        },
-        body: JSON.stringify({ action: 'extract_data_images', limit: 20 }),
-      }).catch(() => {});
+    if (password && navigator.onLine) {
+      setTimeout(() => {
+        fetch(Storage.getApiUrl(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Password': password,
+          },
+          body: JSON.stringify({ action: 'extract_data_images', limit: 5 }),
+        }).catch(() => {});
+      }, 8000);
     }
   } catch { /* ignore */ }
   updateSyncBadge();
@@ -488,10 +490,10 @@ function adminImgTag(path, alt, className = 'table__img') {
 
 /** Foto do card do site: 3:4 (retrato), tamanho fixo — sempre cabe no MySQL e aparece. */
 const PRODUCT_IMG = {
-  width: 720,
-  height: 960, // 3:4 — igual ao .product-card__img
-  quality: 0.78,
-  maxDataUrl: 900000,
+  width: 540,
+  height: 720, // 3:4
+  quality: 0.72,
+  maxDataUrl: 450000,
 };
 
 /**

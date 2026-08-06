@@ -80,27 +80,27 @@ $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
-  // Health / probe do front — leve
+  // Health / probe — SEM MySQL (bem leve)
   if (isset($_GET['ping'])) {
-    try {
-      $cfg = require __DIR__ . '/config.php';
-      $pdo = aurora_db();
-      $ready = aurora_db_ready($pdo);
-      $dbName = $pdo->query('SELECT DATABASE()')->fetchColumn();
-      json_out([
-        'ok' => true,
-        'db' => 'mysql',
-        'database' => $dbName ?: ($cfg['name'] ?? ''),
-        'user' => $cfg['user'] ?? '',
-        'ready' => $ready,
-        'host' => $cfg['host'] ?? '',
-      ]);
-    } catch (Throwable $e) {
-      json_out([
-        'ok' => false,
-        'db' => 'mysql',
-        'error' => $e->getMessage(),
-      ], 500);
+    json_out([
+      'ok' => true,
+      'db' => 'mysql',
+      'light' => true,
+      'ts' => time(),
+    ]);
+  }
+
+  // Preferir catalog.json estático (zero MySQL) quando existir e estiver fresco
+  if (!isset($_GET['full']) && $action !== 'full') {
+    $catalogFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'catalog.json';
+    if (is_file($catalogFile) && (time() - (int) @filemtime($catalogFile)) < 3600) {
+      $raw = @file_get_contents($catalogFile);
+      if ($raw !== false && $raw !== '') {
+        header('Cache-Control: public, max-age=120');
+        header('Content-Type: application/json; charset=utf-8');
+        echo $raw;
+        exit;
+      }
     }
   }
 
@@ -128,8 +128,13 @@ if ($method === 'GET') {
     json_out($data);
   }
 
-  // Catálogo público: cache curto no navegador/CDN
-  header('Cache-Control: public, max-age=45');
+  // Atualiza catalog.json pra próximas visitas não baterem no MySQL
+  try {
+    aurora_write_public_catalog($pdo);
+  } catch (Throwable $e) {
+  }
+
+  header('Cache-Control: public, max-age=120');
   json_out(public_payload($data));
 }
 

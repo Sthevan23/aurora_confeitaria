@@ -72,9 +72,9 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     $priceMap[$pid][$row['flavor']] = (float) $row['price'];
   }
 
-  // Converte até 3 data-URLs por request (alivia API aos poucos)
-  if ($mode === 'public') {
-    aurora_maybe_extract_data_images($pdo, 3);
+  // Conversão de data-URL só no admin/save — não em toda visita pública
+  if ($mode === 'full') {
+    aurora_maybe_extract_data_images($pdo, 2);
   }
 
   $products = [];
