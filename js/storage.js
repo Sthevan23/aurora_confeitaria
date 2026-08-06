@@ -4,7 +4,7 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v2';
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v3';
   const DATA_VERSION = 16;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '');
@@ -119,12 +119,14 @@ const Storage = (() => {
 
   function applyPublicCache(cached) {
     if (!cached) return false;
+    const products = hydrateProductImages(cached.products || []);
+    if (!products.length) return false;
     setMemory({
       ...emptyStore(),
       version: cached.version || DATA_VERSION,
       settings: { ...emptyStore().settings, ...(cached.settings || {}) },
       categories: cached.categories || [],
-      products: cached.products || [],
+      products,
       reviews: cached.reviews || [],
       faq: cached.faq || [],
       gallery: cached.gallery || [],
@@ -138,15 +140,60 @@ const Storage = (() => {
     return true;
   }
 
+  /** Preenche foto vazia com path do default-data (API 503 / cache sem data-URL). */
+  function hydrateProductImages(products) {
+    const defaults = (typeof AURORA_DEFAULT_DATA !== 'undefined' && Array.isArray(AURORA_DEFAULT_DATA.products))
+      ? AURORA_DEFAULT_DATA.products
+      : [];
+    const byId = new Map(defaults.map((p) => [p.id, p]));
+    const byName = new Map(defaults.map((p) => [String(p.name || '').trim().toLowerCase(), p]));
+    return (products || []).map((p) => {
+      const img = String(p.image || '').trim();
+      if (img && !img.startsWith('data:')) return p;
+      const d = byId.get(p.id) || byName.get(String(p.name || '').trim().toLowerCase());
+      if (d && d.image && !String(d.image).startsWith('data:')) {
+        return { ...p, image: d.image };
+      }
+      return { ...p, image: img.startsWith('data:') ? '' : img };
+    });
+  }
+
+  function applyDefaultCatalog() {
+    if (typeof AURORA_DEFAULT_DATA === 'undefined' || !AURORA_DEFAULT_DATA) return false;
+    const d = AURORA_DEFAULT_DATA;
+    if (!Array.isArray(d.products) || !d.products.length) return false;
+    const merged = {
+      ...emptyStore(),
+      version: d.version || DATA_VERSION,
+      settings: { ...emptyStore().settings, ...(d.settings || {}) },
+      categories: d.categories || [],
+      products: (d.products || []).filter((p) => p.active !== false),
+      reviews: d.reviews || [],
+      faq: d.faq || [],
+      gallery: d.gallery || [],
+      coupons: d.coupons || [],
+      clients: [],
+      orders: [],
+      finance: [],
+      auth: { email: '', password: '' },
+    };
+    setMemory(merged);
+    savePublicCache(merged);
+    lastLoadFromCache = true;
+    return true;
+  }
+
   function init() {
     // Limpa store antigo completo (não usar como fonte)
     try { localStorage.removeItem(KEY); } catch { /* ignore */ }
     const cached = loadPublicCache();
-    if (cached) {
-      applyPublicCache(cached);
-    } else if (!memoryData) {
-      memoryData = emptyStore();
+    if (cached && applyPublicCache(cached)) {
+      return memoryData;
     }
+    if (applyDefaultCatalog()) {
+      return memoryData;
+    }
+    if (!memoryData) memoryData = emptyStore();
     return memoryData;
   }
 
@@ -236,6 +283,10 @@ const Storage = (() => {
           notifyUpdated();
           return 'cache';
         }
+        if (applyDefaultCatalog()) {
+          notifyUpdated();
+          return 'cache';
+        }
         return false;
       }
       const remote = await res.json();
@@ -244,10 +295,18 @@ const Storage = (() => {
           notifyUpdated();
           return 'cache';
         }
+        if (applyDefaultCatalog()) {
+          notifyUpdated();
+          return 'cache';
+        }
         return false;
       }
       if (!remote.settings || !Array.isArray(remote.products)) {
         if (applyPublicCache(loadPublicCache())) {
+          notifyUpdated();
+          return 'cache';
+        }
+        if (applyDefaultCatalog()) {
           notifyUpdated();
           return 'cache';
         }
@@ -259,7 +318,7 @@ const Storage = (() => {
         version: remote.version || DATA_VERSION,
         settings: remote.settings,
         categories: remote.categories || [],
-        products: remote.products || [],
+        products: hydrateProductImages(remote.products || []),
         reviews: remote.reviews || [],
         faq: remote.faq || [],
         gallery: remote.gallery || [],
@@ -278,6 +337,10 @@ const Storage = (() => {
     } catch {
       cloudEnabled = false;
       if (applyPublicCache(loadPublicCache())) {
+        notifyUpdated();
+        return 'cache';
+      }
+      if (applyDefaultCatalog()) {
         notifyUpdated();
         return 'cache';
       }
