@@ -40,7 +40,7 @@ const AURORA_DEFAULT_DATA = {
     {
       "id": "p0",
       "name": "Copo Brownie da Felicidade",
-      "description": "Copo 300ml com camadas generosas de brownie e cremes — promoção especial!",
+      "description": "Copo 300ml com camadas generosas de brownie e cremes.",
       "price": 29,
       "categoryId": "cat-copos",
       "image": "products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg",
@@ -54,9 +54,9 @@ const AURORA_DEFAULT_DATA = {
         "Brigadeiro com Morango",
         "Brigadeiro com Nutella"
       ],
-      "promoActive": true,
-      "promoPrice": 22,
-      "promoLabel": "Promoção",
+      "promoActive": false,
+      "promoPrice": null,
+      "promoLabel": "",
       "bestSeller": true,
       "active": true
     },
@@ -110,7 +110,7 @@ const AURORA_DEFAULT_DATA = {
     {
       "id": "p-coxinha",
       "name": "Coxinha de Costela com Cream Cheese",
-      "description": "Opção salgada do cardápio: coxinha de costela desfiada com cream cheese. Ganha refri 200ml de cortesia.",
+      "description": "Temporariamente indisponível. Volta em breve — consulte pelo WhatsApp.",
       "price": 24.9,
       "categoryId": "cat-salgados",
       "image": "products/dcf6f873-6760-4663-a0e4-b5ffb87e0898.jpg",
@@ -122,7 +122,8 @@ const AURORA_DEFAULT_DATA = {
       "promoPrice": null,
       "promoLabel": "",
       "bestSeller": true,
-      "active": true
+      "active": true,
+      "available": false
     },
     {
       "id": "p-afoga",

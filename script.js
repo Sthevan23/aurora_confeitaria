@@ -662,21 +662,28 @@ function renderFilters() {
 }
 
 function productCardHTML(p, { bestSeller = false } = {}) {
-  const flavorsHint = Array.isArray(p.flavors) && p.flavors.length
+  const unavailable = p.available === false;
+  const flavorsHint = !unavailable && Array.isArray(p.flavors) && p.flavors.length
     ? `<p class="product-card__flavor-hint">${p.flavors.length} sabores — toque para escolher e adicionar</p>`
     : '';
-  const badge = bestSeller
-    ? '<span class="product-card__badge product-card__badge--best">Mais vendido</span>'
-    : p.promoActive
-      ? `<span class="product-card__promo">${p.promoLabel || 'Promoção'}</span>`
-      : p.featured
-        ? '<span class="product-card__badge">Destaque</span>'
-        : '';
+  const badge = unavailable
+    ? '<span class="product-card__badge product-card__badge--off">Indisponível</span>'
+    : bestSeller
+      ? '<span class="product-card__badge product-card__badge--best">Mais vendido</span>'
+      : p.promoActive
+        ? `<span class="product-card__promo">${p.promoLabel || 'Promoção'}</span>`
+        : p.featured
+          ? '<span class="product-card__badge">Destaque</span>'
+          : '';
   const size = p.size ? `<span class="product-card__size">${p.size}</span>` : '';
+  const orderAttr = unavailable ? '' : ` data-order="${p.id}"`;
+  const addBtn = unavailable
+    ? '<button type="button" class="btn btn--secondary btn--sm" disabled>Indisponível</button>'
+    : `<button type="button" class="btn btn--secondary btn--sm" data-order="${p.id}">Adicionar</button>`;
 
   return `
-    <article class="product-card">
-      <button type="button" class="product-card__img" data-order="${p.id}" aria-label="Ver e adicionar ${p.name}">
+    <article class="product-card${unavailable ? ' product-card--unavailable' : ''}">
+      <button type="button" class="product-card__img"${orderAttr} aria-label="${unavailable ? `${p.name} indisponível` : `Ver e adicionar ${p.name}`}" ${unavailable ? 'disabled' : ''}>
         ${imgTag(p.image, p.name)}
         ${badge}${size}
       </button>
@@ -687,7 +694,7 @@ function productCardHTML(p, { bestSeller = false } = {}) {
         ${flavorsHint}
         <div class="product-card__footer">
           <span class="product-card__price">${displayPrice(p)}</span>
-          <button type="button" class="btn btn--secondary btn--sm" data-order="${p.id}">Adicionar</button>
+          ${addBtn}
         </div>
       </div>
     </article>
@@ -718,6 +725,21 @@ function renderProducts() {
   const grid = document.getElementById('products-grid');
   grid.innerHTML = products.map((p) => productCardHTML(p)).join('');
   bindProductOrderButtons(grid);
+
+  const notice = document.getElementById('products-notice');
+  if (notice) {
+    const salgadosOff = products.some(
+      (p) => p.categoryId === 'cat-salgados' && p.available === false,
+    );
+    const showSalgadosNotice = activeFilter === 'cat-salgados' || (activeFilter === 'all' && salgadosOff);
+    if (showSalgadosNotice && salgadosOff) {
+      notice.hidden = false;
+      notice.textContent = 'Salgados temporariamente indisponíveis. Voltam em breve.';
+    } else {
+      notice.hidden = true;
+      notice.textContent = '';
+    }
+  }
 }
 
 function renderGallery() {
@@ -893,6 +915,7 @@ function renderLightboxFlavors() {
 function openLightbox(productId) {
   const product = getProducts().find((p) => p.id === productId);
   if (!product) return;
+  if (product.available === false) return;
   selectedProduct = product;
   selectedFlavors = [];
   lightboxQty = 1;

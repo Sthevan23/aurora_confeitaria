@@ -1,6 +1,6 @@
 {
-  "version": 16,
-  "generatedAt": "2026-08-06T18:44:00.263Z",
+  "version": 17,
+  "generatedAt": "2026-08-06T19:25:00.000Z",
   "settings": {
     "name": "Aurora Confeitaria Artesanal",
     "tagline": "Feito com amor",
@@ -65,7 +65,7 @@
     {
       "id": "p0",
       "name": "Copo Brownie da Felicidade",
-      "description": "Copo 300ml com camadas generosas de brownie e cremes — promoção especial!",
+      "description": "Copo 300ml com camadas generosas de brownie e cremes.",
       "price": 29,
       "categoryId": "cat-copos",
       "image": "products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg",
@@ -79,9 +79,9 @@
         "Brigadeiro com Morango",
         "Brigadeiro com Nutella"
       ],
-      "promoActive": true,
-      "promoPrice": 22,
-      "promoLabel": "Promoção",
+      "promoActive": false,
+      "promoPrice": null,
+      "promoLabel": "",
       "bestSeller": true,
       "active": true
     },
@@ -135,7 +135,7 @@
     {
       "id": "p-coxinha",
       "name": "Coxinha de Costela com Cream Cheese",
-      "description": "Opção salgada do cardápio: coxinha de costela desfiada com cream cheese. Ganha refri 200ml de cortesia.",
+      "description": "Temporariamente indisponível. Volta em breve — consulte pelo WhatsApp.",
       "price": 24.9,
       "categoryId": "cat-salgados",
       "image": "products/dcf6f873-6760-4663-a0e4-b5ffb87e0898.jpg",
@@ -147,7 +147,8 @@
       "promoPrice": null,
       "promoLabel": "",
       "bestSeller": true,
-      "active": true
+      "active": true,
+      "available": false
     },
     {
       "id": "p-afoga",
