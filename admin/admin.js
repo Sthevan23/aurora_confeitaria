@@ -980,6 +980,11 @@ function openProductModal(product = null) {
       </div>
       <div class="form-group">
         <label class="checkbox-label">
+          <input type="checkbox" id="prod-available" ${product?.available !== false ? 'checked' : ''}> Disponível para pedido
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
           <input type="checkbox" id="prod-featured" ${product?.featured ? 'checked' : ''}> Produto em destaque
         </label>
       </div>
@@ -1078,6 +1083,7 @@ function openProductModal(product = null) {
         flavors: parsedFlavors.flavors,
         flavorPrices: parsedFlavors.flavorPrices,
         active: document.getElementById('prod-active').checked,
+        available: document.getElementById('prod-available').checked,
       };
 
       if (isEdit) {

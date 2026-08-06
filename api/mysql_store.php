@@ -97,12 +97,20 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
       'promoLabel' => $row['promo_label'] ?? '',
       'bestSeller' => (bool) $row['best_seller'],
       'active' => (bool) $row['active'],
+      'available' => array_key_exists('available', $row) ? (bool) $row['available'] : true,
     ];
     if (!empty($row['price_from'])) {
       $product['priceFrom'] = true;
     }
     if (!empty($priceMap[$pid])) {
       $product['flavorPrices'] = $priceMap[$pid];
+    }
+    // Garante Copo da Felicidade sem promo antiga no cardápio público
+    if ($pid === 'p0') {
+      $product['price'] = 29;
+      $product['promoActive'] = false;
+      $product['promoPrice'] = null;
+      $product['promoLabel'] = '';
     }
     $products[] = $product;
   }
@@ -465,11 +473,23 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       ]);
     }
 
+    $hasAvailable = false;
+    try {
+      $hasAvailable = (bool) $pdo->query("SHOW COLUMNS FROM products LIKE 'available'")->fetch();
+    } catch (Throwable $e) {
+      $hasAvailable = false;
+    }
+
     $prodStmt = $pdo->prepare(
-      'INSERT INTO products (
-        id, name, description, price, price_from, category_id, image, featured, slug, size,
-        promo_active, promo_price, promo_label, best_seller, active, sort_order
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      $hasAvailable
+        ? 'INSERT INTO products (
+            id, name, description, price, price_from, category_id, image, featured, slug, size,
+            promo_active, promo_price, promo_label, best_seller, active, available, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        : 'INSERT INTO products (
+            id, name, description, price, price_from, category_id, image, featured, slug, size,
+            promo_active, promo_price, promo_label, best_seller, active, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $flavorStmt = $pdo->prepare(
       'INSERT INTO product_flavors (product_id, flavor, sort_order) VALUES (?, ?, ?)'
@@ -480,7 +500,14 @@ function aurora_save_all(PDO $pdo, array $payload): void {
 
     foreach (array_values($payload['products'] ?? []) as $i => $p) {
       $pid = $p['id'] ?? ('p-' . $i);
-      $prodStmt->execute([
+      // Copo da Felicidade: preço cheio R$29 (sem promo antiga)
+      if ($pid === 'p0') {
+        $p['price'] = 29;
+        $p['promoActive'] = false;
+        $p['promoPrice'] = null;
+        $p['promoLabel'] = '';
+      }
+      $row = [
         $pid,
         $p['name'] ?? '',
         $p['description'] ?? '',
@@ -498,8 +525,12 @@ function aurora_save_all(PDO $pdo, array $payload): void {
         $p['promoLabel'] ?? '',
         aurora_bool($p['bestSeller'] ?? false),
         aurora_bool($p['active'] ?? true),
-        $i,
-      ]);
+      ];
+      if ($hasAvailable) {
+        $row[] = aurora_bool($p['available'] ?? true);
+      }
+      $row[] = $i;
+      $prodStmt->execute($row);
 
       foreach (array_values($p['flavors'] ?? []) as $fi => $flavor) {
         $flavorStmt->execute([$pid, $flavor, $fi]);

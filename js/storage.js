@@ -4,8 +4,8 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v3';
-  const DATA_VERSION = 16;
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v4';
+  const DATA_VERSION = 19;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '');
 
@@ -148,13 +148,24 @@ const Storage = (() => {
     const byId = new Map(defaults.map((p) => [p.id, p]));
     const byName = new Map(defaults.map((p) => [String(p.name || '').trim().toLowerCase(), p]));
     return (products || []).map((p) => {
-      const img = String(p.image || '').trim();
-      if (img && !img.startsWith('data:')) return p;
-      const d = byId.get(p.id) || byName.get(String(p.name || '').trim().toLowerCase());
-      if (d && d.image && !String(d.image).startsWith('data:')) {
-        return { ...p, image: d.image };
+      let next = p;
+      // Copo da Felicidade: sempre R$29 sem promo antiga no site
+      if (next.id === 'p0') {
+        next = {
+          ...next,
+          price: 29,
+          promoActive: false,
+          promoPrice: null,
+          promoLabel: '',
+        };
       }
-      return { ...p, image: img.startsWith('data:') ? '' : img };
+      const img = String(next.image || '').trim();
+      if (img && !img.startsWith('data:')) return next;
+      const d = byId.get(next.id) || byName.get(String(next.name || '').trim().toLowerCase());
+      if (d && d.image && !String(d.image).startsWith('data:')) {
+        return { ...next, image: d.image };
+      }
+      return { ...next, image: img.startsWith('data:') ? '' : img };
     });
   }
 

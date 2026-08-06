@@ -246,9 +246,9 @@ INSERT INTO `products` (
   `featured`, `slug`, `size`, `promo_active`, `promo_price`, `promo_label`,
   `best_seller`, `active`, `sort_order`
 ) VALUES (
-  'p0', 'Copo Brownie da Felicidade', 'Copo 300ml com camadas generosas de brownie e cremes — promoção especial!', 29, 0,
+  'p0', 'Copo Brownie da Felicidade', 'Copo 300ml com camadas generosas de brownie e cremes.', 29, 0,
   'cat-copos', 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg', 1, 'copo-brownie-felicidade', '300ml',
-  1, 22, 'Promoção',
+  1, NULL, '',
   1, 1, 0
 );
 INSERT INTO `product_flavors` (`product_id`, `flavor`, `sort_order`) VALUES ('p0', 'Ninho com Nutella', 0);

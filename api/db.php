@@ -33,9 +33,48 @@ function aurora_db(bool $ensureSchema = true): PDO {
 
   if ($ensureSchema) {
     aurora_ensure_schema($pdo);
+    aurora_fix_copo_felicidade_price($pdo);
   }
 
   return $pdo;
+}
+
+/**
+ * Corrige preço do Copo da Felicidade (tira promo antiga R$22 → R$29).
+ * Roda 1x (flag) — idempotente.
+ */
+function aurora_fix_copo_felicidade_price(PDO $pdo): void {
+  static $done = false;
+  if ($done) {
+    return;
+  }
+  $done = true;
+
+  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_fix_p0_price_v2_' . md5(__DIR__);
+  if (is_file($flag)) {
+    return;
+  }
+
+  try {
+    $exists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' LIMIT 1"
+    )->fetchColumn();
+    if (!$exists) {
+      return;
+    }
+    $pdo->exec(
+      "UPDATE `products`
+       SET `price` = 29,
+           `promo_active` = 0,
+           `promo_price` = NULL,
+           `promo_label` = ''
+       WHERE `id` = 'p0'"
+    );
+    @file_put_contents($flag, (string) time());
+  } catch (Throwable $e) {
+    // ignore
+  }
 }
 
 /**
@@ -65,6 +104,12 @@ function aurora_ensure_schema(PDO $pdo): void {
       if ($type !== '' && strpos($type, 'mediumtext') === false && strpos($type, 'longtext') === false) {
         $pdo->exec('ALTER TABLE `products` MODIFY `image` MEDIUMTEXT NULL');
       }
+      aurora_ensure_column(
+        $pdo,
+        'products',
+        'available',
+        "TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Disponivel para pedido no site'"
+      );
     }
 
     $settingsExists = $pdo->query(

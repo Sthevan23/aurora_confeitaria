@@ -40,7 +40,7 @@ const AURORA_DEFAULT_DATA = {
     {
       "id": "p0",
       "name": "Copo Brownie da Felicidade",
-      "description": "Temporariamente indisponível hoje. Volta em breve — consulte pelo WhatsApp.",
+      "description": "Copo 300ml com camadas generosas de brownie e cremes.",
       "price": 29,
       "categoryId": "cat-copos",
       "image": "products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg",
@@ -59,7 +59,7 @@ const AURORA_DEFAULT_DATA = {
       "promoLabel": "",
       "bestSeller": true,
       "active": true,
-      "available": false
+      "available": true
     },
     {
       "id": "p-copo-morango",
