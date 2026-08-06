@@ -13,6 +13,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit;
 }
 
+// Site OFF → não abre MySQL (cada conexão = processo)
+$siteOff = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'SITE_OFF';
+if (is_file($siteOff)) {
+  http_response_code(503);
+  header('Retry-After: 3600');
+  echo '{"ok":false,"offline":true}';
+  exit;
+}
+
 require_once __DIR__ . '/mysql_store.php';
 
 function public_payload(array $data): array {

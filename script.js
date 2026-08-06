@@ -1818,26 +1818,7 @@ async function boot() {
   const hasProducts = (Storage.getProducts?.() || []).length > 0;
   if (status !== true) {
     console.error('Sem conexão com a API MySQL Hostinger:', Storage.getApiUrl?.());
-    if (!hasProducts && status !== 'cache') {
-      const msg = 'Servidor Hostinger indisponível agora. Os produtos voltam quando a API responder — tente atualizar em alguns minutos.';
-      document.body.insertAdjacentHTML(
-        'afterbegin',
-        `<div id="aurora-api-banner" style="position:fixed;inset:auto 1rem 1rem;z-index:9999;background:#3d2610;color:#fff;padding:0.9rem 1.1rem;border-radius:999px;font:600 0.9rem Manrope,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:min(520px,calc(100vw - 2rem))">
-          ${msg}
-        </div>`
-      );
-    }
-    let tries = 0;
-    const retry = setInterval(async () => {
-      tries += 1;
-      const again = await Storage.pullPublic?.().catch(() => false);
-      if (again === true) {
-        clearInterval(retry);
-        document.getElementById('aurora-api-banner')?.remove();
-        window.dispatchEvent(new CustomEvent('storage-updated'));
-      }
-      if (tries >= 12) clearInterval(retry);
-    }, 20000);
+    // SEM retry em loop — cada tentativa vira processo na Hostinger e piora o 503
   }
 
   applySettings();

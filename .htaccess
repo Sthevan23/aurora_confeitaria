@@ -1,11 +1,16 @@
-# Aurora Confeitaria — URL limpa
-# /index.html → https://auroraconfeitaria.com.br/
+# Aurora Confeitaria — URL limpa + modo OFF (Hostinger processos)
 
 DirectoryIndex index.html
 
+# ---- MODO OFF: arquivo SITE_OFF na raiz ----
+# Apague SITE_OFF para religar o site.
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  RewriteCond %{DOCUMENT_ROOT}/SITE_OFF -f
+  RewriteCond %{REQUEST_URI} !/offline\.html$ [NC]
+  RewriteRule ^ offline.html [L]
 
   # Força HTTPS (Hostinger)
   RewriteCond %{HTTPS} off

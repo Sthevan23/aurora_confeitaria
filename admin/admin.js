@@ -13,23 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sessionStorage.getItem('admin_logged') !== 'true') return;
 
   await Storage.initCloud({ full: true });
-  Storage.startCloudPolling(120000);
-  // Converte fotos pesadas só se a API estiver ok (não força a cada login)
-  try {
-    const password = Storage.getAdminPassword();
-    if (password && navigator.onLine) {
-      setTimeout(() => {
-        fetch(Storage.getApiUrl(), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Admin-Password': password,
-          },
-          body: JSON.stringify({ action: 'extract_data_images', limit: 5 }),
-        }).catch(() => {});
-      }, 8000);
-    }
-  } catch { /* ignore */ }
+  // Polling OFF — estoura "Máximo de processos" na Hostinger
   updateSyncBadge();
 
   initSidebar();

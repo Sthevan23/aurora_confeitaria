@@ -272,16 +272,41 @@ const Storage = (() => {
   }
 
   async function probeCloud() {
-    try {
-      const res = await fetchWithTimeout(API + '?ping=' + Date.now());
-      const type = (res.headers.get('content-type') || '').toLowerCase();
-      const body = await res.clone().json().catch(() => ({}));
-      cloudEnabled = res.ok && type.includes('json') && body.ok !== false;
-      return cloudEnabled;
-    } catch {
-      cloudEnabled = false;
+    // Desativado: ping a cada visita gera processo e piora LVE
+    cloudEnabled = false;
+    return false;
+  }
+
+  function startCloudPolling() {
+    stopCloudPolling();
+  }
+
+  async function initCloud({ full = false } = {}) {
+    init();
+    if (!full) {
+      // Visitante: não chama PHP/MySQL — usa cache/local
+      if ((getProducts() || []).length > 0) {
+        lastLoadFromCache = true;
+        return 'cache';
+      }
+      // tenta só catálogo estático (sem PHP)
+      const staticOk = await pullStaticCatalog().catch(() => false);
+      if (staticOk) {
+        lastLoadFromCache = false;
+        return true;
+      }
       return false;
     }
+    const ok = await pullFull();
+    if (ok === true) {
+      lastLoadFromCache = false;
+      return true;
+    }
+    if (ok === 'cache' || (getProducts().length > 0)) {
+      lastLoadFromCache = true;
+      return 'cache';
+    }
+    return false;
   }
 
   async function pullStaticCatalog() {
@@ -530,35 +555,11 @@ const Storage = (() => {
     return false;
   }
 
-  function startCloudPolling(intervalMs = 120000) {
-    stopCloudPolling();
-    if (!getAdminPassword()) return;
-    pollTimer = setInterval(() => {
-      if (pushInFlight) return;
-      if (typeof document !== 'undefined' && document.hidden) return;
-      pullFull();
-    }, Math.max(60000, intervalMs));
-  }
-
   function stopCloudPolling() {
     if (pollTimer) {
       clearInterval(pollTimer);
       pollTimer = null;
     }
-  }
-
-  async function initCloud({ full = false } = {}) {
-    init();
-    const ok = full ? await pullFull() : await pullPublic();
-    if (ok === true) {
-      lastLoadFromCache = false;
-      return true;
-    }
-    if (ok === 'cache' || (getProducts().length > 0)) {
-      lastLoadFromCache = true;
-      return 'cache';
-    }
-    return false;
   }
 
   function getApiUrl() {
