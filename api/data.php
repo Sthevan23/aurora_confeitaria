@@ -229,6 +229,7 @@ if ($method === 'POST') {
       $left = (int) $pdo->query(
         "SELECT COUNT(*) FROM products WHERE image LIKE 'data:image%'"
       )->fetchColumn();
+      try { aurora_write_public_catalog($pdo); } catch (Throwable $e) {}
       json_out(['ok' => true, 'converted' => $converted, 'remaining' => $left]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao extrair imagens', 'detail' => $e->getMessage()], 500);

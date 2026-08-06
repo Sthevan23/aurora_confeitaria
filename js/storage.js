@@ -273,8 +273,59 @@ const Storage = (() => {
     }
   }
 
+  async function pullStaticCatalog() {
+    const urls = [
+      'catalog.json?t=' + Date.now(),
+      '/catalog.json?t=' + Date.now(),
+      'api/catalog.json?t=' + Date.now(),
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetchWithTimeout(url, {}, 8000);
+        if (!res.ok) continue;
+        const remote = await res.json();
+        if (!remote || !remote.settings || !Array.isArray(remote.products) || !remote.products.length) {
+          continue;
+        }
+        const merged = {
+          ...emptyStore(),
+          version: remote.version || DATA_VERSION,
+          settings: { ...emptyStore().settings, ...(remote.settings || {}) },
+          categories: remote.categories || [],
+          products: hydrateProductImages(remote.products || []),
+          reviews: remote.reviews || [],
+          faq: remote.faq || [],
+          gallery: remote.gallery || [],
+          coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
+          clients: [],
+          orders: [],
+          finance: [],
+          auth: { email: '', password: '' },
+        };
+        setMemory(merged);
+        savePublicCache(merged);
+        lastLoadFromCache = false;
+        cloudEnabled = true; // catálogo ok (estático)
+        notifyUpdated();
+        return true;
+      } catch {
+        // tenta próxima url
+      }
+    }
+    return false;
+  }
+
   async function pullPublic() {
     lastLoadFromCache = false;
+
+    // 1) Catálogo estático — não cai com 503 do PHP
+    if (await pullStaticCatalog()) {
+      // 2) Tenta API em paralelo só para atualizar (não bloqueia UI)
+      refreshCatalogFromApiInBackground();
+      return true;
+    }
+
+    // 3) API PHP (quando Hostinger estiver ok)
     try {
       const res = await fetchWithTimeout(API + '?t=' + Date.now(), {}, 18000);
       if (!res.ok) {
@@ -290,18 +341,7 @@ const Storage = (() => {
         return false;
       }
       const remote = await res.json();
-      if (remote.empty || remote.error) {
-        if (applyPublicCache(loadPublicCache())) {
-          notifyUpdated();
-          return 'cache';
-        }
-        if (applyDefaultCatalog()) {
-          notifyUpdated();
-          return 'cache';
-        }
-        return false;
-      }
-      if (!remote.settings || !Array.isArray(remote.products)) {
+      if (remote.empty || remote.error || !remote.settings || !Array.isArray(remote.products)) {
         if (applyPublicCache(loadPublicCache())) {
           notifyUpdated();
           return 'cache';
@@ -346,6 +386,34 @@ const Storage = (() => {
       }
       return false;
     }
+  }
+
+  function refreshCatalogFromApiInBackground() {
+    fetchWithTimeout(API + '?t=' + Date.now(), {}, 20000)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const remote = await res.json().catch(() => null);
+        if (!remote || !remote.settings || !Array.isArray(remote.products)) return;
+        const merged = {
+          ...emptyStore(),
+          version: remote.version || DATA_VERSION,
+          settings: remote.settings,
+          categories: remote.categories || [],
+          products: hydrateProductImages(remote.products || []),
+          reviews: remote.reviews || [],
+          faq: remote.faq || [],
+          gallery: remote.gallery || [],
+          coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
+          clients: [],
+          orders: [],
+          finance: [],
+          auth: { email: '', password: '' },
+        };
+        setMemory(merged);
+        savePublicCache(merged);
+        notifyUpdated();
+      })
+      .catch(() => {});
   }
 
   async function pullFull() {

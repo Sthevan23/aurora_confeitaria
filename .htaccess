@@ -18,3 +18,18 @@ DirectoryIndex index.html
   # Carrinho limpo: /carrinho → cart.html
   RewriteRule ^carrinho/?$ cart.html [L]
 </IfModule>
+
+# Catálogo estático e fotos — cache no navegador (alivia Hostinger)
+<IfModule mod_headers.c>
+  <FilesMatch "^(catalog\.json)$">
+    Header set Cache-Control "public, max-age=120"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/jpeg "access plus 7 days"
+  ExpiresByType image/png "access plus 7 days"
+  ExpiresByType image/webp "access plus 7 days"
+  ExpiresByType application/json "access plus 2 minutes"
+</IfModule>

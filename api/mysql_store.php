@@ -672,6 +672,70 @@ function aurora_save_all(PDO $pdo, array $payload): void {
     }
     throw $e;
   }
+
+  // Cardápio estático (não depende de PHP nas visitas do site)
+  try {
+    aurora_write_public_catalog($pdo);
+  } catch (Throwable $e) {
+    // não falha o save se o JSON estático não gravar
+  }
+}
+
+/**
+ * Grava catalog.json na raiz do site — HTML/JS leem sem MySQL/PHP.
+ */
+function aurora_write_public_catalog(PDO $pdo): bool {
+  $data = aurora_load_all($pdo, 'public');
+  if (!$data) return false;
+
+  $coupons = [];
+  foreach ($data['coupons'] ?? [] as $c) {
+    if (empty($c['active'])) continue;
+    $coupons[] = [
+      'code' => strtoupper(trim((string) ($c['code'] ?? ''))),
+      'type' => ($c['type'] ?? '') === 'fixed' ? 'fixed' : 'percent',
+      'value' => (float) ($c['value'] ?? 0),
+      'minOrder' => (float) ($c['minOrder'] ?? 0),
+      'label' => $c['label'] ?? '',
+    ];
+  }
+
+  $products = [];
+  foreach ($data['products'] ?? [] as $p) {
+    if (!is_array($p)) continue;
+    if (isset($p['active']) && !$p['active']) continue;
+    $img = (string) ($p['image'] ?? '');
+    if (str_starts_with($img, 'data:')) {
+      $p['image'] = '';
+    }
+    $products[] = $p;
+  }
+
+  $payload = [
+    'version' => $data['version'] ?? 16,
+    'generatedAt' => gmdate('c'),
+    'settings' => $data['settings'] ?? new stdClass(),
+    'categories' => $data['categories'] ?? [],
+    'products' => $products,
+    'reviews' => $data['reviews'] ?? [],
+    'faq' => $data['faq'] ?? [],
+    'gallery' => array_values(array_filter(
+      $data['gallery'] ?? [],
+      static fn($g) => !str_starts_with((string) $g, 'data:')
+    )),
+    'coupons' => $coupons,
+  ];
+
+  $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  if ($json === false) return false;
+
+  $root = dirname(__DIR__);
+  $ok = @file_put_contents($root . DIRECTORY_SEPARATOR . 'catalog.json', $json) !== false;
+
+  // Espelho em api/ (alguns deploys)
+  @file_put_contents($root . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'catalog.json', $json);
+
+  return $ok;
 }
 
 function aurora_upsert_client(PDO $pdo, array $client): ?string {

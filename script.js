@@ -1402,16 +1402,9 @@ async function checkoutCart() {
     notes: notesParts.filter(Boolean).join(' | '),
   }).catch(() => ({ ok: false, error: 'Falha ao gravar' }));
 
-  if (!saved?.ok) {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = prevLabel || 'Finalizar pedido';
-    }
-    if (error) {
-      error.textContent = saved?.error || 'Não deu para registrar o pedido. Tente de novo.';
-      error.hidden = false;
-    }
-    return;
+  if (!saved?.ok && error) {
+    error.textContent = 'Sistema offline — abrindo WhatsApp mesmo assim.';
+    error.hidden = false;
   }
 
   const message = buildCartWhatsAppMessage({
@@ -1419,7 +1412,7 @@ async function checkoutCart() {
     phone,
     items: itemsSnapshot,
     fulfillment,
-    loyalty: saved.loyalty || null,
+    loyalty: saved?.loyalty || null,
   });
   clearCart();
   closeCart();
@@ -1427,7 +1420,6 @@ async function checkoutCart() {
     btn.disabled = false;
     btn.textContent = prevLabel || 'Finalizar pedido';
   }
-  // Só abre o WhatsApp depois que o pedido já entrou no painel
   openWhatsAppChat(message);
 }
 
@@ -1791,16 +1783,15 @@ async function boot() {
   const hasProducts = (Storage.getProducts?.() || []).length > 0;
   if (status !== true) {
     console.error('Sem conexão com a API MySQL Hostinger:', Storage.getApiUrl?.());
-    const msg = hasProducts || status === 'cache'
-      ? 'Servidor lento agora — mostrando o cardápio salvo. Pedidos podem falhar até normalizar.'
-      : 'Servidor Hostinger indisponível agora. Os produtos voltam quando a API responder — tente atualizar em alguns minutos.';
-    document.body.insertAdjacentHTML(
-      'afterbegin',
-      `<div id="aurora-api-banner" style="position:fixed;inset:auto 1rem 1rem;z-index:9999;background:#3d2610;color:#fff;padding:0.9rem 1.1rem;border-radius:999px;font:600 0.9rem Manrope,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:min(520px,calc(100vw - 2rem))">
-        ${msg}
-      </div>`
-    );
-    // Tenta de novo em background quando a Hostinger liberar
+    if (!hasProducts && status !== 'cache') {
+      const msg = 'Servidor Hostinger indisponível agora. Os produtos voltam quando a API responder — tente atualizar em alguns minutos.';
+      document.body.insertAdjacentHTML(
+        'afterbegin',
+        `<div id="aurora-api-banner" style="position:fixed;inset:auto 1rem 1rem;z-index:9999;background:#3d2610;color:#fff;padding:0.9rem 1.1rem;border-radius:999px;font:600 0.9rem Manrope,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:min(520px,calc(100vw - 2rem))">
+          ${msg}
+        </div>`
+      );
+    }
     let tries = 0;
     const retry = setInterval(async () => {
       tries += 1;
