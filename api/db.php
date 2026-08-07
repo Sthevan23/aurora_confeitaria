@@ -133,6 +133,7 @@ function aurora_ensure_schema(PDO $pdo): void {
 
     // Cupons: cria a tabela se ainda não existir (bancos antigos sem migrate)
     aurora_ensure_coupons_table($pdo);
+    aurora_ensure_product_images_table($pdo);
 
     // Fidelidade: pedidos fora do site (ajuste manual)
     $clientsExists = $pdo->query(
@@ -189,4 +190,40 @@ function aurora_ensure_column(PDO $pdo, string $table, string $column, string $d
     return;
   }
   $pdo->exec('ALTER TABLE `' . str_replace('`', '``', $table) . '` ADD COLUMN `' . str_replace('`', '``', $column) . '` ' . $definition);
+}
+
+/**
+ * Backup das fotos enviadas no painel (sobrevive ao Reimplantar Git).
+ */
+function aurora_ensure_product_images_table(PDO $pdo): void {
+  static $done = false;
+  if ($done) {
+    return;
+  }
+  $done = true;
+  $pdo->exec(
+    "CREATE TABLE IF NOT EXISTS `product_images` (
+      `filename` VARCHAR(190) NOT NULL,
+      `mime` VARCHAR(64) NOT NULL DEFAULT 'image/jpeg',
+      `data` LONGBLOB NOT NULL,
+      `bytes` INT UNSIGNED NOT NULL DEFAULT 0,
+      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (`filename`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  );
+}
+
+function aurora_store_product_image_blob(PDO $pdo, string $filename, string $bytes, string $mime = 'image/jpeg'): bool {
+  $name = basename($filename);
+  if ($name === '' || $bytes === '') {
+    return false;
+  }
+  aurora_ensure_product_images_table($pdo);
+  $stmt = $pdo->prepare(
+    'INSERT INTO product_images (filename, mime, data, bytes)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE mime = VALUES(mime), data = VALUES(data), bytes = VALUES(bytes)'
+  );
+  return $stmt->execute([$name, $mime ?: 'image/jpeg', $bytes, strlen($bytes)]);
 }

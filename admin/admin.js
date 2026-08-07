@@ -464,11 +464,18 @@ function adminImageSrc(path) {
   return publicAssetUrl(path);
 }
 
-const ADMIN_FALLBACK_IMG = 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg';
+const ADMIN_FALLBACK_IMG =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 160">' +
+      '<rect width="120" height="160" fill="#fff1f4"/>' +
+      '<text x="60" y="82" text-anchor="middle" fill="#c4a59a" font-family="Arial,sans-serif" font-size="11" font-weight="600">Sem foto</text>' +
+    '</svg>'
+  );
 
 function adminImgTag(path, alt, className = 'table__img') {
-  const src = adminImageSrc(path) || adminImageSrc(ADMIN_FALLBACK_IMG);
-  const fallback = adminImageSrc(ADMIN_FALLBACK_IMG);
+  const src = adminImageSrc(path) || ADMIN_FALLBACK_IMG;
+  const fallback = ADMIN_FALLBACK_IMG;
   return `<img src="${src}" alt="${escapeHtml(alt || '')}" class="${className}" loading="lazy" onerror="this.onerror=null;this.src='${fallback}'">`;
 }
 
@@ -835,12 +842,14 @@ function renderProducts() {
   const products = Storage.getProducts();
   const tbody = document.querySelector('#products-table tbody');
 
-  tbody.innerHTML = products.map(p => `
+  tbody.innerHTML = products.map(p => {
+    const size = formatSizeLabel(p.size);
+    return `
     <tr>
       <td>${adminImgTag(p.image, p.name)}</td>
       <td><strong>${escapeHtml(p.name)}</strong></td>
       <td>${Storage.getCategoryName(p.categoryId)}</td>
-      <td>${p.size ? `<span class="badge badge--info">${escapeHtml(p.size)}</span>` : '—'}</td>
+      <td>${size ? `<span class="badge badge--info">${escapeHtml(size)}</span>` : '—'}</td>
       <td>${Number(p.price) > 0 ? Storage.formatCurrency(p.price) : 'Consultar'}${p.promoActive && p.promoPrice != null ? `<br><small style="color:#fc7890">Promo ${Storage.formatCurrency(p.promoPrice)}</small>` : ''}</td>
       <td>${p.featured ? '<i class="fas fa-star" style="color:#FFD700"></i>' : '—'}${p.bestSeller ? ' <span class="badge badge--novo">Mais vendido</span>' : ''}${p.promoActive ? ' <span class="badge badge--novo">Promo</span>' : ''}</td>
       <td>
@@ -850,7 +859,16 @@ function renderProducts() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
+}
+
+function formatSizeLabel(raw) {
+  let value = String(raw || '').trim();
+  if (!value) return '';
+  value = value.replace(/\s+/g, '');
+  value = value.replace(/^(\d+(?:[.,]\d+)?)gr$/i, '$1g');
+  return value;
 }
 
 function formatFlavorsForEditor(product) {
@@ -1004,10 +1022,14 @@ function openProductModal(product = null) {
   const sizeInput = document.getElementById('prod-size');
   const sizePreview = document.getElementById('prod-size-preview');
   const formatProductSize = (raw) => {
-    const value = String(raw || '').trim();
+    let value = String(raw || '').trim();
     if (!value) return '';
+    // número puro → ml (pote/copo)
     if (/^\d+([.,]\d+)?$/.test(value)) return `${value.replace(',', '.')}ml`;
-    if (/^\d+([.,]\d+)?\s*ml$/i.test(value)) return value.replace(/\s+/g, '').toLowerCase().replace('ml', 'ml');
+    value = value.replace(/\s+/g, '');
+    // 200gr / 200GR → 200g
+    value = value.replace(/^(\d+(?:[.,]\d+)?)gr$/i, '$1g');
+    value = value.replace(/^(\d+(?:[.,]\d+)?)(ml|g|kg)$/i, (_, n, u) => `${n.replace(',', '.')}${u.toLowerCase()}`);
     return value;
   };
   const refreshSizePreview = () => {

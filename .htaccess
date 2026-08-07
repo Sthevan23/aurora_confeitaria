@@ -22,6 +22,10 @@ DirectoryIndex index.html
 
   # Carrinho limpo: /carrinho → cart.html
   RewriteRule ^carrinho/?$ cart.html [L]
+
+  # Foto faltando em /products → busca backup no MySQL (api/photo.php)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^products/([a-zA-Z0-9._-]+\.(jpe?g|png|webp|gif))$ api/photo.php?f=$1 [L,QSA,NC]
 </IfModule>
 
 # Catálogo estático e fotos — cache no navegador (alivia Hostinger)

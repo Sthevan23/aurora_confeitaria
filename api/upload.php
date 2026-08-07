@@ -242,6 +242,12 @@ foreach ($anchorDirs as $dir) {
 
 $path = 'products/' . $savedAs;
 
+try {
+  aurora_store_product_image_blob($pdo, $savedAs, $jpegBytes, 'image/jpeg');
+} catch (Throwable $e) {
+  // Arquivo em disco ainda serve; backup MySQL é extra
+}
+
 echo json_encode([
   'ok' => true,
   'path' => $path,
