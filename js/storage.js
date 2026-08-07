@@ -309,7 +309,7 @@ const Storage = (() => {
     return false;
   }
 
-  async function pullStaticCatalog() {
+  async function pullStaticCatalog({ maxAgeMs = null } = {}) {
     const urls = [
       'catalog.json?t=' + Date.now(),
       '/catalog.json?t=' + Date.now(),
@@ -322,6 +322,12 @@ const Storage = (() => {
         const remote = await res.json();
         if (!remote || !remote.settings || !Array.isArray(remote.products) || !remote.products.length) {
           continue;
+        }
+        if (maxAgeMs != null) {
+          const gen = Date.parse(remote.generatedAt || '');
+          if (!Number.isFinite(gen) || (Date.now() - gen) > maxAgeMs) {
+            continue; // catálogo velho do Git — prefere API/MySQL
+          }
         }
         const merged = {
           ...emptyStore(),
@@ -354,17 +360,19 @@ const Storage = (() => {
   async function pullPublic() {
     lastLoadFromCache = false;
 
-    // 1) Catálogo estático — não cai com 503 do PHP
-    if (await pullStaticCatalog()) {
-      // Não bate na API a cada visita (economiza Hostinger)
+    // 1) Catálogo estático fresco (gerado pelo painel/API)
+    if (await pullStaticCatalog({ maxAgeMs: 60 * 60 * 1000 })) {
       return true;
     }
 
-    // 3) API PHP (quando Hostinger estiver ok)
+    // 2) API MySQL — reescreve catalog.json com o que está no painel
     try {
-      const res = await fetchWithTimeout(API + '?t=' + Date.now(), {}, 18000);
+      const res = await fetchWithTimeout(API + '?rebuild=1&t=' + Date.now(), {}, 18000);
       if (!res.ok) {
         cloudEnabled = false;
+        if (await pullStaticCatalog()) {
+          return true;
+        }
         if (applyPublicCache(loadPublicCache())) {
           notifyUpdated();
           return 'cache';
@@ -377,6 +385,9 @@ const Storage = (() => {
       }
       const remote = await res.json();
       if (remote.empty || remote.error || !remote.settings || !Array.isArray(remote.products)) {
+        if (await pullStaticCatalog()) {
+          return true;
+        }
         if (applyPublicCache(loadPublicCache())) {
           notifyUpdated();
           return 'cache';

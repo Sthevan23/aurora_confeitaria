@@ -99,12 +99,16 @@ if ($method === 'GET') {
     ]);
   }
 
-  // Preferir catalog.json estático (zero MySQL) quando existir e estiver fresco
-  if (!isset($_GET['full']) && $action !== 'full') {
+  // Preferir catalog.json estático só se o CONTEÚDO for fresco.
+  // (filemtime muda no Reimplantar Git e servia catálogo velho do repo)
+  if (!isset($_GET['full']) && $action !== 'full' && !isset($_GET['rebuild'])) {
     $catalogFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'catalog.json';
-    if (is_file($catalogFile) && (time() - (int) @filemtime($catalogFile)) < 3600) {
+    if (is_file($catalogFile)) {
       $raw = @file_get_contents($catalogFile);
-      if ($raw !== false && $raw !== '') {
+      $meta = is_string($raw) ? json_decode($raw, true) : null;
+      $generatedAt = is_array($meta) ? strtotime((string) ($meta['generatedAt'] ?? '')) : false;
+      $fresh = $generatedAt && (time() - $generatedAt) < 3600;
+      if ($fresh && $raw !== false && $raw !== '') {
         header('Cache-Control: public, max-age=120');
         header('Content-Type: application/json; charset=utf-8');
         echo $raw;
