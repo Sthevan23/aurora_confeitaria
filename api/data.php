@@ -147,7 +147,7 @@ if ($method === 'GET') {
   } catch (Throwable $e) {
   }
 
-  header('Cache-Control: public, max-age=120');
+  header('Cache-Control: no-store, max-age=0');
   json_out(public_payload($data));
 }
 
@@ -220,6 +220,35 @@ if ($method === 'POST') {
       json_out($result);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao gravar pedido', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  // Liga/desliga produto no cardápio (leve — só 1 UPDATE)
+  if ($actionName === 'set_product_active') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    $productId = trim((string) ($body['id'] ?? $body['productId'] ?? ''));
+    if ($productId === '') {
+      json_out(['error' => 'Produto inválido'], 400);
+    }
+    $active = !empty($body['active']) ? 1 : 0;
+    try {
+      $stmt = $pdo->prepare('UPDATE products SET active = ? WHERE id = ?');
+      $stmt->execute([$active, $productId]);
+      if ($stmt->rowCount() < 1) {
+        // id pode existir mas valor igual — confere
+        $check = $pdo->prepare('SELECT id FROM products WHERE id = ? LIMIT 1');
+        $check->execute([$productId]);
+        if (!$check->fetchColumn()) {
+          json_out(['error' => 'Produto não encontrado'], 404);
+        }
+      }
+      aurora_write_public_catalog($pdo);
+      json_out(['ok' => true, 'id' => $productId, 'active' => $active === 1]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao atualizar produto', 'detail' => $e->getMessage()], 500);
     }
   }
 

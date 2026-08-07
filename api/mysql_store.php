@@ -88,18 +88,20 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
       'price' => (float) $row['price'],
       'categoryId' => $row['category_id'],
       'image' => $row['image'] ?? '',
-      'featured' => (bool) $row['featured'],
+      'featured' => ((int) ($row['featured'] ?? 0)) === 1,
       'slug' => $row['slug'],
       'size' => $row['size'] ?? '',
       'flavors' => $flavorMap[$pid] ?? [],
-      'promoActive' => (bool) $row['promo_active'],
+      'promoActive' => ((int) ($row['promo_active'] ?? 0)) === 1,
       'promoPrice' => $row['promo_price'] !== null ? (float) $row['promo_price'] : null,
       'promoLabel' => $row['promo_label'] ?? '',
-      'bestSeller' => (bool) $row['best_seller'],
-      'active' => (bool) $row['active'],
-      'available' => array_key_exists('available', $row) ? (bool) $row['available'] : true,
+      'bestSeller' => ((int) ($row['best_seller'] ?? 0)) === 1,
+      'active' => ((int) ($row['active'] ?? 1)) === 1,
+      'available' => array_key_exists('available', $row)
+        ? (((int) ($row['available'] ?? 1)) === 1)
+        : true,
     ];
-    if (!empty($row['price_from'])) {
+    if (((int) ($row['price_from'] ?? 0)) === 1) {
       $product['priceFrom'] = true;
     }
     if (!empty($priceMap[$pid])) {

@@ -591,6 +591,38 @@ const Storage = (() => {
     data.products = products;
     return saveAsync(data);
   }
+
+  async function setProductActiveAsync(productId, active) {
+    const password = getAdminPassword();
+    if (!password || !productId) return false;
+    try {
+      const res = await fetchWithTimeout(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({
+          action: 'set_product_active',
+          id: productId,
+          active: !!active,
+        }),
+      }, 20000);
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || result.ok === false) return false;
+
+      const data = getAll();
+      data.products = (data.products || []).map((p) => (
+        p.id === productId ? { ...p, active: !!active } : p
+      ));
+      setMemory(data);
+      notifyUpdated();
+      cloudEnabled = true;
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function getCategories() { return getAll().categories; }
   function saveCategories(categories) {
     const data = getAll();
@@ -1002,7 +1034,7 @@ const Storage = (() => {
   return {
     init, getAll, save,
     getSettings, saveSettings,
-    getProducts, saveProducts, saveProductsAsync,
+    getProducts, saveProducts, saveProductsAsync, setProductActiveAsync,
     getCategories, saveCategories,
     getClients, saveClients,
     getOrders, saveOrders,

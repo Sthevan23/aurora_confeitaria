@@ -28,10 +28,10 @@ DirectoryIndex index.html
   RewriteRule ^products/([a-zA-Z0-9._-]+\.(jpe?g|png|webp|gif))$ api/photo.php?f=$1 [L,QSA,NC]
 </IfModule>
 
-# Catálogo estático e fotos — cache no navegador (alivia Hostinger)
+# Catálogo estático — sem cache longo (admin liga/desliga na hora)
 <IfModule mod_headers.c>
   <FilesMatch "^(catalog\.json)$">
-    Header set Cache-Control "public, max-age=120"
+    Header set Cache-Control "no-store, max-age=0"
   </FilesMatch>
 </IfModule>
 

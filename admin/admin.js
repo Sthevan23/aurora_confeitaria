@@ -873,15 +873,22 @@ async function toggleProductActive(id, active) {
   const products = Storage.getProducts();
   const idx = products.findIndex((p) => p.id === id);
   if (idx < 0) return;
+
+  const prev = products[idx].active !== false;
   products[idx] = { ...products[idx], active: !!active };
-  const ok = await Storage.saveProductsAsync(products);
   renderProducts();
-  renderDashboard();
+
+  const ok = await Storage.setProductActiveAsync(id, !!active);
   if (ok) {
-    showToast(active ? 'Produto no cardápio do site.' : 'Produto oculto do site.', 'success');
-  } else {
-    showToast('Não salvou no site. Verifique a internet e tente de novo.', 'error');
+    showToast(active ? 'Fora do site → agora no cardápio.' : 'Removido do cardápio do site.', 'success');
+    renderDashboard();
+    return;
   }
+
+  // Reverte se não salvou
+  products[idx] = { ...products[idx], active: prev };
+  renderProducts();
+  showToast('Não sincronizou com o site. Entre de novo no admin e tente outra vez.', 'error');
 }
 
 function formatSizeLabel(raw) {

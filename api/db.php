@@ -34,48 +34,9 @@ function aurora_db(bool $ensureSchema = true): PDO {
   if ($ensureSchema) {
     aurora_ensure_schema($pdo);
     aurora_fix_copo_felicidade_price($pdo);
-    aurora_publish_all_products_once($pdo);
   }
 
   return $pdo;
-}
-
-/**
- * Publica no cardápio todos os produtos que estavam só no painel (active=0).
- * Roda 1x (flag).
- */
-function aurora_publish_all_products_once(PDO $pdo): void {
-  static $done = false;
-  if ($done) {
-    return;
-  }
-  $done = true;
-
-  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_publish_all_v1_' . md5(__DIR__);
-  if (is_file($flag)) {
-    return;
-  }
-
-  try {
-    $exists = $pdo->query(
-      "SELECT 1 FROM information_schema.TABLES
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' LIMIT 1"
-    )->fetchColumn();
-    if (!$exists) {
-      return;
-    }
-    $pdo->exec('UPDATE `products` SET `active` = 1 WHERE `active` = 0 OR `active` IS NULL');
-    if (function_exists('aurora_write_public_catalog')) {
-      try {
-        aurora_write_public_catalog($pdo);
-      } catch (Throwable $e) {
-        // ignore
-      }
-    }
-    @file_put_contents($flag, (string) time());
-  } catch (Throwable $e) {
-    // ignore
-  }
 }
 
 /**
