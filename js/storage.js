@@ -526,16 +526,17 @@ const Storage = (() => {
   }
 
   async function loginRemote(email, password) {
-    const reachable = await probeCloud();
-    if (!reachable) {
-      return { ok: false, reason: 'offline' };
-    }
+    // Sem probeCloud: o ping estava desligado pra aliviar Hostinger,
+    // mas bloqueava o login. Aqui só 1 POST na hora de entrar.
     try {
       const res = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', email, password }),
       });
+      if (res.status === 503) {
+        return { ok: false, reason: 'offline' };
+      }
       const result = await res.json().catch(() => ({}));
       if (!res.ok || !result.ok) {
         return { ok: false, reason: 'auth', error: result.error || '' };
