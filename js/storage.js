@@ -4,8 +4,8 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v4';
-  const DATA_VERSION = 19;
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v5';
+  const DATA_VERSION = 20;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '');
 
@@ -284,18 +284,14 @@ const Storage = (() => {
   async function initCloud({ full = false } = {}) {
     init();
     if (!full) {
-      // Visitante: não chama PHP/MySQL — usa cache/local
-      if ((getProducts() || []).length > 0) {
-        lastLoadFromCache = true;
-        return 'cache';
-      }
-      // tenta só catálogo estático (sem PHP)
-      const staticOk = await pullStaticCatalog().catch(() => false);
-      if (staticOk) {
-        lastLoadFromCache = false;
-        return true;
-      }
-      return false;
+      // Visitante: sempre tenta atualizar o cardápio (não fica preso no cache velho)
+      try {
+        const ok = await pullPublic();
+        if (ok === true || (getProducts() || []).length > 0) {
+          return ok === true ? true : 'cache';
+        }
+      } catch { /* ignore */ }
+      return (getProducts() || []).length > 0 ? 'cache' : false;
     }
     const ok = await pullFull();
     if (ok === true) {
