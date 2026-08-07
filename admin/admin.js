@@ -843,9 +843,15 @@ function renderProducts() {
   const tbody = document.querySelector('#products-table tbody');
 
   tbody.innerHTML = products.map(p => {
+    const onMenu = p.active !== false;
     const size = formatSizeLabel(p.size);
     return `
-    <tr>
+    <tr class="${onMenu ? '' : 'row--off-menu'}">
+      <td>
+        <button type="button" class="btn-onsite ${onMenu ? 'is-on' : 'is-off'}" onclick="toggleProductActive('${p.id}', ${onMenu ? 'false' : 'true'})" title="${onMenu ? 'Clique para ocultar do site' : 'Clique para mostrar no site'}">
+          ${onMenu ? '✓ No site' : '✗ Fora'}
+        </button>
+      </td>
       <td>${adminImgTag(p.image, p.name)}</td>
       <td><strong>${escapeHtml(p.name)}</strong></td>
       <td>${Storage.getCategoryName(p.categoryId)}</td>
@@ -861,6 +867,21 @@ function renderProducts() {
     </tr>
   `;
   }).join('');
+}
+
+async function toggleProductActive(id, active) {
+  const products = Storage.getProducts();
+  const idx = products.findIndex((p) => p.id === id);
+  if (idx < 0) return;
+  products[idx] = { ...products[idx], active: !!active };
+  const ok = await Storage.saveProductsAsync(products);
+  renderProducts();
+  renderDashboard();
+  if (ok) {
+    showToast(active ? 'Produto no cardápio do site.' : 'Produto oculto do site.', 'success');
+  } else {
+    showToast('Não salvou no site. Verifique a internet e tente de novo.', 'error');
+  }
 }
 
 function formatSizeLabel(raw) {
@@ -1839,6 +1860,7 @@ function showToast(message, type = '') {
 // Expor funções globais para onclick inline
 window.editProduct = editProduct;
 window.deleteProduct = deleteProduct;
+window.toggleProductActive = toggleProductActive;
 window.editCategory = editCategory;
 window.deleteCategory = deleteCategory;
 window.editClient = editClient;

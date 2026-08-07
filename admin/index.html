@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=58">
+  <link rel="stylesheet" href="admin.css?v=59">
   <script>
     if (sessionStorage.getItem('admin_logged') !== 'true') {
       location.replace('login.html');
@@ -156,7 +156,7 @@
 
     <!-- Produtos -->
     <section class="admin-page" id="page-produtos">
-      <p class="fin-note"><i class="fas fa-info-circle"></i> Aqui você altera <strong>foto</strong>, <strong>preço</strong>, <strong>promoção</strong>, sabores e se o produto aparece no site.</p>
+      <p class="fin-note"><i class="fas fa-info-circle"></i> Use <strong>✓ No site</strong> / <strong>✗ Fora</strong> pra ver e controlar o que aparece no cardápio. Também dá pra alterar foto, preço, promoção e sabores.</p>
       <p class="fin-note" id="products-photo-tip"><i class="fas fa-camera"></i> Se aparecer <strong>Sem foto</strong>, o Reimplantar do Git apagou o arquivo. Abra o produto e <strong>envie a foto de novo</strong> — agora ela fica salva no banco e não some.</p>
       <div class="page-actions">
         <button class="btn btn--primary" id="btn-new-product"><i class="fas fa-plus"></i> Novo Produto</button>
@@ -165,7 +165,7 @@
         <div class="table-responsive">
           <table class="table" id="products-table">
             <thead>
-              <tr><th>Imagem</th><th>Nome</th><th>Categoria</th><th>Volume</th><th>Preço / Promo</th><th>Status</th><th>Ações</th></tr>
+              <tr><th>No cardápio</th><th>Imagem</th><th>Nome</th><th>Categoria</th><th>Volume</th><th>Preço / Promo</th><th>Status</th><th>Ações</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -461,7 +461,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="../js/default-data.js?v=16"></script>
   <script src="../js/storage.js?v=39"></script>
-  <script src="admin.js?v=24"></script>
+  <script src="admin.js?v=25"></script>
 </body>
 </html>
 

@@ -679,6 +679,32 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   gap: 6px;
 }
 
+.row--off-menu {
+  opacity: 0.72;
+  background: #f7f5f4;
+}
+
+.btn-onsite {
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-onsite.is-on {
+  background: #4caf50;
+  color: #fff;
+}
+
+.btn-onsite.is-off {
+  background: #eee;
+  color: #666;
+  border: 1px solid #ccc;
+}
+
 /* --- Status Badge --- */
 .badge {
   display: inline-block;
