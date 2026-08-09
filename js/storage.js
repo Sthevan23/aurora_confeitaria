@@ -520,7 +520,7 @@ const Storage = (() => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', email, password }),
-      }, 20000);
+      }, 6000);
       if (res.status === 503) {
         return loginOfflineFallback(email, password);
       }

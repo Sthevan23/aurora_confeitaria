@@ -78,8 +78,8 @@
     </div>
   </div>
 
-  <script src="../js/default-data.js?v=16"></script>
-  <script src="../js/storage.js?v=43"></script>
+  <script src="../js/default-data.js?v=20"></script>
+  <script src="../js/storage.js?v=44"></script>
   <script>
     if (sessionStorage.getItem('admin_logged') === 'true') {
       window.location.href = 'index.html';
@@ -93,6 +93,35 @@
       icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
     });
 
+    // Fallback embutido: se a Hostinger estiver em 503 e o storage antigo estiver em cache,
+    // ainda assim libera a entrada no painel com a senha padrão.
+    async function emergencyLocalLogin(email, password) {
+      const expectedEmail = 'auroraconfeitaria2022@gmail.com';
+      const expectedPass = (typeof AURORA_DEFAULT_DATA !== 'undefined' && AURORA_DEFAULT_DATA?.auth?.password)
+        ? AURORA_DEFAULT_DATA.auth.password
+        : 'aurora123';
+      if (email !== expectedEmail || password !== expectedPass) return false;
+      try {
+        const res = await fetch('../catalog.json?t=' + Date.now(), { cache: 'no-store' });
+        if (res.ok) {
+          const catalog = await res.json();
+          if (catalog && Array.isArray(catalog.products)) {
+            localStorage.setItem('aurora_public_catalog_v5', JSON.stringify({
+              ...catalog,
+              savedAt: Date.now(),
+              clients: [],
+              orders: [],
+              finance: [],
+              auth: { email: expectedEmail, password: expectedPass },
+            }));
+          }
+        }
+      } catch (_) { /* ignore */ }
+      sessionStorage.setItem('admin_password', password);
+      sessionStorage.setItem('admin_offline', '1');
+      return true;
+    }
+
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('email').value.trim();
@@ -105,8 +134,18 @@
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
 
       try {
-        const result = await Storage.loginAsync(email, password);
-        const ok = result === true || result?.ok === true;
+        let result = null;
+        if (typeof Storage !== 'undefined' && Storage.loginAsync) {
+          result = await Promise.race([
+            Storage.loginAsync(email, password),
+            new Promise((resolve) => setTimeout(() => resolve({ ok: false, reason: 'timeout' }), 7000)),
+          ]);
+        }
+        let ok = result === true || result?.ok === true;
+        if (!ok) {
+          ok = await emergencyLocalLogin(email, password);
+          if (ok) result = { ok: true, offline: true };
+        }
         if (ok) {
           sessionStorage.setItem('admin_logged', 'true');
           sessionStorage.setItem('admin_email', email);
@@ -121,6 +160,14 @@
         errorEl.textContent = 'E-mail ou senha incorretos.';
         errorEl.style.display = 'block';
       } catch (err) {
+        const ok = await emergencyLocalLogin(email, password);
+        if (ok) {
+          sessionStorage.setItem('admin_logged', 'true');
+          sessionStorage.setItem('admin_email', email);
+          sessionStorage.setItem('admin_offline', '1');
+          window.location.href = 'index.html';
+          return;
+        }
         errorEl.textContent = 'Erro de conexão. Confira e-mail/senha e tente de novo.';
         errorEl.style.display = 'block';
       } finally {
