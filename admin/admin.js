@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Storage.initCloud({ full: true });
   // Polling OFF — estoura "Máximo de processos" na Hostinger
   updateSyncBadge();
+  initSyncBadgeRetry();
 
   initSidebar();
   initNavigation();
@@ -34,6 +35,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     updateSyncBadge();
   });
+
+  // Tenta religar a nuvem em background (sem martelar se ainda estiver 503)
+  scheduleCloudReconnect();
 });
 
 function renderAllAdminPages() {
@@ -52,17 +56,68 @@ function updateSyncBadge() {
   if (Storage.isCloudEnabled()) {
     el.textContent = 'Nuvem';
     badge.classList.add('sync-badge--on');
-    badge.title = 'Dados sincronizados entre celulares';
+    badge.title = 'Dados sincronizados entre celulares. Clique para sincronizar de novo.';
     sessionStorage.removeItem('admin_offline');
-  } else if (sessionStorage.getItem('admin_offline') === '1') {
+  } else if (sessionStorage.getItem('admin_offline') === '1' || Storage.apiCoolingDown?.()) {
     el.textContent = 'API offline';
     badge.classList.remove('sync-badge--on');
-    badge.title = 'Hostinger ocupada (503). Você entrou no modo local — tente sair e entrar de novo em alguns minutos para sincronizar.';
+    badge.title = 'Hostinger ocupada (503). Clique aqui para tentar religar a nuvem.';
   } else {
     el.textContent = 'Só neste aparelho';
     badge.classList.remove('sync-badge--on');
-    badge.title = 'Suba o site na Hostinger com a pasta api/ para sincronizar';
+    badge.title = 'Clique para tentar conectar na nuvem';
   }
+}
+
+function initSyncBadgeRetry() {
+  const badge = document.getElementById('sync-badge');
+  if (!badge || badge.dataset.retryBound) return;
+  badge.dataset.retryBound = '1';
+  badge.style.cursor = 'pointer';
+  badge.addEventListener('click', async () => {
+    const el = document.getElementById('sync-badge-text');
+    if (el) el.textContent = 'Conectando…';
+    const ok = await Storage.reconnectCloud();
+    if (ok) {
+      sessionStorage.removeItem('admin_offline');
+      renderAllAdminPages();
+    }
+    updateSyncBadge();
+    if (!ok) {
+      alert('Ainda está offline na Hostinger. Aguarde 1–2 minutos e toque de novo em “API offline”.');
+    }
+  });
+}
+
+let cloudReconnectTimer = null;
+function scheduleCloudReconnect() {
+  if (cloudReconnectTimer) clearTimeout(cloudReconnectTimer);
+  if (Storage.isCloudEnabled()) return;
+
+  let attempt = 0;
+  const tick = async () => {
+    if (Storage.isCloudEnabled()) return;
+    attempt += 1;
+    // Espera crescer: 20s, 40s, 80s… até ~3 min
+    const waitMs = Math.min(180000, 20000 * (2 ** Math.min(attempt - 1, 3)));
+    cloudReconnectTimer = setTimeout(async () => {
+      if (Storage.isCloudEnabled()) return;
+      // Só tenta se o cooldown já passou (senão apiFetch nem chama a Hostinger)
+      if (Storage.apiCoolingDown?.()) {
+        tick();
+        return;
+      }
+      const ok = await Storage.reconnectCloud();
+      updateSyncBadge();
+      if (ok) {
+        sessionStorage.removeItem('admin_offline');
+        renderAllAdminPages();
+        return;
+      }
+      tick();
+    }, waitMs);
+  };
+  tick();
 }
 
 /* --- Sidebar mobile --- */

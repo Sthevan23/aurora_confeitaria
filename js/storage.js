@@ -5,8 +5,10 @@
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
   const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v5';
+  const API_DOWN_KEY = 'aurora_api_down_until';
   const DATA_VERSION = 20;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
+  const PRODUCTION_PING = 'https://auroraconfeitaria.com.br/api/ping.php';
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '');
 
   const API = (() => {
@@ -18,6 +20,11 @@ const Storage = (() => {
     }
     if (path.endsWith('/')) return path + 'api/data.php';
     return path.replace(/\/[^/]*$/, '/api/data.php');
+  })();
+
+  const PING = (() => {
+    if (isLocalHost || location.protocol === 'file:') return PRODUCTION_PING;
+    return API.replace(/data\.php(?:\?.*)?$/, 'ping.php');
   })();
 
   let cloudEnabled = false;
@@ -271,10 +278,74 @@ const Storage = (() => {
     }
   }
 
-  async function probeCloud() {
-    // Desativado: ping a cada visita gera processo e piora LVE
+  function apiCoolingDown() {
+    try {
+      const until = Number(localStorage.getItem(API_DOWN_KEY) || 0);
+      return Number.isFinite(until) && until > Date.now();
+    } catch {
+      return false;
+    }
+  }
+
+  function tripApiBreaker(ms = 3 * 60 * 1000) {
     cloudEnabled = false;
-    return false;
+    try {
+      localStorage.setItem(API_DOWN_KEY, String(Date.now() + ms));
+    } catch { /* ignore */ }
+  }
+
+  function clearApiBreaker() {
+    try { localStorage.removeItem(API_DOWN_KEY); } catch { /* ignore */ }
+  }
+
+  async function apiFetch(url, options = {}, ms = 15000) {
+    if (apiCoolingDown()) {
+      return new Response('{"ok":false,"offline":true}', {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    try {
+      const res = await fetchWithTimeout(url, options, ms);
+      if (res.status === 503) {
+        tripApiBreaker();
+      } else if (res.ok) {
+        clearApiBreaker();
+      }
+      return res;
+    } catch (err) {
+      tripApiBreaker(5 * 60 * 1000);
+      throw err;
+    }
+  }
+
+  async function probeCloud() {
+    if (apiCoolingDown()) {
+      cloudEnabled = false;
+      return false;
+    }
+    try {
+      const res = await fetchWithTimeout(PING + '?t=' + Date.now(), {}, 4000);
+      if (!res.ok) {
+        tripApiBreaker();
+        cloudEnabled = false;
+        return false;
+      }
+      const body = await res.json().catch(() => ({}));
+      const ok = body && body.ok !== false;
+      if (ok) {
+        clearApiBreaker();
+        cloudEnabled = true;
+        return true;
+      }
+      tripApiBreaker();
+      cloudEnabled = false;
+      return false;
+    } catch {
+      tripApiBreaker(5 * 60 * 1000);
+      cloudEnabled = false;
+      return false;
+    }
   }
 
   function startCloudPolling() {
@@ -284,7 +355,7 @@ const Storage = (() => {
   async function initCloud({ full = false } = {}) {
     init();
     if (!full) {
-      // Visitante: sempre tenta atualizar o cardápio (não fica preso no cache velho)
+      // Visitante: só catálogo estático — não bate PHP (libera Hostinger)
       try {
         const ok = await pullPublic();
         if (ok === true || (getProducts() || []).length > 0) {
@@ -293,6 +364,20 @@ const Storage = (() => {
       } catch { /* ignore */ }
       return (getProducts() || []).length > 0 ? 'cache' : false;
     }
+
+    // Admin: se a API está em cooldown 503, não martela de novo
+    if (apiCoolingDown()) {
+      lastLoadFromCache = true;
+      cloudEnabled = false;
+      return (getProducts() || []).length > 0 ? 'cache' : false;
+    }
+
+    const reachable = await probeCloud();
+    if (!reachable) {
+      lastLoadFromCache = true;
+      return (getProducts() || []).length > 0 ? 'cache' : false;
+    }
+
     const ok = await pullFull();
     if (ok === true) {
       lastLoadFromCache = false;
@@ -356,19 +441,11 @@ const Storage = (() => {
   async function pullPublic() {
     lastLoadFromCache = false;
 
-    // 1) Catálogo estático — sem bater MySQL (evita 503 na Hostinger)
+    // Só catálogo estático — zero chamada PHP no site público
     if (await pullStaticCatalog()) {
-      // Atualização em nuvem no máx. 1x por aba (não a cada visita)
-      try {
-        if (!sessionStorage.getItem('aurora_api_catalog_tried')) {
-          sessionStorage.setItem('aurora_api_catalog_tried', '1');
-          refreshCatalogFromApiInBackground();
-        }
-      } catch { /* ignore */ }
       return true;
     }
 
-    // 2) Fallback: cache local / default (sem rebuild forçado)
     cloudEnabled = false;
     if (applyPublicCache(loadPublicCache())) {
       notifyUpdated();
@@ -381,41 +458,14 @@ const Storage = (() => {
     return false;
   }
 
-  function refreshCatalogFromApiInBackground() {
-    fetchWithTimeout(API + '?t=' + Date.now(), {}, 20000)
-      .then(async (res) => {
-        if (!res.ok) return;
-        const remote = await res.json().catch(() => null);
-        if (!remote || !remote.settings || !Array.isArray(remote.products)) return;
-        const merged = {
-          ...emptyStore(),
-          version: remote.version || DATA_VERSION,
-          settings: remote.settings,
-          categories: remote.categories || [],
-          products: hydrateProductImages(remote.products || []),
-          reviews: remote.reviews || [],
-          faq: remote.faq || [],
-          gallery: remote.gallery || [],
-          coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
-          clients: [],
-          orders: [],
-          finance: [],
-          auth: { email: '', password: '' },
-        };
-        setMemory(merged);
-        savePublicCache(merged);
-        notifyUpdated();
-      })
-      .catch(() => {});
-  }
-
   async function pullFull() {
     const password = getAdminPassword();
     if (!password) return false;
+    if (apiCoolingDown()) return false;
     try {
-      const res = await fetchWithTimeout(API + '?full=1&t=' + Date.now(), {
+      const res = await apiFetch(API + '?full=1&t=' + Date.now(), {
         headers: { 'X-Admin-Password': password },
-      });
+      }, 20000);
       if (!res.ok) return false;
       const remote = await res.json();
       if (!remote || !remote.settings) return false;
@@ -434,6 +484,7 @@ const Storage = (() => {
   async function pushToCloud(data) {
     const password = getAdminPassword() || (data.auth && data.auth.password) || '';
     if (!password) return false;
+    if (apiCoolingDown()) return false;
 
     // Evita corrida: se já está enviando, agenda o mais recente
     if (pushInFlight) {
@@ -446,7 +497,7 @@ const Storage = (() => {
       const payload = JSON.stringify({ data });
       // Foto em data-URL deixa o JSON grande — dá mais tempo
       const timeoutMs = payload.length > 400000 ? 90000 : 25000;
-      const res = await fetchWithTimeout(API, {
+      const res = await apiFetch(API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -513,33 +564,49 @@ const Storage = (() => {
   }
 
   async function loginRemote(email, password) {
-    // Sem probeCloud: o ping estava desligado pra aliviar Hostinger,
-    // mas bloqueava o login. Aqui só 1 POST na hora de entrar.
+    // Se a Hostinger acabou de dar 503, entra local e não martela a API
+    if (apiCoolingDown()) {
+      return loginOfflineFallback(email, password);
+    }
+
     try {
-      const res = await fetchWithTimeout(API, {
+      const res = await apiFetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', email, password }),
-      }, 6000);
+      }, 8000);
       if (res.status === 503) {
         return loginOfflineFallback(email, password);
       }
       const result = await res.json().catch(() => ({}));
       if (!res.ok || !result.ok) {
-        // HTML 503 da Hostinger às vezes vem como parse vazio + !ok
         if (res.status >= 500) {
           return loginOfflineFallback(email, password);
         }
         return { ok: false, reason: 'auth', error: result.error || '' };
       }
+      clearApiBreaker();
       setMemory(result.data);
       lastRemoteJson = JSON.stringify(result.data);
       setAdminPassword(password);
       cloudEnabled = true;
+      try { sessionStorage.removeItem('admin_offline'); } catch { /* ignore */ }
       return { ok: true };
     } catch {
       return loginOfflineFallback(email, password);
     }
+  }
+
+  async function reconnectCloud() {
+    clearApiBreaker();
+    const email = sessionStorage.getItem('admin_email') || '';
+    const password = getAdminPassword();
+    if (!email || !password) {
+      const reachable = await probeCloud();
+      return reachable;
+    }
+    const result = await loginRemote(email, password);
+    return result === true || result?.ok === true;
   }
 
   function loginLocal(email, password) {
@@ -579,7 +646,7 @@ const Storage = (() => {
     const password = getAdminPassword();
     if (!password || !productId) return false;
     try {
-      const res = await fetchWithTimeout(API, {
+      const res = await apiFetch(API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -928,13 +995,13 @@ const Storage = (() => {
     if (!phone || phone.length < 10) {
       return computeLoyaltyFromOrders([], phone);
     }
-    if (location.protocol !== 'file:' || isLocalHost) {
+    if ((location.protocol !== 'file:' || isLocalHost) && !apiCoolingDown()) {
       try {
-        const res = await fetch(API, {
+        const res = await apiFetch(API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'loyalty_status', phone }),
-        });
+        }, 8000);
         const result = await res.json().catch(() => ({}));
         if (res.ok && result.ok && result.loyalty) return result.loyalty;
       } catch { /* fallback local */ }
@@ -988,12 +1055,15 @@ const Storage = (() => {
 
     let loyalty = null;
     if (location.protocol !== 'file:' || isLocalHost) {
+      if (apiCoolingDown()) {
+        return { ok: false, error: 'Servidor ocupado agora. Aguarde 2–3 minutos e envie de novo.' };
+      }
       try {
-        const res = await fetch(API, {
+        const res = await apiFetch(API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'create_order', order, client }),
-        });
+        }, 20000);
         const result = await res.json().catch(() => ({}));
         if (!res.ok || !result.ok) {
           const detail = result.detail ? ` (${result.detail})` : '';
@@ -1033,6 +1103,7 @@ const Storage = (() => {
     isCloudEnabled, wasLoadedFromCache, setAdminPassword, getAdminPassword,
     startCloudPolling, stopCloudPolling, notifyUpdated,
     createPublicOrder, getLoyaltyStatus, computeLoyaltyFromOrders, getApiUrl,
+    probeCloud, reconnectCloud, apiCoolingDown, clearApiBreaker,
   };
 })();
 

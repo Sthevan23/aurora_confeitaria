@@ -13,6 +13,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit;
 }
 
+// Ping ultraleve ANTES de qualquer include/MySQL
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['ping'])) {
+  header('Cache-Control: no-store');
+  echo '{"ok":true,"db":"mysql","light":true,"ts":' . time() . '}';
+  exit;
+}
+
+// Catálogo estático sem carregar PDO (evita processo pesado)
+if (
+  ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
+  && !isset($_GET['full'])
+  && !isset($_GET['rebuild'])
+  && (($_GET['action'] ?? '') !== 'full')
+) {
+  $catalogFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'catalog.json';
+  if (is_file($catalogFile)) {
+    $raw = @file_get_contents($catalogFile);
+    if (is_string($raw) && $raw !== '' && strpos($raw, '"products"') !== false) {
+      header('Cache-Control: public, max-age=120');
+      echo $raw;
+      exit;
+    }
+  }
+}
+
 // Site OFF → não abre MySQL (cada conexão = processo)
 $siteOff = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'SITE_OFF';
 if (is_file($siteOff)) {
@@ -89,34 +114,8 @@ $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
-  // Health / probe — SEM MySQL (bem leve)
-  if (isset($_GET['ping'])) {
-    json_out([
-      'ok' => true,
-      'db' => 'mysql',
-      'light' => true,
-      'ts' => time(),
-    ]);
-  }
-
-  // Preferir catalog.json estático para NÃO abrir MySQL em toda visita.
-  // rebuild=1 continua forçando MySQL (uso do painel após salvar).
-  if (!isset($_GET['full']) && $action !== 'full' && !isset($_GET['rebuild'])) {
-    $catalogFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'catalog.json';
-    if (is_file($catalogFile)) {
-      $raw = @file_get_contents($catalogFile);
-      if (is_string($raw) && $raw !== '') {
-        $meta = json_decode($raw, true);
-        if (is_array($meta) && !empty($meta['products'])) {
-          header('Cache-Control: public, max-age=120');
-          header('Content-Type: application/json; charset=utf-8');
-          echo $raw;
-          exit;
-        }
-      }
-    }
-  }
-
+  // Ping/catálogo público já saíram antes do require (bem leves).
+  // Aqui: full=1 (admin) ou rebuild=1 (reescreve catalog.json).
   $pdo = db_or_fail();
   $password = get_password_header();
   $wantFull = isset($_GET['full']) || $action === 'full';
