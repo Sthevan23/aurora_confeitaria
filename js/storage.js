@@ -428,7 +428,7 @@ const Storage = (() => {
         setMemory(merged);
         savePublicCache(merged);
         lastLoadFromCache = false;
-        cloudEnabled = true; // catálogo ok (estático)
+        // Catálogo estático ≠ API MySQL online
         notifyUpdated();
         return true;
       } catch {
