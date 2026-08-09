@@ -28,10 +28,10 @@ DirectoryIndex index.html
   # Recuperação de backup: api/repair_photos.php (manual, com senha).
 </IfModule>
 
-# Catálogo estático — sem cache longo (admin liga/desliga na hora)
+# Catálogo estático — cache curto (visitante não bate MySQL)
 <IfModule mod_headers.c>
   <FilesMatch "^(catalog\.json)$">
-    Header set Cache-Control "no-store, max-age=0"
+    Header set Cache-Control "public, max-age=300"
   </FilesMatch>
 </IfModule>
 

@@ -355,14 +355,28 @@ const Storage = (() => {
   async function initCloud({ full = false } = {}) {
     init();
     if (!full) {
-      // Visitante: só catálogo estático — não bate PHP (libera Hostinger)
+      // Visitante: ZERO PHP/MySQL — só catalog.json estático (+ cache local).
       try {
-        const ok = await pullPublic();
-        if (ok === true || (getProducts() || []).length > 0) {
-          return ok === true ? true : 'cache';
+        if (await pullStaticCatalog()) {
+          lastLoadFromCache = false;
+          return true;
         }
       } catch { /* ignore */ }
-      return (getProducts() || []).length > 0 ? 'cache' : false;
+      if ((getProducts() || []).length > 0) {
+        lastLoadFromCache = true;
+        return 'cache';
+      }
+      if (applyPublicCache(loadPublicCache())) {
+        lastLoadFromCache = true;
+        notifyUpdated();
+        return 'cache';
+      }
+      if (applyDefaultCatalog()) {
+        lastLoadFromCache = true;
+        notifyUpdated();
+        return 'cache';
+      }
+      return false;
     }
 
     // Admin: se a API está em cooldown 503, não martela de novo
@@ -391,10 +405,11 @@ const Storage = (() => {
   }
 
   async function pullStaticCatalog({ maxAgeMs = null } = {}) {
+    // Sem ?t= — deixa o navegador/cache do Hostinger servir o JSON (sem PHP)
     const urls = [
-      'catalog.json?t=' + Date.now(),
-      '/catalog.json?t=' + Date.now(),
-      'api/catalog.json?t=' + Date.now(),
+      'catalog.json',
+      '/catalog.json',
+      'api/catalog.json',
     ];
     for (const url of urls) {
       try {
@@ -439,13 +454,9 @@ const Storage = (() => {
   }
 
   async function pullPublic() {
+    // Público: nunca chama data.php / MySQL
     lastLoadFromCache = false;
-
-    // Só catálogo estático — zero chamada PHP no site público
-    if (await pullStaticCatalog()) {
-      return true;
-    }
-
+    if (await pullStaticCatalog()) return true;
     cloudEnabled = false;
     if (applyPublicCache(loadPublicCache())) {
       notifyUpdated();
@@ -456,6 +467,10 @@ const Storage = (() => {
       return 'cache';
     }
     return false;
+  }
+
+  function refreshCatalogFromApiInBackground() {
+    // Desativado — gerava processo PHP em background
   }
 
   async function pullFull() {
@@ -991,21 +1006,8 @@ const Storage = (() => {
   }
 
   async function getLoyaltyStatus(whatsapp) {
+    // Sem POST na API a cada digitação no carrinho (estourava processos)
     const phone = String(whatsapp || '').replace(/\D/g, '');
-    if (!phone || phone.length < 10) {
-      return computeLoyaltyFromOrders([], phone);
-    }
-    if ((location.protocol !== 'file:' || isLocalHost) && !apiCoolingDown()) {
-      try {
-        const res = await apiFetch(API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'loyalty_status', phone }),
-        }, 8000);
-        const result = await res.json().catch(() => ({}));
-        if (res.ok && result.ok && result.loyalty) return result.loyalty;
-      } catch { /* fallback local */ }
-    }
     return computeLoyaltyFromOrders(getOrders(), phone);
   }
 
