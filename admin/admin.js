@@ -941,7 +941,7 @@ async function toggleProductActive(id, active) {
 
   const ok = await Storage.setProductActiveAsync(id, !!active);
   if (ok) {
-    showToast(active ? 'Fora do site → agora no cardápio.' : 'Removido do cardápio do site.', 'success');
+    showToast(active ? 'Produto no cardápio do site.' : 'Produto fora do site.', 'success');
     renderDashboard();
     return;
   }

@@ -31,7 +31,7 @@ if (
   if (is_file($catalogFile)) {
     $raw = @file_get_contents($catalogFile);
     if (is_string($raw) && $raw !== '' && strpos($raw, '"products"') !== false) {
-      header('Cache-Control: public, max-age=120');
+      header('Cache-Control: no-store, max-age=0');
       echo $raw;
       exit;
     }
@@ -262,8 +262,21 @@ if ($method === 'POST') {
           json_out(['error' => 'Produto não encontrado'], 404);
         }
       }
-      aurora_write_public_catalog($pdo);
-      json_out(['ok' => true, 'id' => $productId, 'active' => $active === 1]);
+      $wrote = false;
+      try {
+        $wrote = aurora_write_public_catalog($pdo);
+      } catch (Throwable $e) {
+        $wrote = false;
+      }
+      if (!$wrote) {
+        json_out([
+          'ok' => false,
+          'error' => 'Salvou no banco, mas não atualizou catalog.json (permissão?).',
+          'id' => $productId,
+          'active' => $active === 1,
+        ], 500);
+      }
+      json_out(['ok' => true, 'id' => $productId, 'active' => $active === 1, 'catalog' => true]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao atualizar produto', 'detail' => $e->getMessage()], 500);
     }

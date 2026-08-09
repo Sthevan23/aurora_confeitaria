@@ -298,8 +298,8 @@ const Storage = (() => {
     try { localStorage.removeItem(API_DOWN_KEY); } catch { /* ignore */ }
   }
 
-  async function apiFetch(url, options = {}, ms = 15000) {
-    if (apiCoolingDown()) {
+  async function apiFetch(url, options = {}, ms = 15000, { force = false } = {}) {
+    if (!force && apiCoolingDown()) {
       return new Response('{"ok":false,"offline":true}', {
         status: 503,
         headers: { 'Content-Type': 'application/json' },
@@ -314,7 +314,7 @@ const Storage = (() => {
       }
       return res;
     } catch (err) {
-      tripApiBreaker(5 * 60 * 1000);
+      if (!force) tripApiBreaker(5 * 60 * 1000);
       throw err;
     }
   }
@@ -499,7 +499,6 @@ const Storage = (() => {
   async function pushToCloud(data) {
     const password = getAdminPassword() || (data.auth && data.auth.password) || '';
     if (!password) return false;
-    if (apiCoolingDown()) return false;
 
     // Evita corrida: se já está enviando, agenda o mais recente
     if (pushInFlight) {
@@ -519,7 +518,7 @@ const Storage = (() => {
           'X-Admin-Password': password,
         },
         body: payload,
-      }, timeoutMs);
+      }, timeoutMs, { force: true });
 
       let result = {};
       try {
@@ -661,6 +660,7 @@ const Storage = (() => {
     const password = getAdminPassword();
     if (!password || !productId) return false;
     try {
+      clearApiBreaker();
       const res = await apiFetch(API, {
         method: 'POST',
         headers: {
@@ -672,7 +672,7 @@ const Storage = (() => {
           id: productId,
           active: !!active,
         }),
-      }, 20000);
+      }, 20000, { force: true });
       const result = await res.json().catch(() => ({}));
       if (!res.ok || result.ok === false) return false;
 
@@ -681,8 +681,14 @@ const Storage = (() => {
         p.id === productId ? { ...p, active: !!active } : p
       ));
       setMemory(data);
+      // Atualiza cache do site (visitante lê isso)
+      try {
+        const publicProducts = (data.products || []).filter((p) => p.active !== false);
+        savePublicCache({ ...data, products: publicProducts });
+      } catch { /* ignore */ }
       notifyUpdated();
       cloudEnabled = true;
+      try { sessionStorage.removeItem('admin_offline'); } catch { /* ignore */ }
       return true;
     } catch {
       return false;
