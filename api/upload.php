@@ -196,52 +196,7 @@ if ($jpegBytes === null || strlen($jpegBytes) < 32) {
 
 $dataUrl = 'data:image/jpeg;base64,' . base64_encode($jpegBytes);
 
-// Sem pasta pública âncora → só dataUrl (aparece no site via MySQL)
-if (!$anchorDirs) {
-  echo json_encode([
-    'ok' => true,
-    'path' => null,
-    'url' => null,
-    'bytes' => strlen($jpegBytes),
-    'dirs' => 0,
-    'anchor' => false,
-    'dataUrl' => $dataUrl,
-  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-  exit;
-}
-
-$primary = $anchorDirs[0];
-$dest = $primary . DIRECTORY_SEPARATOR . $savedAs;
-if (@file_put_contents($dest, $jpegBytes) === false) {
-  // Fallback: dataUrl ainda funciona
-  echo json_encode([
-    'ok' => true,
-    'path' => null,
-    'url' => null,
-    'bytes' => strlen($jpegBytes),
-    'dirs' => 0,
-    'anchor' => false,
-    'dataUrl' => $dataUrl,
-    'warn' => 'Não deu para gravar em products/ — use dataUrl',
-  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-  exit;
-}
-@chmod($dest, 0644);
-
-$savedDirs = [$primary];
-foreach ($anchorDirs as $dir) {
-  if ($dir === $primary) {
-    continue;
-  }
-  $copyTo = $dir . DIRECTORY_SEPARATOR . $savedAs;
-  if (@file_put_contents($copyTo, $jpegBytes) !== false) {
-    @chmod($copyTo, 0644);
-    $savedDirs[] = $dir;
-  }
-}
-
-$path = 'products/' . $savedAs;
-
+// Backup no MySQL é OBRIGATÓRIO — sem isso o Reimplantar Git apaga a foto
 $blobOk = false;
 try {
   $blobOk = aurora_store_product_image_blob($pdo, $savedAs, $jpegBytes, 'image/jpeg');
@@ -249,14 +204,55 @@ try {
   $blobOk = false;
 }
 
+if (!$blobOk) {
+  // Sem backup: devolve dataUrl para gravar no produto (aparece no painel/site via MySQL)
+  echo json_encode([
+    'ok' => true,
+    'path' => null,
+    'url' => null,
+    'bytes' => strlen($jpegBytes),
+    'dirs' => 0,
+    'anchor' => false,
+    'blob' => false,
+    'dataUrl' => $dataUrl,
+    'warn' => 'Backup MySQL falhou — usando dataUrl',
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+
+// Tenta gravar também em products/ (rápido no site). Se falhar, photo.php serve o blob.
+$diskOk = false;
+$savedDirs = [];
+if ($anchorDirs) {
+  $primary = $anchorDirs[0];
+  $dest = $primary . DIRECTORY_SEPARATOR . $savedAs;
+  if (@file_put_contents($dest, $jpegBytes) !== false) {
+    @chmod($dest, 0644);
+    $diskOk = true;
+    $savedDirs[] = $primary;
+    foreach ($anchorDirs as $dir) {
+      if ($dir === $primary) continue;
+      $copyTo = $dir . DIRECTORY_SEPARATOR . $savedAs;
+      if (@file_put_contents($copyTo, $jpegBytes) !== false) {
+        @chmod($copyTo, 0644);
+        $savedDirs[] = $dir;
+      }
+    }
+  }
+}
+
+// Path canônico: products/… (htaccess → photo.php se o arquivo sumir no Git)
+$path = 'products/' . $savedAs;
+
 echo json_encode([
   'ok' => true,
   'path' => $path,
   'url' => '/' . $path,
-  'bytes' => filesize($dest) ?: strlen($jpegBytes),
+  'bytes' => strlen($jpegBytes),
   'dirs' => count($savedDirs),
-  'anchor' => true,
-  'blob' => $blobOk ? true : false,
-  'dir' => $primary,
+  'anchor' => $diskOk,
+  'blob' => true,
+  'dir' => $savedDirs[0] ?? null,
   'dataUrl' => $dataUrl,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+exit;

@@ -746,8 +746,22 @@ function aurora_write_public_catalog(PDO $pdo): bool {
     if (!is_array($p)) continue;
     if (isset($p['active']) && !$p['active']) continue;
     $img = (string) ($p['image'] ?? '');
+    // data-URL → arquivo + backup MySQL (catalog.json não pode ficar gigante)
     if (str_starts_with($img, 'data:')) {
-      $p['image'] = '';
+      $path = aurora_save_data_url_file($img);
+      if ($path) {
+        $p['image'] = $path;
+        if (!empty($p['id'])) {
+          try {
+            $upd = $pdo->prepare('UPDATE products SET image = ? WHERE id = ?');
+            $upd->execute([$path, $p['id']]);
+          } catch (Throwable $e) {
+            // catalog ainda leva o path
+          }
+        }
+      } else {
+        $p['image'] = '';
+      }
     }
     $products[] = $p;
   }
