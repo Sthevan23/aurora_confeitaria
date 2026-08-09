@@ -648,9 +648,13 @@ async function uploadAdminImage(file) {
       body: form,
     });
     const result = await res.json().catch(() => ({}));
-    if (res.ok && result.ok && result.path) {
+    // Path + backup no banco: sobrevive ao Reimplantar Git
+    if (res.ok && result.ok && result.path && (result.blob === true || result.anchor === true)) {
       const ok = await isPublicImageOk(result.path);
-      if (ok) return result.path;
+      if (ok || result.blob === true) return result.path;
+    }
+    if (res.ok && result.ok && typeof result.dataUrl === 'string' && result.dataUrl.startsWith('data:image/')) {
+      return result.dataUrl;
     }
   } catch {
     // cai no dataUrl

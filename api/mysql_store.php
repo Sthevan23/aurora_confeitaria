@@ -345,6 +345,16 @@ function aurora_save_data_url_file(string $dataUrl): ?string {
   @unlink($tmp);
   if (!$wrote || !is_file($dest)) return null;
   @chmod($dest, 0644);
+  $bytes = @file_get_contents($dest);
+  if ($bytes !== false && function_exists('aurora_store_product_image_blob')) {
+    try {
+      // Precisa de PDO — tenta via conexão global leve
+      $pdo = aurora_db(false);
+      aurora_store_product_image_blob($pdo, $name, $bytes, 'image/jpeg');
+    } catch (Throwable $e) {
+      // path em disco ainda vale
+    }
+  }
   return 'products/' . $name;
 }
 

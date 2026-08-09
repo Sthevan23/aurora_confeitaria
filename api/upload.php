@@ -242,10 +242,11 @@ foreach ($anchorDirs as $dir) {
 
 $path = 'products/' . $savedAs;
 
+$blobOk = false;
 try {
-  aurora_store_product_image_blob($pdo, $savedAs, $jpegBytes, 'image/jpeg');
+  $blobOk = aurora_store_product_image_blob($pdo, $savedAs, $jpegBytes, 'image/jpeg');
 } catch (Throwable $e) {
-  // Arquivo em disco ainda serve; backup MySQL é extra
+  $blobOk = false;
 }
 
 echo json_encode([
@@ -255,6 +256,7 @@ echo json_encode([
   'bytes' => filesize($dest) ?: strlen($jpegBytes),
   'dirs' => count($savedDirs),
   'anchor' => true,
+  'blob' => $blobOk ? true : false,
   'dir' => $primary,
   'dataUrl' => $dataUrl,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

@@ -23,9 +23,9 @@ DirectoryIndex index.html
   # Carrinho limpo: /carrinho → cart.html
   RewriteRule ^carrinho/?$ cart.html [L]
 
-  # NÃO redirecionar foto faltando para api/photo.php.
-  # Cada imagem quebrada virava 1 processo PHP+MySQL e derrubava o painel (503).
-  # Recuperação de backup: api/repair_photos.php (manual, com senha).
+  # Foto faltando em /products → backup MySQL (só se o arquivo não existir)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^products/([a-zA-Z0-9._-]+\.(jpe?g|png|webp|gif))$ api/photo.php?f=$1 [L,QSA,NC]
 </IfModule>
 
 # Catálogo estático — sem cache longo (No site / Fora precisa refletir na hora)
