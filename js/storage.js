@@ -356,78 +356,29 @@ const Storage = (() => {
   async function pullPublic() {
     lastLoadFromCache = false;
 
-    // 1) Catálogo estático fresco (gerado pelo painel/API)
-    if (await pullStaticCatalog({ maxAgeMs: 60 * 60 * 1000 })) {
+    // 1) Catálogo estático — sem bater MySQL (evita 503 na Hostinger)
+    if (await pullStaticCatalog()) {
+      // Atualização em nuvem no máx. 1x por aba (não a cada visita)
+      try {
+        if (!sessionStorage.getItem('aurora_api_catalog_tried')) {
+          sessionStorage.setItem('aurora_api_catalog_tried', '1');
+          refreshCatalogFromApiInBackground();
+        }
+      } catch { /* ignore */ }
       return true;
     }
 
-    // 2) API MySQL — reescreve catalog.json com o que está no painel
-    try {
-      const res = await fetchWithTimeout(API + '?rebuild=1&t=' + Date.now(), {}, 18000);
-      if (!res.ok) {
-        cloudEnabled = false;
-        if (await pullStaticCatalog()) {
-          return true;
-        }
-        if (applyPublicCache(loadPublicCache())) {
-          notifyUpdated();
-          return 'cache';
-        }
-        if (applyDefaultCatalog()) {
-          notifyUpdated();
-          return 'cache';
-        }
-        return false;
-      }
-      const remote = await res.json();
-      if (remote.empty || remote.error || !remote.settings || !Array.isArray(remote.products)) {
-        if (await pullStaticCatalog()) {
-          return true;
-        }
-        if (applyPublicCache(loadPublicCache())) {
-          notifyUpdated();
-          return 'cache';
-        }
-        if (applyDefaultCatalog()) {
-          notifyUpdated();
-          return 'cache';
-        }
-        return false;
-      }
-      cloudEnabled = true;
-      const merged = {
-        ...emptyStore(),
-        version: remote.version || DATA_VERSION,
-        settings: remote.settings,
-        categories: remote.categories || [],
-        products: hydrateProductImages(remote.products || []),
-        reviews: remote.reviews || [],
-        faq: remote.faq || [],
-        gallery: remote.gallery || [],
-        coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
-        clients: [],
-        orders: [],
-        finance: [],
-        auth: { email: '', password: '' },
-      };
-      setMemory(merged);
-      savePublicCache(merged);
-      lastRemoteJson = JSON.stringify(merged);
-      lastLoadFromCache = false;
+    // 2) Fallback: cache local / default (sem rebuild forçado)
+    cloudEnabled = false;
+    if (applyPublicCache(loadPublicCache())) {
       notifyUpdated();
-      return true;
-    } catch {
-      cloudEnabled = false;
-      if (applyPublicCache(loadPublicCache())) {
-        notifyUpdated();
-        return 'cache';
-      }
-      if (applyDefaultCatalog()) {
-        notifyUpdated();
-        return 'cache';
-      }
-      return false;
+      return 'cache';
     }
+    if (applyDefaultCatalog()) {
+      notifyUpdated();
+      return 'cache';
+    }
+    return false;
   }
 
   function refreshCatalogFromApiInBackground() {
@@ -532,20 +483,53 @@ const Storage = (() => {
     }
   }
 
+  async function loginOfflineFallback(email, password) {
+    const def = (typeof AURORA_DEFAULT_DATA !== 'undefined' && AURORA_DEFAULT_DATA) ? AURORA_DEFAULT_DATA : null;
+    const authEmail = String(def?.auth?.email || 'auroraconfeitaria2022@gmail.com').trim();
+    const authPass = String(def?.auth?.password || 'aurora123');
+    if (String(email || '').trim() !== authEmail || String(password || '') !== authPass) {
+      return { ok: false, reason: 'auth' };
+    }
+
+    // Entra com catálogo estático/cache — painel abre mesmo com API 503
+    let loaded = false;
+    try {
+      loaded = await pullStaticCatalog();
+    } catch { loaded = false; }
+    if (!loaded) loaded = applyPublicCache(loadPublicCache());
+    if (!loaded) loaded = applyDefaultCatalog();
+    if (!loaded) {
+      setMemory(emptyStore());
+    }
+
+    const data = getAll();
+    data.auth = { email: authEmail, password: authPass };
+    setMemory(data);
+    savePublicCache(data);
+    setAdminPassword(password);
+    cloudEnabled = false;
+    lastLoadFromCache = true;
+    return { ok: true, offline: true };
+  }
+
   async function loginRemote(email, password) {
     // Sem probeCloud: o ping estava desligado pra aliviar Hostinger,
     // mas bloqueava o login. Aqui só 1 POST na hora de entrar.
     try {
-      const res = await fetch(API, {
+      const res = await fetchWithTimeout(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', email, password }),
-      });
+      }, 20000);
       if (res.status === 503) {
-        return { ok: false, reason: 'offline' };
+        return loginOfflineFallback(email, password);
       }
       const result = await res.json().catch(() => ({}));
       if (!res.ok || !result.ok) {
+        // HTML 503 da Hostinger às vezes vem como parse vazio + !ok
+        if (res.status >= 500) {
+          return loginOfflineFallback(email, password);
+        }
         return { ok: false, reason: 'auth', error: result.error || '' };
       }
       setMemory(result.data);
@@ -554,13 +538,12 @@ const Storage = (() => {
       cloudEnabled = true;
       return { ok: true };
     } catch {
-      return { ok: false, reason: 'offline' };
+      return loginOfflineFallback(email, password);
     }
   }
 
-  function loginLocal() {
-    // Desativado: login só via MySQL/API
-    return false;
+  function loginLocal(email, password) {
+    return loginOfflineFallback(email, password);
   }
 
   function stopCloudPolling() {

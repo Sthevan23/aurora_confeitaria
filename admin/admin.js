@@ -53,6 +53,11 @@ function updateSyncBadge() {
     el.textContent = 'Nuvem';
     badge.classList.add('sync-badge--on');
     badge.title = 'Dados sincronizados entre celulares';
+    sessionStorage.removeItem('admin_offline');
+  } else if (sessionStorage.getItem('admin_offline') === '1') {
+    el.textContent = 'API offline';
+    badge.classList.remove('sync-badge--on');
+    badge.title = 'Hostinger ocupada (503). Você entrou no modo local — tente sair e entrar de novo em alguns minutos para sincronizar.';
   } else {
     el.textContent = 'Só neste aparelho';
     badge.classList.remove('sync-badge--on');
@@ -154,6 +159,7 @@ function initLogout() {
     Storage.setAdminPassword('');
     sessionStorage.removeItem('admin_logged');
     sessionStorage.removeItem('admin_email');
+    sessionStorage.removeItem('admin_offline');
     window.location.href = 'login.html';
   });
 }

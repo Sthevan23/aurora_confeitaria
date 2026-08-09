@@ -99,20 +99,20 @@ if ($method === 'GET') {
     ]);
   }
 
-  // Preferir catalog.json estático só se o CONTEÚDO for fresco.
-  // (filemtime muda no Reimplantar Git e servia catálogo velho do repo)
+  // Preferir catalog.json estático para NÃO abrir MySQL em toda visita.
+  // rebuild=1 continua forçando MySQL (uso do painel após salvar).
   if (!isset($_GET['full']) && $action !== 'full' && !isset($_GET['rebuild'])) {
     $catalogFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'catalog.json';
     if (is_file($catalogFile)) {
       $raw = @file_get_contents($catalogFile);
-      $meta = is_string($raw) ? json_decode($raw, true) : null;
-      $generatedAt = is_array($meta) ? strtotime((string) ($meta['generatedAt'] ?? '')) : false;
-      $fresh = $generatedAt && (time() - $generatedAt) < 3600;
-      if ($fresh && $raw !== false && $raw !== '') {
-        header('Cache-Control: public, max-age=120');
-        header('Content-Type: application/json; charset=utf-8');
-        echo $raw;
-        exit;
+      if (is_string($raw) && $raw !== '') {
+        $meta = json_decode($raw, true);
+        if (is_array($meta) && !empty($meta['products'])) {
+          header('Cache-Control: public, max-age=120');
+          header('Content-Type: application/json; charset=utf-8');
+          echo $raw;
+          exit;
+        }
       }
     }
   }
@@ -159,20 +159,42 @@ if ($method === 'POST') {
     json_out(['error' => 'JSON inválido'], 400);
   }
 
-  $pdo = db_or_fail();
-  $password = get_password_header() ?: get_password_from_body($body);
   $actionName = (string) ($body['action'] ?? '');
 
-  // Login — carrega tudo 1x
+  // Login leve: auth primeiro (sem schema/ALTER), só então carrega o painel
   if ($actionName === 'login') {
+    $email = trim((string) ($body['email'] ?? ''));
+    $pass = (string) ($body['password'] ?? '');
+
     try {
+      $pdoAuth = aurora_db(false);
+      $auth = aurora_get_auth($pdoAuth);
+    } catch (Throwable $e) {
+      json_out([
+        'error' => 'Falha na conexão MySQL',
+        'detail' => $e->getMessage(),
+      ], 500);
+    }
+
+    $authEmail = (string) ($auth['email'] ?? '');
+    $authPass = (string) ($auth['password'] ?? '');
+
+    if ($authEmail === '' || $authPass === '') {
+      json_out([
+        'error' => 'Banco sem dados. Importe api/aurora_mysql.sql no phpMyAdmin.',
+      ], 404);
+    }
+
+    if (!hash_equals($authEmail, $email) || !hash_equals($authPass, $pass)) {
+      json_out(['error' => 'E-mail ou senha incorretos.'], 401);
+    }
+
+    try {
+      $pdo = aurora_db(true);
       $stored = aurora_load_all($pdo, 'full');
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao ler MySQL', 'detail' => $e->getMessage()], 500);
     }
-
-    $email = trim((string) ($body['email'] ?? ''));
-    $pass = (string) ($body['password'] ?? '');
 
     if ($stored === null) {
       json_out([
@@ -180,15 +202,11 @@ if ($method === 'POST') {
       ], 404);
     }
 
-    $authEmail = (string) ($stored['auth']['email'] ?? '');
-    $authPass = (string) ($stored['auth']['password'] ?? '');
-
-    if (!hash_equals($authEmail, $email) || !hash_equals($authPass, $pass)) {
-      json_out(['error' => 'E-mail ou senha incorretos.'], 401);
-    }
-
     json_out(['ok' => true, 'data' => $stored]);
   }
+
+  $pdo = db_or_fail();
+  $password = get_password_header() ?: get_password_from_body($body);
 
   // Pedido / fidelidade — sem carregar produtos/imagens
   if ($actionName === 'loyalty_status') {

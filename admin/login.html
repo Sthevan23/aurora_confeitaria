@@ -79,7 +79,7 @@
   </div>
 
   <script src="../js/default-data.js?v=16"></script>
-  <script src="../js/storage.js?v=42"></script>
+  <script src="../js/storage.js?v=43"></script>
   <script>
     if (sessionStorage.getItem('admin_logged') === 'true') {
       window.location.href = 'index.html';
@@ -110,17 +110,18 @@
         if (ok) {
           sessionStorage.setItem('admin_logged', 'true');
           sessionStorage.setItem('admin_email', email);
+          if (result?.offline) {
+            sessionStorage.setItem('admin_offline', '1');
+          } else {
+            sessionStorage.removeItem('admin_offline');
+          }
           window.location.href = 'index.html';
           return;
         }
-        if (result?.reason === 'offline') {
-          errorEl.textContent = 'Servidor Hostinger indisponível agora (503). Aguarde alguns minutos e tente de novo — não é a senha.';
-        } else {
-          errorEl.textContent = 'E-mail ou senha incorretos.';
-        }
+        errorEl.textContent = 'E-mail ou senha incorretos.';
         errorEl.style.display = 'block';
       } catch (err) {
-        errorEl.textContent = 'Erro de conexão com o servidor. Tente de novo em alguns minutos.';
+        errorEl.textContent = 'Erro de conexão. Confira e-mail/senha e tente de novo.';
         errorEl.style.display = 'block';
       } finally {
         btn.disabled = false;

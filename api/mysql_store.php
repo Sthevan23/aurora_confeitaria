@@ -72,10 +72,8 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     $priceMap[$pid][$row['flavor']] = (float) $row['price'];
   }
 
-  // Conversão de data-URL só no admin/save — não em toda visita pública
-  if ($mode === 'full') {
-    aurora_maybe_extract_data_images($pdo, 2);
-  }
+  // Conversão de data-URL só sob demanda no save — nunca no login/load
+  // (escrever arquivos no login estourava processos na Hostinger)
 
   $products = [];
   $prodRows = $pdo->query('SELECT * FROM products ORDER BY sort_order ASC, name ASC')->fetchAll();
