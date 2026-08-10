@@ -38,9 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     updateSyncBadge();
   });
-
-  // Tenta religar a nuvem em background (sem martelar se ainda estiver 503)
-  scheduleCloudReconnect();
+  // Sem reconnect automático — martelava a Hostinger e ativava bloqueio 403/bot
 });
 
 function renderAllAdminPages() {

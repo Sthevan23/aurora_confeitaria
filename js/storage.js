@@ -307,8 +307,8 @@ const Storage = (() => {
     }
     try {
       const res = await fetchWithTimeout(url, options, ms);
-      if (res.status === 503) {
-        tripApiBreaker();
+      if (res.status === 503 || res.status === 403) {
+        tripApiBreaker(res.status === 403 ? 3 * 60 * 1000 : 45 * 1000);
       } else if (res.ok) {
         clearApiBreaker();
       }
@@ -320,15 +320,23 @@ const Storage = (() => {
   }
 
   async function probeCloud() {
-    // Sempre tenta: limpa breaker antigo e testa ping leve
-    clearApiBreaker();
+    // Não limpa breaker se ainda está em cooldown (evita flood → 403 bot Hostinger)
+    if (apiCoolingDown()) {
+      cloudEnabled = false;
+      return false;
+    }
     const pings = [
       PING + '?t=' + Date.now(),
       API + '?ping=1&t=' + Date.now(),
     ];
+    let sawBlock = false;
     for (const url of pings) {
       try {
         const res = await fetchWithTimeout(url, {}, 5000);
+        if (res.status === 503 || res.status === 403) {
+          sawBlock = true;
+          continue;
+        }
         if (!res.ok) continue;
         const body = await res.json().catch(() => ({}));
         if (body && body.ok !== false) {
@@ -340,7 +348,7 @@ const Storage = (() => {
         // tenta próximo
       }
     }
-    tripApiBreaker(45 * 1000);
+    tripApiBreaker(sawBlock ? 3 * 60 * 1000 : 45 * 1000);
     cloudEnabled = false;
     return false;
   }
@@ -376,8 +384,12 @@ const Storage = (() => {
       return false;
     }
 
-    // Admin: sempre tenta religar a API (não fica preso no breaker)
-    clearApiBreaker();
+    // Admin: respeita cooldown (não martela Hostinger em 403/503)
+    if (apiCoolingDown()) {
+      lastLoadFromCache = true;
+      cloudEnabled = false;
+      return (getProducts() || []).length > 0 ? 'cache' : false;
+    }
     const reachable = await probeCloud();
     if (!reachable) {
       lastLoadFromCache = true;
