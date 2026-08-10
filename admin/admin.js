@@ -101,11 +101,10 @@ function scheduleCloudReconnect() {
   const tick = async () => {
     if (Storage.isCloudEnabled()) return;
     attempt += 1;
-    // Espera crescer: 20s, 40s, 80s… até ~3 min
-    const waitMs = Math.min(180000, 20000 * (2 ** Math.min(attempt - 1, 3)));
+    // Hostinger 503: não martelar. 2 min, 4 min, 6 min… máx 10 min
+    const waitMs = Math.min(600000, 120000 * Math.min(attempt, 5));
     cloudReconnectTimer = setTimeout(async () => {
       if (Storage.isCloudEnabled()) return;
-      // Só tenta se o cooldown já passou (senão apiFetch nem chama a Hostinger)
       if (Storage.apiCoolingDown?.()) {
         tick();
         return;
