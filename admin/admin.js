@@ -12,6 +12,9 @@
 document.addEventListener('DOMContentLoaded', async () => {
   if (sessionStorage.getItem('admin_logged') !== 'true') return;
 
+  try { Storage.clearApiBreaker?.(); } catch { /* ignore */ }
+  sessionStorage.removeItem('admin_offline');
+
   await Storage.initCloud({ full: true });
   // Polling OFF — estoura "Máximo de processos" na Hostinger
   updateSyncBadge();

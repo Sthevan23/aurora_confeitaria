@@ -287,7 +287,7 @@ const Storage = (() => {
     }
   }
 
-  function tripApiBreaker(ms = 3 * 60 * 1000) {
+  function tripApiBreaker(ms = 45 * 1000) {
     cloudEnabled = false;
     try {
       localStorage.setItem(API_DOWN_KEY, String(Date.now() + ms));
@@ -320,32 +320,29 @@ const Storage = (() => {
   }
 
   async function probeCloud() {
-    if (apiCoolingDown()) {
-      cloudEnabled = false;
-      return false;
-    }
-    try {
-      const res = await fetchWithTimeout(PING + '?t=' + Date.now(), {}, 4000);
-      if (!res.ok) {
-        tripApiBreaker();
-        cloudEnabled = false;
-        return false;
+    // Sempre tenta: limpa breaker antigo e testa ping leve
+    clearApiBreaker();
+    const pings = [
+      PING + '?t=' + Date.now(),
+      API + '?ping=1&t=' + Date.now(),
+    ];
+    for (const url of pings) {
+      try {
+        const res = await fetchWithTimeout(url, {}, 5000);
+        if (!res.ok) continue;
+        const body = await res.json().catch(() => ({}));
+        if (body && body.ok !== false) {
+          clearApiBreaker();
+          cloudEnabled = true;
+          return true;
+        }
+      } catch {
+        // tenta próximo
       }
-      const body = await res.json().catch(() => ({}));
-      const ok = body && body.ok !== false;
-      if (ok) {
-        clearApiBreaker();
-        cloudEnabled = true;
-        return true;
-      }
-      tripApiBreaker();
-      cloudEnabled = false;
-      return false;
-    } catch {
-      tripApiBreaker(5 * 60 * 1000);
-      cloudEnabled = false;
-      return false;
     }
+    tripApiBreaker(45 * 1000);
+    cloudEnabled = false;
+    return false;
   }
 
   function startCloudPolling() {
@@ -379,22 +376,19 @@ const Storage = (() => {
       return false;
     }
 
-    // Admin: se a API está em cooldown 503, não martela de novo
-    if (apiCoolingDown()) {
-      lastLoadFromCache = true;
-      cloudEnabled = false;
-      return (getProducts() || []).length > 0 ? 'cache' : false;
-    }
-
+    // Admin: sempre tenta religar a API (não fica preso no breaker)
+    clearApiBreaker();
     const reachable = await probeCloud();
     if (!reachable) {
       lastLoadFromCache = true;
+      cloudEnabled = false;
       return (getProducts() || []).length > 0 ? 'cache' : false;
     }
 
     const ok = await pullFull();
     if (ok === true) {
       lastLoadFromCache = false;
+      cloudEnabled = true;
       return true;
     }
     if (ok === 'cache' || (getProducts().length > 0)) {
@@ -578,17 +572,15 @@ const Storage = (() => {
   }
 
   async function loginRemote(email, password) {
-    // Se a Hostinger acabou de dar 503, entra local e não martela a API
-    if (apiCoolingDown()) {
-      return loginOfflineFallback(email, password);
-    }
+    // Sempre tenta a API ao logar (liga a nuvem)
+    clearApiBreaker();
 
     try {
       const res = await apiFetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', email, password }),
-      }, 8000);
+      }, 12000, { force: true });
       if (res.status === 503) {
         return loginOfflineFallback(email, password);
       }
