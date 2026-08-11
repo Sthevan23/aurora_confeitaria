@@ -20,6 +20,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateSyncBadge();
   initSyncBadgeRetry();
 
+  if (Storage.isCloudEnabled?.()) {
+    const published = await Storage.publishCatalogAsync?.();
+    if (published) {
+      showToast('Cardápio do site atualizado com o painel (MySQL).', 'success');
+    }
+  }
+
   initSidebar();
   initNavigation();
   initLogout();
@@ -1912,6 +1919,24 @@ function initButtons() {
   document.getElementById('btn-new-order').addEventListener('click', openNewOrderModal);
   document.getElementById('btn-refresh-orders')?.addEventListener('click', () => {
     refreshOrdersFromCloud();
+  });
+  document.getElementById('btn-publish-catalog')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-publish-catalog');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publicando…';
+    }
+    try {
+      Storage.clearApiBreaker?.();
+      const ok = await Storage.publishCatalogAsync?.();
+      if (ok) showToast('Cardápio publicado no site.', 'success');
+      else showToast('Falha ao publicar. Confira se a API está online (Nuvem).', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Publicar cardápio no site';
+      }
+    }
   });
   document.getElementById('btn-new-product').addEventListener('click', () => openProductModal());
   document.getElementById('btn-new-category').addEventListener('click', () => openCategoryModal());

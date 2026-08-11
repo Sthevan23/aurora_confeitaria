@@ -790,6 +790,9 @@ function aurora_write_public_catalog(PDO $pdo): bool {
   // Espelho em api/ (alguns deploys)
   @file_put_contents($root . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'catalog.json', $json);
 
+  // Arquivo "vivo" (não versionado) — sobrevive melhor a confusão com o JSON do Git
+  @file_put_contents($root . DIRECTORY_SEPARATOR . 'catalog.live.json', $json);
+
   return $ok;
 }
 

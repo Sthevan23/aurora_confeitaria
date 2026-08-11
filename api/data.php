@@ -201,6 +201,13 @@ if ($method === 'POST') {
       ], 404);
     }
 
+    // Republika o cardápio do MySQL → catalog.json (evita Git Reimplantar deixar o site velho)
+    try {
+      aurora_write_public_catalog($pdo);
+    } catch (Throwable $e) {
+      // login continua mesmo se o JSON estático falhar
+    }
+
     json_out(['ok' => true, 'data' => $stored]);
   }
 
@@ -291,6 +298,23 @@ if ($method === 'POST') {
       json_out(['ok' => true, 'id' => $productId, 'active' => $active === 1, 'catalog' => true]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao atualizar produto', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  // Publica cardápio MySQL → catalog.json (site estático)
+  if ($actionName === 'publish_catalog') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    try {
+      $wrote = aurora_write_public_catalog($pdo);
+      if (!$wrote) {
+        json_out(['ok' => false, 'error' => 'Não foi possível gravar catalog.json (permissão?).'], 500);
+      }
+      json_out(['ok' => true, 'catalog' => true, 'ts' => time()]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao publicar cardápio', 'detail' => $e->getMessage()], 500);
     }
   }
 

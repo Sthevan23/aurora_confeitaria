@@ -4,7 +4,7 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v7';
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v8';
   const API_DOWN_KEY = 'aurora_api_down_until';
   const DATA_VERSION = 20;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
@@ -402,6 +402,8 @@ const Storage = (() => {
     if (ok === true) {
       lastLoadFromCache = false;
       cloudEnabled = true;
+      // Garante site = MySQL (batatas / Fora / etc. não somem após Reimplantar)
+      try { await publishCatalogAsync(); } catch { /* ignore */ }
       return true;
     }
     if (ok === 'cache' || (getProducts().length > 0)) {
@@ -412,12 +414,15 @@ const Storage = (() => {
   }
 
   async function pullStaticCatalog({ maxAgeMs = null } = {}) {
-    // Sem ?t= — deixa o navegador/cache do Hostinger servir o JSON (sem PHP)
+    // catalog.live.json = publicado pelo admin/MySQL; catalog.json = pode vir velho do Git
     const urls = [
-      'catalog.json',
-      '/catalog.json',
-      'api/catalog.json',
+      'catalog.live.json?t=' + Date.now(),
+      '/catalog.live.json?t=' + Date.now(),
+      'catalog.json?t=' + Date.now(),
+      '/catalog.json?t=' + Date.now(),
+      'api/catalog.json?t=' + Date.now(),
     ];
+    let best = null;
     for (const url of urls) {
       try {
         const res = await fetchWithTimeout(url, {}, 8000);
@@ -429,35 +434,40 @@ const Storage = (() => {
         if (maxAgeMs != null) {
           const gen = Date.parse(remote.generatedAt || '');
           if (!Number.isFinite(gen) || (Date.now() - gen) > maxAgeMs) {
-            continue; // catálogo velho do Git — prefere API/MySQL
+            continue;
           }
         }
-        const merged = {
-          ...emptyStore(),
-          version: remote.version || DATA_VERSION,
-          settings: { ...emptyStore().settings, ...(remote.settings || {}) },
-          categories: remote.categories || [],
-          products: hydrateProductImages(remote.products || []).filter((p) => p && p.active !== false),
-          reviews: remote.reviews || [],
-          faq: remote.faq || [],
-          gallery: remote.gallery || [],
-          coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
-          clients: [],
-          orders: [],
-          finance: [],
-          auth: { email: '', password: '' },
-        };
-        setMemory(merged);
-        savePublicCache(merged);
-        lastLoadFromCache = false;
-        // Catálogo estático ≠ API MySQL online
-        notifyUpdated();
-        return true;
+        const ver = Number(remote.version) || 0;
+        const gen = Date.parse(remote.generatedAt || '') || 0;
+        if (!best || ver > best.ver || (ver === best.ver && gen > best.gen)) {
+          best = { remote, ver, gen };
+        }
       } catch {
         // tenta próxima url
       }
     }
-    return false;
+    if (!best) return false;
+    const remote = best.remote;
+    const merged = {
+      ...emptyStore(),
+      version: remote.version || DATA_VERSION,
+      settings: { ...emptyStore().settings, ...(remote.settings || {}) },
+      categories: remote.categories || [],
+      products: hydrateProductImages(remote.products || []).filter((p) => p && p.active !== false),
+      reviews: remote.reviews || [],
+      faq: remote.faq || [],
+      gallery: remote.gallery || [],
+      coupons: Array.isArray(remote.coupons) ? remote.coupons : [],
+      clients: [],
+      orders: [],
+      finance: [],
+      auth: { email: '', password: '' },
+    };
+    setMemory(merged);
+    savePublicCache(merged);
+    lastLoadFromCache = false;
+    notifyUpdated();
+    return true;
   }
 
   async function pullPublic() {
@@ -659,6 +669,26 @@ const Storage = (() => {
     const data = getAll();
     data.products = products;
     return saveAsync(data);
+  }
+
+  async function publishCatalogAsync() {
+    const password = getAdminPassword();
+    if (!password) return false;
+    try {
+      clearApiBreaker();
+      const res = await apiFetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({ action: 'publish_catalog' }),
+      }, 20000, { force: true });
+      const result = await res.json().catch(() => ({}));
+      return !!(res.ok && result.ok !== false);
+    } catch {
+      return false;
+    }
   }
 
   async function setProductActiveAsync(productId, active) {
@@ -1110,7 +1140,7 @@ const Storage = (() => {
   return {
     init, getAll, save,
     getSettings, saveSettings,
-    getProducts, saveProducts, saveProductsAsync, setProductActiveAsync,
+    getProducts, saveProducts, saveProductsAsync, setProductActiveAsync, publishCatalogAsync,
     getCategories, saveCategories,
     getClients, saveClients,
     getOrders, saveOrders,
