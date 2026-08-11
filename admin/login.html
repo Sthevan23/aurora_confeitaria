@@ -1,10 +1,10 @@
-ï»¿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>Login â€” Aurora Admin</title>
+  <title>Login — Aurora Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -27,7 +27,7 @@
       <div class="login__form-container">
         <div class="login__header">
           <h2>Bem-vindo de volta</h2>
-          <p>FaÃ§a login para acessar o painel</p>
+          <p>Faça login para acessar o painel</p>
         </div>
 
         <form id="login-form" class="login__form">
@@ -38,7 +38,7 @@
           <div class="form-group">
             <label for="password"><i class="fas fa-lock"></i> Senha</label>
             <div class="input-password">
-              <input type="password" id="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required autocomplete="current-password">
+              <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
               <button type="button" class="toggle-password" aria-label="Mostrar senha"><i class="fas fa-eye"></i></button>
             </div>
           </div>
@@ -56,7 +56,7 @@
 
         <a href="../index.html" class="login__back"><i class="fas fa-arrow-left"></i> Voltar ao site</a>
 
-        <p class="login__private-note"><i class="fas fa-cloud"></i> Pedidos e financeiro sincronizam entre celulares apÃ³s o login.</p>
+        <p class="login__private-note"><i class="fas fa-cloud"></i> Pedidos e financeiro sincronizam entre celulares após o login.</p>
       </div>
     </div>
   </div>
@@ -67,7 +67,7 @@
     <div class="modal__content">
       <button class="modal__close" aria-label="Fechar"><i class="fas fa-times"></i></button>
       <h3><i class="fas fa-key"></i> Recuperar Senha</h3>
-      <p>Digite seu e-mail para receber instruÃ§Ãµes de recuperaÃ§Ã£o.</p>
+      <p>Digite seu e-mail para receber instruções de recuperação.</p>
       <form id="recover-form">
         <div class="form-group">
           <label for="recover-email">E-mail</label>
@@ -79,7 +79,7 @@
   </div>
 
   <script src="../js/default-data.js?v=20"></script>
-  <script src="../js/storage.js?v=49"></script>
+  <script src="../js/storage.js?v=50"></script>
   <script>
     if (sessionStorage.getItem('admin_logged') === 'true') {
       window.location.href = 'index.html';
@@ -94,7 +94,7 @@
     });
 
     // Fallback embutido: se a Hostinger estiver em 503 e o storage antigo estiver em cache,
-    // ainda assim libera a entrada no painel com a senha padrÃ£o.
+    // ainda assim libera a entrada no painel com a senha padrão.
     async function emergencyLocalLogin(email, password) {
       const expectedEmail = 'auroraconfeitaria2022@gmail.com';
       const expectedPass = (typeof AURORA_DEFAULT_DATA !== 'undefined' && AURORA_DEFAULT_DATA?.auth?.password)
@@ -168,7 +168,7 @@
           window.location.href = 'index.html';
           return;
         }
-        errorEl.textContent = 'Erro de conexÃ£o. Confira e-mail/senha e tente de novo.';
+        errorEl.textContent = 'Erro de conexão. Confira e-mail/senha e tente de novo.';
         errorEl.style.display = 'block';
       } finally {
         btn.disabled = false;
@@ -187,7 +187,7 @@
     document.getElementById('recover-form').addEventListener('submit', (e) => {
       e.preventDefault();
       modal.classList.remove('active');
-      alert('PeÃ§a a senha ao responsÃ¡vel da confeitaria.');
+      alert('Peça a senha ao responsável da confeitaria.');
     });
   </script>
 </body>
