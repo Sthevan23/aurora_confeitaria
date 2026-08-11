@@ -4,9 +4,9 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v8';
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v9';
   const API_DOWN_KEY = 'aurora_api_down_until';
-  const DATA_VERSION = 20;
+  const DATA_VERSION = 21;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
   const PRODUCTION_PING = 'https://auroraconfeitaria.com.br/api/ping.php';
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname || '');
@@ -233,19 +233,39 @@ const Storage = (() => {
     return memoryData;
   }
 
+  function bumpCatalogVersion(data) {
+    const current = Number(data?.version) || 0;
+    data.version = Math.max(current, DATA_VERSION - 1) + 1;
+    data.generatedAt = new Date().toISOString();
+    return data;
+  }
+
   function save(data) {
-    data.version = data.version || DATA_VERSION;
+    bumpCatalogVersion(data);
     setMemory(data);
     notifyUpdated();
     // fire-and-forget (compatível com o resto do admin)
-    pushToCloud(data).catch(() => {});
+    pushToCloud(data).then((result) => {
+      if (result && result.ok) {
+        try { savePublicCache(data); } catch { /* ignore */ }
+        if (!result.catalog) {
+          publishCatalogAsync().catch(() => {});
+        }
+      }
+    }).catch(() => {});
   }
 
   async function saveAsync(data) {
-    data.version = data.version || DATA_VERSION;
+    bumpCatalogVersion(data);
     setMemory(data);
     notifyUpdated();
-    return pushToCloud(data);
+    const pushed = await pushToCloud(data);
+    if (!pushed || !pushed.ok) return false;
+    try { savePublicCache(data); } catch { /* ignore */ }
+    if (pushed.catalog) return true;
+    // MySQL ok, mas JSON do site falhou — tenta publicar de novo
+    const published = await publishCatalogAsync();
+    return !!published;
   }
 
   function getAdminPassword() {
@@ -413,38 +433,68 @@ const Storage = (() => {
     return false;
   }
 
-  async function pullStaticCatalog({ maxAgeMs = null } = {}) {
-    // catalog.live.json = publicado pelo admin/MySQL; catalog.json = pode vir velho do Git
-    const urls = [
-      'catalog.live.json?t=' + Date.now(),
-      '/catalog.live.json?t=' + Date.now(),
-      'catalog.json?t=' + Date.now(),
-      '/catalog.json?t=' + Date.now(),
-      'api/catalog.json?t=' + Date.now(),
-    ];
+  async function fetchCatalogCandidate(url, maxAgeMs) {
+    const res = await fetchWithTimeout(url, {}, 8000);
+    if (!res.ok) return null;
+    const remote = await res.json();
+    if (!remote || !remote.settings || !Array.isArray(remote.products) || !remote.products.length) {
+      return null;
+    }
+    if (maxAgeMs != null) {
+      const gen = Date.parse(remote.generatedAt || '');
+      if (!Number.isFinite(gen) || (Date.now() - gen) > maxAgeMs) {
+        return null;
+      }
+    }
+    return {
+      remote,
+      ver: Number(remote.version) || 0,
+      gen: Date.parse(remote.generatedAt || '') || 0,
+      productCount: remote.products.length,
+    };
+  }
+
+  async function pickBestCatalog(urls, maxAgeMs) {
     let best = null;
     for (const url of urls) {
       try {
-        const res = await fetchWithTimeout(url, {}, 8000);
-        if (!res.ok) continue;
-        const remote = await res.json();
-        if (!remote || !remote.settings || !Array.isArray(remote.products) || !remote.products.length) {
-          continue;
-        }
-        if (maxAgeMs != null) {
-          const gen = Date.parse(remote.generatedAt || '');
-          if (!Number.isFinite(gen) || (Date.now() - gen) > maxAgeMs) {
-            continue;
-          }
-        }
-        const ver = Number(remote.version) || 0;
-        const gen = Date.parse(remote.generatedAt || '') || 0;
-        if (!best || ver > best.ver || (ver === best.ver && gen > best.gen)) {
-          best = { remote, ver, gen };
+        const candidate = await fetchCatalogCandidate(url, maxAgeMs);
+        if (!candidate) continue;
+        if (
+          !best ||
+          candidate.ver > best.ver ||
+          (candidate.ver === best.ver && candidate.gen > best.gen) ||
+          (candidate.ver === best.ver && candidate.gen === best.gen && candidate.productCount > best.productCount)
+        ) {
+          best = candidate;
         }
       } catch {
         // tenta próxima url
       }
+    }
+    return best;
+  }
+
+  async function pullStaticCatalog({ maxAgeMs = null } = {}) {
+    // 1) Endpoint PHP leve (só lê arquivo, sem MySQL) — fura cache CDN
+    // 2) catalog.live.json (publicado pelo admin)
+    // 3) catalog.json do Git (pode estar velho)
+    const liveUrls = [
+      'api/public-catalog.php?t=' + Date.now(),
+      '/api/public-catalog.php?t=' + Date.now(),
+      'catalog.live.json?t=' + Date.now(),
+      '/catalog.live.json?t=' + Date.now(),
+      'api/catalog.live.json?t=' + Date.now(),
+      '/api/catalog.live.json?t=' + Date.now(),
+    ];
+    const gitUrls = [
+      'catalog.json?t=' + Date.now(),
+      '/catalog.json?t=' + Date.now(),
+      'api/catalog.json?t=' + Date.now(),
+    ];
+    let best = await pickBestCatalog(liveUrls, maxAgeMs);
+    if (!best) {
+      best = await pickBestCatalog(gitUrls, maxAgeMs);
     }
     if (!best) return false;
     const remote = best.remote;
@@ -515,12 +565,12 @@ const Storage = (() => {
 
   async function pushToCloud(data) {
     const password = getAdminPassword() || (data.auth && data.auth.password) || '';
-    if (!password) return false;
+    if (!password) return { ok: false, catalog: false };
 
     // Evita corrida: se já está enviando, agenda o mais recente
     if (pushInFlight) {
       pendingPushData = data;
-      return false;
+      return { ok: false, catalog: false, queued: true };
     }
 
     pushInFlight = true;
@@ -545,22 +595,33 @@ const Storage = (() => {
       }
 
       if (res.ok && result.ok !== false) {
+        if (result.version) data.version = Number(result.version) || data.version;
         setMemory(data);
         lastRemoteJson = JSON.stringify(data);
         cloudEnabled = true;
-        return true;
+        return {
+          ok: true,
+          catalog: result.catalog !== false,
+          version: Number(result.version) || data.version,
+        };
       }
       console.warn('[Aurora] Falha ao salvar na nuvem', res.status, result);
-      return false;
+      return { ok: false, catalog: false, error: result.error || '' };
     } catch (err) {
       console.warn('[Aurora] Erro de rede ao salvar', err);
-      return false;
+      return { ok: false, catalog: false };
     } finally {
       pushInFlight = false;
       if (pendingPushData) {
         const next = pendingPushData;
         pendingPushData = null;
-        await pushToCloud(next);
+        const queuedResult = await pushToCloud(next);
+        if (queuedResult && queuedResult.ok) {
+          try { savePublicCache(next); } catch { /* ignore */ }
+          if (!queuedResult.catalog) {
+            try { await publishCatalogAsync(); } catch { /* ignore */ }
+          }
+        }
       }
     }
   }
@@ -685,10 +746,26 @@ const Storage = (() => {
         body: JSON.stringify({ action: 'publish_catalog' }),
       }, 20000, { force: true });
       const result = await res.json().catch(() => ({}));
-      return !!(res.ok && result.ok !== false);
+      const ok = !!(res.ok && result.ok !== false);
+      if (ok) {
+        if (result.version) {
+          const data = getAll();
+          data.version = Number(result.version) || data.version;
+          setMemory(data);
+        }
+        try { savePublicCache(getAll()); } catch { /* ignore */ }
+        cloudEnabled = true;
+      }
+      return ok;
     } catch {
       return false;
     }
+  }
+
+  async function saveCategoriesAsync(categories) {
+    const data = getAll();
+    data.categories = categories;
+    return saveAsync(data);
   }
 
   async function setProductActiveAsync(productId, active) {
@@ -724,6 +801,10 @@ const Storage = (() => {
       notifyUpdated();
       cloudEnabled = true;
       try { sessionStorage.removeItem('admin_offline'); } catch { /* ignore */ }
+      // set_product_active já tenta gravar o catalog no PHP; reforça se falhou
+      if (result.catalog === false) {
+        try { await publishCatalogAsync(); } catch { /* ignore */ }
+      }
       return true;
     } catch {
       return false;
@@ -860,12 +941,25 @@ const Storage = (() => {
     return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  function coerceMoney(value) {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const raw = String(value).trim().replace(/[^\d,.-]/g, '');
+    if (!raw) return 0;
+    // Aceita "38,99" (pt-BR) e "38.99"
+    const normalized = raw.includes(',')
+      ? raw.replace(/\./g, '').replace(',', '.')
+      : raw;
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+  }
+
   function productDisplayPrice(product) {
-    const list = Number(product.price || 0);
-    if (product.promoActive && product.promoPrice != null && product.promoPrice >= 0) {
-      const promo = Number(product.promoPrice);
+    const list = coerceMoney(product?.price);
+    if (product?.promoActive && product?.promoPrice != null && product.promoPrice !== '') {
+      const promo = coerceMoney(product.promoPrice);
       // Promo só vale se for menor; senão mantém o mesmo valor do preço
-      if (promo < list) return promo;
+      if (promo > 0 && promo < list) return promo;
     }
     return list;
   }
@@ -1141,7 +1235,7 @@ const Storage = (() => {
     init, getAll, save,
     getSettings, saveSettings,
     getProducts, saveProducts, saveProductsAsync, setProductActiveAsync, publishCatalogAsync,
-    getCategories, saveCategories,
+    getCategories, saveCategories, saveCategoriesAsync,
     getClients, saveClients,
     getOrders, saveOrders,
     getFinance, saveFinance, addFinanceEntry, deleteFinanceEntry, getFinanceSummary,
@@ -1149,7 +1243,7 @@ const Storage = (() => {
     getReviews, getFaq, getGallery,
     login, loginAsync, updatePassword,
     generateId, generateOrderNumber,
-    getCategoryName, formatCurrency, productDisplayPrice,
+    getCategoryName, formatCurrency, coerceMoney, productDisplayPrice,
     getDashboardStats, getMonthlyRevenue,
     getFinishedOrdersByPeriod, getProductSalesBreakdown, getSalesPeriodStats,
     initCloud, pullFull, pullPublic, pushToCloud, saveAsync,

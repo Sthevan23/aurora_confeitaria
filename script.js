@@ -14,7 +14,8 @@ const CATEGORY_LABELS = {
   'cat-especiais': 'Especiais',
 };
 
-const FILTERS = ['all', 'cat-copos', 'cat-sandu', 'cat-cookies', 'cat-potes', 'cat-salgados', 'cat-bolos', 'cat-especiais'];
+/** Ordem preferida dos filtros fixos; categorias novas do admin entram depois. */
+const FILTER_ORDER = ['cat-copos', 'cat-sandu', 'cat-cookies', 'cat-potes', 'cat-salgados', 'cat-bolos', 'cat-especiais'];
 
 let activeFilter = 'all';
 let selectedProduct = null;
@@ -350,7 +351,9 @@ function displayPrice(product, flavor) {
   const money = Storage.formatCurrency(sale);
   const hasFlavorPrice = flavor && product.flavorPrices && product.flavorPrices[flavor] != null;
   const label = product.priceFrom && !hasFlavorPrice ? `a partir de ${money}` : money;
-  const list = Number(product.price) || 0;
+  const list = Storage.coerceMoney
+    ? Storage.coerceMoney(product.price)
+    : (Number(product.price) || 0);
   // Só risca preço antigo se a promo for realmente menor (evita 29 riscado + 29 / valores diferentes)
   if (
     !hasFlavorPrice &&
@@ -366,15 +369,19 @@ function displayPrice(product, flavor) {
 
 function resolveProductPrice(product, flavor) {
   if (flavor && product.flavorPrices && product.flavorPrices[flavor] != null) {
-    const flavorPrice = Number(product.flavorPrices[flavor]);
+    const flavorPrice = Storage.coerceMoney
+      ? Storage.coerceMoney(product.flavorPrices[flavor])
+      : Number(product.flavorPrices[flavor]);
     // Se o sabor usa o preço cheio e há promoção, mantém a promo
     if (
       product.promoActive &&
       product.promoPrice != null &&
-      Number(product.price) > 0 &&
-      flavorPrice === Number(product.price)
+      (Storage.coerceMoney ? Storage.coerceMoney(product.price) : Number(product.price)) > 0 &&
+      flavorPrice === (Storage.coerceMoney ? Storage.coerceMoney(product.price) : Number(product.price))
     ) {
-      return Number(product.promoPrice);
+      return Storage.coerceMoney
+        ? Storage.coerceMoney(product.promoPrice)
+        : Number(product.promoPrice);
     }
     return flavorPrice;
   }
@@ -416,6 +423,15 @@ function imgTag(path, alt, className = '') {
   const fallback = imgSrc(FALLBACK_IMG);
   const cls = className ? ` class="${className}"` : '';
   const safeAlt = String(alt || '').replace(/"/g, '&quot;');
+  // Se o arquivo sumiu no Reimplantar Git, tenta photo.php (restaura do MySQL uma vez).
+  const clean = String(path || '').trim().replace(/^\//, '');
+  const m = clean.match(/^products\/([a-zA-Z0-9._-]+\.(jpe?g|png|webp|gif))$/i);
+  const photoApi = m ? imgSrc(`api/photo.php?f=${encodeURIComponent(m[1])}`) : '';
+  if (photoApi && photoApi !== src) {
+    const safePhoto = photoApi.replace(/'/g, '%27');
+    const safeFb = fallback.replace(/'/g, '%27');
+    return `<img${cls} src="${src}" alt="${safeAlt}" loading="lazy" decoding="async" onerror="this.onerror=function(){this.onerror=null;this.src='${safeFb}'};this.src='${safePhoto}'">`;
+  }
   return `<img${cls} src="${src}" alt="${safeAlt}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${fallback}'">`;
 }
 
@@ -653,10 +669,36 @@ function renderMarquee() {
     .join('');
 }
 
+function getFilterKeys() {
+  const products = getProducts();
+  const used = new Set(products.map((p) => p.categoryId).filter(Boolean));
+  const categories = (Storage.getCategories?.() || []).filter((c) => c && c.id && used.has(c.id));
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const ordered = [];
+  FILTER_ORDER.forEach((id) => {
+    if (byId.has(id)) ordered.push(id);
+  });
+  categories.forEach((c) => {
+    if (!ordered.includes(c.id)) ordered.push(c.id);
+  });
+  return ['all', ...ordered];
+}
+
+function filterLabel(key) {
+  if (key === 'all') return 'Todos';
+  if (CATEGORY_LABELS[key]) return CATEGORY_LABELS[key];
+  return Storage.getCategoryName(key) || key;
+}
+
 function renderFilters() {
   const box = document.getElementById('category-filter');
-  box.innerHTML = FILTERS.map((key) => {
-    const label = CATEGORY_LABELS[key] || key;
+  if (!box) return;
+  const keys = getFilterKeys();
+  if (activeFilter !== 'all' && !keys.includes(activeFilter)) {
+    activeFilter = 'all';
+  }
+  box.innerHTML = keys.map((key) => {
+    const label = filterLabel(key);
     return `<button type="button" class="filter-btn ${activeFilter === key ? 'is-active' : ''}" data-filter="${key}">${label}</button>`;
   }).join('');
 

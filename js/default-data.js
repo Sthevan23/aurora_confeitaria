@@ -1,5 +1,5 @@
 const AURORA_DEFAULT_DATA = {
-  "version": 16,
+  "version": 19,
   "settings": {
     "name": "Aurora Confeitaria Artesanal",
     "tagline": "Feito com amor",
@@ -34,7 +34,8 @@ const AURORA_DEFAULT_DATA = {
     { "id": "cat-potes", "name": "Potes", "slug": "potes" },
     { "id": "cat-salgados", "name": "Salgados", "slug": "salgados" },
     { "id": "cat-bolos", "name": "Bolos", "slug": "bolos" },
-    { "id": "cat-especiais", "name": "Especiais", "slug": "especiais" }
+    { "id": "cat-especiais", "name": "Especiais", "slug": "especiais" },
+    { "id": "catmsjfwries1yyd", "name": "Batatas Recheadas", "slug": "batatas-recheadas" }
   ],
   "products": [
     {
@@ -285,6 +286,60 @@ const AURORA_DEFAULT_DATA = {
       "promoLabel": "",
       "bestSeller": true,
       "active": true
+    },
+    {
+      "id": "pmsjfzy4d1y3o0",
+      "name": "Batata Recheada Bacon ao Molho Cheddar",
+      "description": "Batata recheada de bacon ao molho de Cheddar, finalizada com mussarela, farofa de bacon, cheiro verde e requeijão cremoso!",
+      "price": 38.99,
+      "categoryId": "catmsjfwries1yyd",
+      "image": "products/ff5af67f-a560-0e09-6780-720d72c4d117.jpg",
+      "featured": true,
+      "slug": "batata-recheada-bacon-ao-molho-cheddar-zy4d",
+      "size": "500g",
+      "flavors": [],
+      "promoActive": false,
+      "promoPrice": null,
+      "promoLabel": "",
+      "bestSeller": false,
+      "active": true,
+      "available": true
+    },
+    {
+      "id": "pmsjg1qrlmkkd9",
+      "name": "Batata Recheada Carne desfiada ao molho Branco",
+      "description": "Batata recheada com Carne desfiada ao molho branco, finalizada com mussarela, farofa de bacon, cheiro verde e requeijão cremoso!",
+      "price": 41.99,
+      "categoryId": "catmsjfwries1yyd",
+      "image": "products/84cab5a9-4a09-aa23-e959-a75da32488c5.jpg",
+      "featured": true,
+      "slug": "batata-recheada-carne-desfiada-ao-molho-branco-1qrl",
+      "size": "500g",
+      "flavors": [],
+      "promoActive": false,
+      "promoPrice": null,
+      "promoLabel": "",
+      "bestSeller": false,
+      "active": true,
+      "available": true
+    },
+    {
+      "id": "pmsjg3utv3oatp",
+      "name": "Batata Recheada Strogonoff de Frango",
+      "description": "Batata recheada de Strogonoffe de Frango, finalizada com mussarela, farofa de bacon, cheiro verde e requeijão cremoso!",
+      "price": 35.99,
+      "categoryId": "catmsjfwries1yyd",
+      "image": "products/af5f4ce3-3afe-7919-6e0e-ff943b951b76.jpg",
+      "featured": true,
+      "slug": "batata-recheada-strogonoff-de-frango-3utv",
+      "size": "500g",
+      "flavors": [],
+      "promoActive": false,
+      "promoPrice": null,
+      "promoLabel": "",
+      "bestSeller": false,
+      "active": true,
+      "available": true
     }
   ],
   "clients": [],
