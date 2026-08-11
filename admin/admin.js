@@ -1247,7 +1247,13 @@ function openProductModal(product = null) {
         return;
       }
 
+      // Garante republicação do JSON do cardápio (preço/foto no site)
+      const published = await Storage.publishCatalogAsync?.();
       closeModal();
+      if (published === false) {
+        showToast('Salvou no banco, mas o site pode estar atrasado. Clique em “Publicar cardápio no site”.', 'error');
+        return;
+      }
       showToast(isEdit ? 'Produto atualizado no site!' : 'Produto publicado no site!', 'success');
     } catch (err) {
       showToast(err.message || 'Falha ao salvar produto.', 'error');
@@ -1265,12 +1271,18 @@ function editProduct(id) {
   if (product) openProductModal(product);
 }
 
-function deleteProduct(id) {
+async function deleteProduct(id) {
   if (!confirm('Deseja excluir este produto?')) return;
-  Storage.saveProducts(Storage.getProducts().filter(p => p.id !== id));
+  const products = Storage.getProducts().filter(p => p.id !== id);
+  const ok = await Storage.saveProductsAsync(products);
   renderProducts();
   renderDashboard();
-  showToast('Produto excluído.', 'success');
+  if (!ok) {
+    showToast('Excluiu só neste celular. Tente de novo com a nuvem online.', 'error');
+    return;
+  }
+  await Storage.publishCatalogAsync?.();
+  showToast('Produto excluído do site.', 'success');
 }
 
 /* --- Categorias --- */
@@ -1322,7 +1334,7 @@ function openCategoryModal(category = null) {
     }
   });
 
-  document.getElementById('category-form').addEventListener('submit', (e) => {
+  document.getElementById('category-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const categories = Storage.getCategories();
     const data = {
@@ -1337,10 +1349,15 @@ function openCategoryModal(category = null) {
       categories.push({ id: Storage.generateId('cat'), ...data });
     }
 
-    Storage.saveCategories(categories);
+    const ok = await Storage.saveCategoriesAsync(categories);
     closeModal();
     renderCategories();
-    showToast(isEdit ? 'Categoria atualizada!' : 'Categoria criada!', 'success');
+    if (!ok) {
+      showToast('Categoria ficou só neste celular. Tente de novo.', 'error');
+      return;
+    }
+    await Storage.publishCatalogAsync?.();
+    showToast(isEdit ? 'Categoria atualizada no site!' : 'Categoria criada no site!', 'success');
   });
 }
 
@@ -1349,16 +1366,21 @@ function editCategory(id) {
   if (cat) openCategoryModal(cat);
 }
 
-function deleteCategory(id) {
+async function deleteCategory(id) {
   const products = Storage.getProducts().filter(p => p.categoryId === id);
   if (products.length > 0) {
     showToast('Não é possível excluir: existem produtos nesta categoria.', 'error');
     return;
   }
   if (!confirm('Deseja excluir esta categoria?')) return;
-  Storage.saveCategories(Storage.getCategories().filter(c => c.id !== id));
+  const ok = await Storage.saveCategoriesAsync(Storage.getCategories().filter(c => c.id !== id));
   renderCategories();
-  showToast('Categoria excluída.', 'success');
+  if (!ok) {
+    showToast('Excluiu só neste celular. Tente de novo.', 'error');
+    return;
+  }
+  await Storage.publishCatalogAsync?.();
+  showToast('Categoria excluída do site.', 'success');
 }
 
 /* --- Clientes --- */

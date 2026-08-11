@@ -310,9 +310,14 @@ if ($method === 'POST') {
     try {
       $wrote = aurora_write_public_catalog($pdo);
       if (!$wrote) {
-        json_out(['ok' => false, 'error' => 'Não foi possível gravar catalog.json (permissão?).'], 500);
+        json_out(['ok' => false, 'error' => 'Não foi possível gravar catalog.live.json (permissão?).'], 500);
       }
-      json_out(['ok' => true, 'catalog' => true, 'ts' => time()]);
+      json_out([
+        'ok' => true,
+        'catalog' => true,
+        'version' => (int) ($GLOBALS['aurora_last_catalog_version'] ?? 0),
+        'ts' => time(),
+      ]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao publicar cardápio', 'detail' => $e->getMessage()], 500);
     }
@@ -415,7 +420,20 @@ if ($method === 'POST') {
 
   try {
     aurora_save_all($pdo, $payload);
-    json_out(['ok' => true]);
+    $catalogOk = !empty($GLOBALS['aurora_last_catalog_write']);
+    // Se o save não republicou, tenta de novo explicitamente
+    if (!$catalogOk) {
+      try {
+        $catalogOk = aurora_write_public_catalog($pdo);
+      } catch (Throwable $e) {
+        $catalogOk = false;
+      }
+    }
+    json_out([
+      'ok' => true,
+      'catalog' => (bool) $catalogOk,
+      'version' => (int) ($GLOBALS['aurora_last_catalog_version'] ?? ($payload['version'] ?? 0)),
+    ]);
   } catch (Throwable $e) {
     json_out(['error' => 'Falha ao salvar', 'detail' => $e->getMessage()], 500);
   }

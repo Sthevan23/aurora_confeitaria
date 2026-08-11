@@ -28,10 +28,12 @@ DirectoryIndex index.html
   # backup MySQL fica só no upload / photo.php?f= manual quando a API estiver ok.
 </IfModule>
 
-# Catálogo estático — sem cache longo (No site / Fora precisa refletir na hora)
+# Catálogo público — nunca cachear (preço/foto do painel precisam refletir na hora)
 <IfModule mod_headers.c>
   <FilesMatch "^(catalog\.json|catalog\.live\.json)$">
-    Header set Cache-Control "no-store, max-age=0"
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
   </FilesMatch>
 </IfModule>
 
@@ -40,5 +42,5 @@ DirectoryIndex index.html
   ExpiresByType image/jpeg "access plus 7 days"
   ExpiresByType image/png "access plus 7 days"
   ExpiresByType image/webp "access plus 7 days"
-  ExpiresByType application/json "access plus 2 minutes"
+  # JSON do cardápio NÃO entra em expires — ver FilesMatch acima
 </IfModule>

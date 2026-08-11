@@ -715,15 +715,19 @@ function aurora_save_all(PDO $pdo, array $payload): void {
   }
 
   // Cardápio estático (não depende de PHP nas visitas do site)
+  $catalogOk = false;
   try {
-    aurora_write_public_catalog($pdo);
+    $catalogOk = aurora_write_public_catalog($pdo);
   } catch (Throwable $e) {
-    // não falha o save se o JSON estático não gravar
+    $catalogOk = false;
   }
+  // Guarda o resultado no PDO via variável estática para o caller (data.php)
+  $GLOBALS['aurora_last_catalog_write'] = $catalogOk;
 }
 
 /**
- * Grava catalog.json na raiz do site — HTML/JS leem sem MySQL/PHP.
+ * Grava catalog.json / catalog.live.json — HTML/JS leem sem MySQL/PHP.
+ * Retorna true se pelo menos um arquivo “vivo” foi gravado.
  */
 function aurora_write_public_catalog(PDO $pdo): bool {
   $data = aurora_load_all($pdo, 'public');
@@ -766,8 +770,11 @@ function aurora_write_public_catalog(PDO $pdo): bool {
     $products[] = $p;
   }
 
+  // Versão vem do MySQL (o admin sobe ao salvar). generatedAt muda a cada publicação.
+  $version = max(1, (int) ($data['version'] ?? 16));
+
   $payload = [
-    'version' => $data['version'] ?? 16,
+    'version' => $version,
     'generatedAt' => gmdate('c'),
     'settings' => $data['settings'] ?? new stdClass(),
     'categories' => $data['categories'] ?? [],
@@ -785,15 +792,46 @@ function aurora_write_public_catalog(PDO $pdo): bool {
   if ($json === false) return false;
 
   $root = dirname(__DIR__);
-  $ok = @file_put_contents($root . DIRECTORY_SEPARATOR . 'catalog.json', $json) !== false;
+  $apiDir = $root . DIRECTORY_SEPARATOR . 'api';
+  $targets = [
+    $root . DIRECTORY_SEPARATOR . 'catalog.live.json',
+    $apiDir . DIRECTORY_SEPARATOR . 'catalog.live.json',
+    $root . DIRECTORY_SEPARATOR . 'catalog.json',
+    $apiDir . DIRECTORY_SEPARATOR . 'catalog.json',
+  ];
 
-  // Espelho em api/ (alguns deploys)
-  @file_put_contents($root . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'catalog.json', $json);
+  $wroteLive = false;
+  $wroteAny = false;
+  foreach ($targets as $path) {
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+      @mkdir($dir, 0755, true);
+    }
+    // Escreve via temp + rename (mais confiável em Hostinger/NFS)
+    $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
+    $ok = @file_put_contents($tmp, $json, LOCK_EX) !== false;
+    if ($ok) {
+      if (!@rename($tmp, $path)) {
+        $ok = @file_put_contents($path, $json, LOCK_EX) !== false;
+        @unlink($tmp);
+      }
+    } else {
+      @unlink($tmp);
+      $ok = @file_put_contents($path, $json, LOCK_EX) !== false;
+    }
+    if ($ok) {
+      @chmod($path, 0644);
+      $wroteAny = true;
+      if (str_contains($path, 'catalog.live.json')) {
+        $wroteLive = true;
+      }
+    }
+  }
 
-  // Arquivo "vivo" (não versionado) — sobrevive melhor a confusão com o JSON do Git
-  @file_put_contents($root . DIRECTORY_SEPARATOR . 'catalog.live.json', $json);
-
-  return $ok;
+  $GLOBALS['aurora_last_catalog_write'] = $wroteLive || $wroteAny;
+  $GLOBALS['aurora_last_catalog_version'] = $version;
+  // Sucesso se gravou o live (preferido) ou ao menos o catalog.json
+  return $wroteLive || $wroteAny;
 }
 
 function aurora_upsert_client(PDO $pdo, array $client): ?string {

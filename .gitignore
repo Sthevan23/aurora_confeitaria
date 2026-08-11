@@ -7,3 +7,5 @@ node_modules/
 *.zip
 api/config.local.php
 catalog.live.json
+api/catalog.live.json
+api/catalog.json
