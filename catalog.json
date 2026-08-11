@@ -1,5 +1,5 @@
 {
-  "version": 17,
+  "version": 18,
   "generatedAt": "2026-08-11T16:22:08+00:00",
   "settings": {
     "name": "Aurora Confeitaria Artesanal",
@@ -93,7 +93,7 @@
       "promoPrice": null,
       "promoLabel": "",
       "bestSeller": true,
-      "active": true,
+      "active": false,
       "available": true,
       "flavorPrices": {
         "Ninho com Nutella": 29,
@@ -136,7 +136,7 @@
       "promoPrice": null,
       "promoLabel": "Promoção",
       "bestSeller": true,
-      "active": true,
+      "active": false,
       "available": true
     },
     {

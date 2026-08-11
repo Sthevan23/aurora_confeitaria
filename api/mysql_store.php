@@ -744,7 +744,7 @@ function aurora_write_public_catalog(PDO $pdo): bool {
   $products = [];
   foreach ($data['products'] ?? [] as $p) {
     if (!is_array($p)) continue;
-    if (isset($p['active']) && !$p['active']) continue;
+    if (((int) (!empty($p['active']) ? 1 : 0)) !== 1) continue;
     $img = (string) ($p['image'] ?? '');
     // data-URL → arquivo + backup MySQL (catalog.json não pode ficar gigante)
     if (str_starts_with($img, 'data:')) {

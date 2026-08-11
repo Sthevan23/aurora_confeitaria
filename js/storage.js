@@ -4,7 +4,7 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v6';
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v7';
   const API_DOWN_KEY = 'aurora_api_down_until';
   const DATA_VERSION = 20;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
@@ -126,7 +126,8 @@ const Storage = (() => {
 
   function applyPublicCache(cached) {
     if (!cached) return false;
-    const products = hydrateProductImages(cached.products || []);
+    const products = hydrateProductImages(cached.products || [])
+      .filter((p) => p && p.active !== false);
     if (!products.length) return false;
     setMemory({
       ...emptyStore(),
@@ -436,7 +437,7 @@ const Storage = (() => {
           version: remote.version || DATA_VERSION,
           settings: { ...emptyStore().settings, ...(remote.settings || {}) },
           categories: remote.categories || [],
-          products: hydrateProductImages(remote.products || []),
+          products: hydrateProductImages(remote.products || []).filter((p) => p && p.active !== false),
           reviews: remote.reviews || [],
           faq: remote.faq || [],
           gallery: remote.gallery || [],

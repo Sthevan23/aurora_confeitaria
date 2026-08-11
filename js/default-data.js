@@ -58,7 +58,7 @@ const AURORA_DEFAULT_DATA = {
       "promoPrice": null,
       "promoLabel": "",
       "bestSeller": true,
-      "active": true,
+      "active": false,
       "available": true
     },
     {
@@ -123,7 +123,7 @@ const AURORA_DEFAULT_DATA = {
       "promoPrice": null,
       "promoLabel": "",
       "bestSeller": true,
-      "active": true,
+      "active": false,
       "available": false
     },
     {
@@ -161,7 +161,7 @@ const AURORA_DEFAULT_DATA = {
       "promoActive": false,
       "promoPrice": null,
       "promoLabel": "",
-      "active": true
+      "active": false
     },
     {
       "id": "p-minipote",
