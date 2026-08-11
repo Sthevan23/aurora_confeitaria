@@ -169,7 +169,7 @@ const AURORA_DEFAULT_DATA = {
       "description": "Mini bolo de pote 140 ml — R$ 8 cada ou 2 por R$ 15. Escolha o sabor.",
       "price": 8,
       "categoryId": "cat-potes",
-      "image": "https://iili.io/CNBagxj.jpg",
+      "image": "products/aurora-mini-bolo-pote.jpg",
       "featured": true,
       "slug": "mini-bolo-de-pote",
       "size": "140ml",
