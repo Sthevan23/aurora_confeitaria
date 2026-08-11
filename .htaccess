@@ -30,7 +30,7 @@ DirectoryIndex index.html
 
 # Catálogo estático — sem cache longo (No site / Fora precisa refletir na hora)
 <IfModule mod_headers.c>
-  <FilesMatch "^(catalog\.json)$">
+  <FilesMatch "^(catalog\.json|catalog\.live\.json)$">
     Header set Cache-Control "no-store, max-age=0"
   </FilesMatch>
 </IfModule>

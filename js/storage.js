@@ -413,38 +413,63 @@ const Storage = (() => {
     return false;
   }
 
-  async function pullStaticCatalog({ maxAgeMs = null } = {}) {
-    // catalog.live.json = publicado pelo admin/MySQL; catalog.json = pode vir velho do Git
-    const urls = [
-      'catalog.live.json?t=' + Date.now(),
-      '/catalog.live.json?t=' + Date.now(),
-      'catalog.json?t=' + Date.now(),
-      '/catalog.json?t=' + Date.now(),
-      'api/catalog.json?t=' + Date.now(),
-    ];
+  async function fetchCatalogCandidate(url, maxAgeMs) {
+    const res = await fetchWithTimeout(url, {}, 8000);
+    if (!res.ok) return null;
+    const remote = await res.json();
+    if (!remote || !remote.settings || !Array.isArray(remote.products) || !remote.products.length) {
+      return null;
+    }
+    if (maxAgeMs != null) {
+      const gen = Date.parse(remote.generatedAt || '');
+      if (!Number.isFinite(gen) || (Date.now() - gen) > maxAgeMs) {
+        return null;
+      }
+    }
+    return {
+      remote,
+      ver: Number(remote.version) || 0,
+      gen: Date.parse(remote.generatedAt || '') || 0,
+      productCount: remote.products.length,
+    };
+  }
+
+  async function pickBestCatalog(urls, maxAgeMs) {
     let best = null;
     for (const url of urls) {
       try {
-        const res = await fetchWithTimeout(url, {}, 8000);
-        if (!res.ok) continue;
-        const remote = await res.json();
-        if (!remote || !remote.settings || !Array.isArray(remote.products) || !remote.products.length) {
-          continue;
-        }
-        if (maxAgeMs != null) {
-          const gen = Date.parse(remote.generatedAt || '');
-          if (!Number.isFinite(gen) || (Date.now() - gen) > maxAgeMs) {
-            continue;
-          }
-        }
-        const ver = Number(remote.version) || 0;
-        const gen = Date.parse(remote.generatedAt || '') || 0;
-        if (!best || ver > best.ver || (ver === best.ver && gen > best.gen)) {
-          best = { remote, ver, gen };
+        const candidate = await fetchCatalogCandidate(url, maxAgeMs);
+        if (!candidate) continue;
+        if (
+          !best ||
+          candidate.ver > best.ver ||
+          (candidate.ver === best.ver && candidate.gen > best.gen) ||
+          (candidate.ver === best.ver && candidate.gen === best.gen && candidate.productCount > best.productCount)
+        ) {
+          best = candidate;
         }
       } catch {
         // tenta próxima url
       }
+    }
+    return best;
+  }
+
+  async function pullStaticCatalog({ maxAgeMs = null } = {}) {
+    // catalog.live.json = publicado pelo admin/MySQL (fonte da verdade do cardápio).
+    // catalog.json do Git pode ter version maior e ainda assim estar incompleto (ex.: sem batatas).
+    const liveUrls = [
+      'catalog.live.json?t=' + Date.now(),
+      '/catalog.live.json?t=' + Date.now(),
+    ];
+    const gitUrls = [
+      'catalog.json?t=' + Date.now(),
+      '/catalog.json?t=' + Date.now(),
+      'api/catalog.json?t=' + Date.now(),
+    ];
+    let best = await pickBestCatalog(liveUrls, maxAgeMs);
+    if (!best) {
+      best = await pickBestCatalog(gitUrls, maxAgeMs);
     }
     if (!best) return false;
     const remote = best.remote;
@@ -860,12 +885,25 @@ const Storage = (() => {
     return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  function coerceMoney(value) {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const raw = String(value).trim().replace(/[^\d,.-]/g, '');
+    if (!raw) return 0;
+    // Aceita "38,99" (pt-BR) e "38.99"
+    const normalized = raw.includes(',')
+      ? raw.replace(/\./g, '').replace(',', '.')
+      : raw;
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+  }
+
   function productDisplayPrice(product) {
-    const list = Number(product.price || 0);
-    if (product.promoActive && product.promoPrice != null && product.promoPrice >= 0) {
-      const promo = Number(product.promoPrice);
+    const list = coerceMoney(product?.price);
+    if (product?.promoActive && product?.promoPrice != null && product.promoPrice !== '') {
+      const promo = coerceMoney(product.promoPrice);
       // Promo só vale se for menor; senão mantém o mesmo valor do preço
-      if (promo < list) return promo;
+      if (promo > 0 && promo < list) return promo;
     }
     return list;
   }
@@ -1149,7 +1187,7 @@ const Storage = (() => {
     getReviews, getFaq, getGallery,
     login, loginAsync, updatePassword,
     generateId, generateOrderNumber,
-    getCategoryName, formatCurrency, productDisplayPrice,
+    getCategoryName, formatCurrency, coerceMoney, productDisplayPrice,
     getDashboardStats, getMonthlyRevenue,
     getFinishedOrdersByPeriod, getProductSalesBreakdown, getSalesPeriodStats,
     initCloud, pullFull, pullPublic, pushToCloud, saveAsync,
