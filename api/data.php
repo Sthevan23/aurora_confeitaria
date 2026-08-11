@@ -204,7 +204,19 @@ if ($method === 'POST') {
     json_out(['ok' => true, 'data' => $stored]);
   }
 
-  $pdo = db_or_fail();
+  // Pedido / fidelidade — conexão leve (sem ALTER/schema) pra não estourar processos
+  if ($actionName === 'loyalty_status' || $actionName === 'create_order') {
+    try {
+      $pdo = aurora_db(false);
+    } catch (Throwable $e) {
+      json_out([
+        'error' => 'Falha na conexão MySQL',
+        'detail' => $e->getMessage(),
+      ], 500);
+    }
+  } else {
+    $pdo = db_or_fail();
+  }
   $password = get_password_header() ?: get_password_from_body($body);
 
   // Pedido / fidelidade — sem carregar produtos/imagens

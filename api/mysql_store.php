@@ -903,6 +903,14 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
 
   $pdo->beginTransaction();
   try {
+    if ($clientId) {
+      $chkClient = $pdo->prepare('SELECT id FROM clients WHERE id = ? LIMIT 1');
+      $chkClient->execute([$clientId]);
+      if (!$chkClient->fetchColumn()) {
+        $clientId = null;
+      }
+    }
+
     $ins = $pdo->prepare(
       'INSERT INTO orders (
         id, number, client_id, client_name, client_whatsapp, total, status, ordered_at

@@ -1437,9 +1437,16 @@ async function checkoutCart() {
     notes: notesParts.filter(Boolean).join(' | '),
   }).catch(() => ({ ok: false, error: 'Falha ao gravar' }));
 
-  if (!saved?.ok && error) {
-    error.textContent = 'Sistema offline — abrindo WhatsApp mesmo assim.';
-    error.hidden = false;
+  if (!saved?.ok) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || 'Finalizar pedido';
+    }
+    if (error) {
+      error.textContent = saved?.error || 'Não deu para gravar no painel. Tente de novo em instantes.';
+      error.hidden = false;
+    }
+    return;
   }
 
   const message = buildCartWhatsAppMessage({

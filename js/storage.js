@@ -1066,35 +1066,45 @@ const Storage = (() => {
       source: 'site',
     };
 
+    if (location.protocol === 'file:' && !isLocalHost) {
+      return { ok: false, error: 'Abra pelo site online (não por arquivo local)' };
+    }
+
+    // Pedido sempre tenta a API de verdade (não fica preso no breaker 503)
+    clearApiBreaker();
     let loyalty = null;
-    if (location.protocol !== 'file:' || isLocalHost) {
-      if (apiCoolingDown()) {
-        return { ok: false, error: 'Servidor ocupado agora. Aguarde 2–3 minutos e envie de novo.' };
-      }
+    let lastError = 'Sem conexão com a API Hostinger';
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const res = await apiFetch(API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'create_order', order, client }),
-        }, 20000);
+        }, 25000, { force: true });
         const result = await res.json().catch(() => ({}));
-        if (!res.ok || !result.ok) {
-          const detail = result.detail ? ` (${result.detail})` : '';
-          return { ok: false, error: (result.error || 'Falha ao gravar no MySQL') + detail };
+        if (res.ok && result.ok) {
+          if (result.orderNumber) order.number = result.orderNumber;
+          if (result.loyalty) loyalty = result.loyalty;
+          data.orders.push(order);
+          setMemory(data);
+          if (!loyalty) loyalty = computeLoyaltyFromOrders(data.orders, phone);
+          return { ok: true, order, loyalty, duplicated: !!result.duplicated };
         }
-        if (result.orderNumber) order.number = result.orderNumber;
-        if (result.loyalty) loyalty = result.loyalty;
+        if (res.status === 503 || res.status === 403) {
+          lastError = 'Servidor ocupado agora. Aguarde 1 minuto e tente de novo.';
+          await new Promise((r) => setTimeout(r, 1200));
+          clearApiBreaker();
+          continue;
+        }
+        const detail = result.detail ? ` (${result.detail})` : '';
+        return { ok: false, error: (result.error || 'Falha ao gravar no painel') + detail };
       } catch {
-        return { ok: false, error: 'Sem conexão com a API Hostinger' };
+        lastError = 'Sem conexão com a API Hostinger';
+        await new Promise((r) => setTimeout(r, 800));
+        clearApiBreaker();
       }
-    } else {
-      return { ok: false, error: 'Abra pelo localhost ou pelo site online' };
     }
-
-    data.orders.push(order);
-    setMemory(data);
-    if (!loyalty) loyalty = computeLoyaltyFromOrders(data.orders, phone);
-    return { ok: true, order, loyalty };
+    return { ok: false, error: lastError };
   }
 
   return {

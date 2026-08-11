@@ -438,20 +438,23 @@
       notes: notesParts.filter(Boolean).join(' | '),
     }).catch(() => ({ ok: false, error: 'Falha ao gravar' }));
 
-    // Mesmo se a API cair, o pedido vai no WhatsApp (loja não para)
-    let loyalty = saved?.loyalty || null;
     if (!saved?.ok) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
       if (error) {
-        error.textContent = 'Sistema offline — abrindo WhatsApp mesmo assim para não perder o pedido.';
+        error.textContent = saved?.error || 'Não deu para gravar no painel. Tente de novo em instantes.';
         error.hidden = false;
       }
+      return;
     }
 
     const message = Cart.buildWhatsAppMessage({
       fullName,
       phone,
       fulfillment,
-      loyalty,
+      loyalty: saved.loyalty || null,
     });
     Cart.clear();
     if (btn) {

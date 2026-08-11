@@ -204,7 +204,35 @@ function navigateTo(page) {
   if (page === 'financeiro') initFinanceiro();
   if (page === 'cupons') renderCoupons();
   if (page === 'dashboard') renderDashboard();
+  if (page === 'pedidos') {
+    renderOrders();
+    refreshOrdersFromCloud();
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function refreshOrdersFromCloud() {
+  const btn = document.getElementById('btn-refresh-orders');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando…';
+  }
+  try {
+    Storage.clearApiBreaker?.();
+    const ok = await Storage.pullFull();
+    renderOrders();
+    renderDashboard();
+    updateSyncBadge();
+    if (ok) showToast('Pedidos atualizados da nuvem.', 'success');
+    else showToast('Não deu para buscar na nuvem. Tente de novo.', 'error');
+  } catch {
+    showToast('Falha ao atualizar pedidos.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sync"></i> Atualizar pedidos';
+    }
+  }
 }
 
 function initLogout() {
@@ -1882,6 +1910,9 @@ function initSettings() {
 /* --- Botões de ação --- */
 function initButtons() {
   document.getElementById('btn-new-order').addEventListener('click', openNewOrderModal);
+  document.getElementById('btn-refresh-orders')?.addEventListener('click', () => {
+    refreshOrdersFromCloud();
+  });
   document.getElementById('btn-new-product').addEventListener('click', () => openProductModal());
   document.getElementById('btn-new-category').addEventListener('click', () => openCategoryModal());
   document.getElementById('btn-new-client').addEventListener('click', () => openClientModal());
