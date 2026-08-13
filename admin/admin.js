@@ -362,17 +362,17 @@ function renderOrders() {
 
   const tbody = document.querySelector('#orders-table tbody');
   tbody.innerHTML = orders.map(o => `
-    <tr class="order-row" onclick="viewOrder('${o.id}')" title="Ver detalhes do pedido">
-      <td><strong>${o.number}</strong></td>
-      <td>
+    <tr class="order-row mobile-card" onclick="viewOrder('${o.id}')" title="Ver detalhes do pedido">
+      <td data-label="Nº"><strong>${o.number}</strong></td>
+      <td data-label="Cliente">
         ${escapeHtml(o.clientName)}
         ${o.clientWhatsapp ? `<br>${whatsappTableLink(o.clientWhatsapp)}` : ''}
       </td>
-      <td>${o.items.length} item(s)</td>
-      <td>${Storage.formatCurrency(o.total)}</td>
-      <td>${statusBadge(o.status)}</td>
-      <td>${formatDate(o.date)}</td>
-      <td>
+      <td data-label="Itens">${o.items.length} item(s)</td>
+      <td data-label="Valor">${Storage.formatCurrency(o.total)}</td>
+      <td data-label="Status">${statusBadge(o.status)}</td>
+      <td data-label="Data">${formatDate(o.date)}</td>
+      <td data-label="Ações">
         <div class="table__actions" onclick="event.stopPropagation()">
           <button class="btn--icon edit" onclick="editOrderStatus('${o.id}')" title="Alterar Status"><i class="fas fa-exchange-alt"></i></button>
           <button class="btn--icon edit" onclick="viewOrder('${o.id}')" title="Ver Detalhes"><i class="fas fa-eye"></i></button>
@@ -945,19 +945,19 @@ function renderProducts() {
     const onMenu = p.active !== false;
     const size = formatSizeLabel(p.size);
     return `
-    <tr class="${onMenu ? '' : 'row--off-menu'}">
-      <td>
+    <tr class="${onMenu ? '' : 'row--off-menu'} mobile-card">
+      <td data-label="No cardápio">
         <button type="button" class="btn-onsite ${onMenu ? 'is-on' : 'is-off'}" onclick="toggleProductActive('${p.id}', ${onMenu ? 'false' : 'true'})" title="${onMenu ? 'Clique para ocultar do site' : 'Clique para mostrar no site'}">
           ${onMenu ? '✓ No site' : '✗ Fora'}
         </button>
       </td>
-      <td>${adminImgTag(p.image, p.name)}</td>
-      <td><strong>${escapeHtml(p.name)}</strong></td>
-      <td>${Storage.getCategoryName(p.categoryId)}</td>
-      <td>${size ? `<span class="badge badge--info">${escapeHtml(size)}</span>` : '—'}</td>
-      <td>${Number(p.price) > 0 ? Storage.formatCurrency(p.price) : 'Consultar'}${p.promoActive && p.promoPrice != null ? `<br><small style="color:#fc7890">Promo ${Storage.formatCurrency(p.promoPrice)}</small>` : ''}</td>
-      <td>${p.featured ? '<i class="fas fa-star" style="color:#FFD700"></i>' : '—'}${p.bestSeller ? ' <span class="badge badge--novo">Mais vendido</span>' : ''}${p.promoActive ? ' <span class="badge badge--novo">Promo</span>' : ''}</td>
-      <td>
+      <td data-label="Imagem">${adminImgTag(p.image, p.name)}</td>
+      <td data-label="Nome"><strong>${escapeHtml(p.name)}</strong></td>
+      <td data-label="Categoria">${Storage.getCategoryName(p.categoryId)}</td>
+      <td data-label="Volume">${size ? `<span class="badge badge--info">${escapeHtml(size)}</span>` : '—'}</td>
+      <td data-label="Preço">${Number(p.price) > 0 ? Storage.formatCurrency(p.price) : 'Consultar'}${p.promoActive && p.promoPrice != null ? `<br><small style="color:#fc7890">Promo ${Storage.formatCurrency(p.promoPrice)}</small>` : ''}</td>
+      <td data-label="Status">${p.featured ? '<i class="fas fa-star" style="color:#FFD700"></i>' : '—'}${p.bestSeller ? ' <span class="badge badge--novo">Mais vendido</span>' : ''}${p.promoActive ? ' <span class="badge badge--novo">Promo</span>' : ''}</td>
+      <td data-label="Ações">
         <div class="table__actions">
           <button class="btn--icon edit" onclick="editProduct('${p.id}')" title="Editar"><i class="fas fa-edit"></i></button>
           <button class="btn--icon delete" onclick="deleteProduct('${p.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
@@ -1280,11 +1280,11 @@ function renderCategories() {
   const tbody = document.querySelector('#categories-table tbody');
 
   tbody.innerHTML = categories.map(c => `
-    <tr>
-      <td><strong>${c.name}</strong></td>
-      <td>${c.slug}</td>
-      <td>${products.filter(p => p.categoryId === c.id).length}</td>
-      <td>
+    <tr class="mobile-card">
+      <td data-label="Nome"><strong>${c.name}</strong></td>
+      <td data-label="Slug">${c.slug}</td>
+      <td data-label="Produtos">${products.filter(p => p.categoryId === c.id).length}</td>
+      <td data-label="Ações">
         <div class="table__actions">
           <button class="btn--icon edit" onclick="editCategory('${c.id}')" title="Editar"><i class="fas fa-edit"></i></button>
           <button class="btn--icon delete" onclick="deleteCategory('${c.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
@@ -1385,13 +1385,13 @@ function renderClients() {
   tbody.innerHTML = clients.map(c => {
     const loyalty = Storage.computeLoyaltyFromOrders(orders, c.phone);
     return `
-    <tr>
-      <td><strong>${escapeHtml(c.name)}</strong></td>
-      <td>${escapeHtml(c.email || '')}</td>
-      <td>${escapeHtml(c.phone || '')}</td>
-      <td>${loyaltyBadgeHtml(loyalty)}</td>
-      <td>${escapeHtml(c.address || '')}</td>
-      <td>
+    <tr class="mobile-card">
+      <td data-label="Nome"><strong>${escapeHtml(c.name)}</strong></td>
+      <td data-label="E-mail">${escapeHtml(c.email || '—')}</td>
+      <td data-label="WhatsApp">${escapeHtml(c.phone || '—')}</td>
+      <td data-label="Fidelidade">${loyaltyBadgeHtml(loyalty)}</td>
+      <td data-label="Endereço">${escapeHtml(c.address || '—')}</td>
+      <td data-label="Ações">
         <div class="table__actions">
           <button class="btn--icon edit" onclick="editClient('${c.id}')" title="Editar"><i class="fas fa-edit"></i></button>
           <button class="btn--icon delete" onclick="deleteClient('${c.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
@@ -1544,13 +1544,13 @@ function renderCoupons() {
       ? Storage.formatCurrency(c.value)
       : `${Number(c.value) || 0}%`;
     return `
-      <tr>
-        <td><strong>${escapeHtml(c.code || '')}</strong>${c.label ? `<br><small>${escapeHtml(c.label)}</small>` : ''}</td>
-        <td>${typeLabel}</td>
-        <td>${valueLabel}</td>
-        <td>${Number(c.minOrder) > 0 ? Storage.formatCurrency(c.minOrder) : '—'}</td>
-        <td>${c.active !== false ? '<span class="badge badge--novo">Ativo</span>' : '<span class="badge">Inativo</span>'}</td>
-        <td>
+      <tr class="mobile-card">
+        <td data-label="Código"><strong>${escapeHtml(c.code || '')}</strong>${c.label ? `<br><small>${escapeHtml(c.label)}</small>` : ''}</td>
+        <td data-label="Tipo">${typeLabel}</td>
+        <td data-label="Valor">${valueLabel}</td>
+        <td data-label="Mínimo">${Number(c.minOrder) > 0 ? Storage.formatCurrency(c.minOrder) : '—'}</td>
+        <td data-label="Status">${c.active !== false ? '<span class="badge badge--novo">Ativo</span>' : '<span class="badge">Inativo</span>'}</td>
+        <td data-label="Ações">
           <button type="button" class="btn--icon" data-coupon-edit="${c.id}" title="Editar"><i class="fas fa-pen"></i></button>
           <button type="button" class="btn--icon delete" data-coupon-del="${c.id}" title="Excluir"><i class="fas fa-trash"></i></button>
         </td>
