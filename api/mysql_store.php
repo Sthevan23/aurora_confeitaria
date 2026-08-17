@@ -222,6 +222,18 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     }
   }
 
+  $productImageById = [];
+  $productImageByName = [];
+  foreach ($products as $p) {
+    $pid = (string) ($p['id'] ?? '');
+    $img = (string) ($p['image'] ?? '');
+    if ($pid !== '' && $img !== '') $productImageById[$pid] = $img;
+    $pname = function_exists('mb_strtolower')
+      ? mb_strtolower(trim((string) ($p['name'] ?? '')), 'UTF-8')
+      : strtolower(trim((string) ($p['name'] ?? '')));
+    if ($pname !== '' && $img !== '') $productImageByName[$pname] = $img;
+  }
+
   $orders = [];
   if (aurora_table_exists($pdo, 'orders')) {
     $orderRows = $pdo->query('SELECT * FROM orders ORDER BY ordered_at DESC')->fetchAll();
@@ -231,12 +243,21 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
       foreach ($itemRows as $item) {
         $oid = $item['order_id'];
         if (!isset($itemsByOrder[$oid])) $itemsByOrder[$oid] = [];
+        $pid = (string) ($item['product_id'] ?? '');
+        $iname = (string) ($item['product_name'] ?? '');
+        $inameNorm = function_exists('mb_strtolower')
+          ? mb_strtolower(trim($iname), 'UTF-8')
+          : strtolower(trim($iname));
+        $image = $productImageById[$pid]
+          ?? $productImageByName[$inameNorm]
+          ?? '';
         $itemsByOrder[$oid][] = [
-          'productId' => $item['product_id'] ?? '',
-          'name' => $item['product_name'],
+          'productId' => $pid,
+          'name' => $iname,
           'flavor' => $item['flavor'] ?? '',
           'qty' => (int) $item['qty'],
           'price' => (float) $item['price'],
+          'image' => $image,
         ];
       }
     }

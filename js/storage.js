@@ -1082,14 +1082,26 @@ const Storage = (() => {
       client.phone = phone;
     }
 
+    const catalog = data.products || [];
+    const itemsWithImage = (items || []).map((item) => {
+      const id = String(item.productId || item.id || '').trim();
+      const product = catalog.find((p) => String(p.id) === id)
+        || catalog.find((p) => String(p.name || '').trim().toLowerCase() === String(item.name || '').trim().toLowerCase());
+      const image = String(item.image || product?.image || '').trim();
+      return {
+        ...item,
+        image: image.startsWith('data:') ? '' : image,
+      };
+    });
+
     const order = {
       id: generateId('o'),
       number: nextOrderNumber(data.orders),
       clientId: client.id,
       clientName: name,
       clientWhatsapp: phone,
-      items,
-      total: Number(total) || items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 1), 0),
+      items: itemsWithImage,
+      total: Number(total) || itemsWithImage.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 1), 0),
       status: 'novo',
       date: new Date().toISOString(),
       notes: notes || '',

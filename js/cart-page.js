@@ -433,6 +433,7 @@
         price: item.price,
         qty: item.qty,
         detail: [item.detail, item.notes].filter(Boolean).join(' · '),
+        image: item.image || '',
       })),
       total: payable,
       notes: notesParts.filter(Boolean).join(' | '),

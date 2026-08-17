@@ -290,12 +290,8 @@ function renderDashboard() {
     if (listEl) {
       listEl.innerHTML = recent.map(order => {
         const thumbs = (order.items || []).slice(0, 3).map(item => {
-          const product = products.find(p => p.id === item.productId)
-            || products.find(p => p.name === item.name);
-          const image = product?.image ? adminImageSrc(product.image) : '';
-          return image
-            ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}" class="dash-order__thumb">`
-            : `<span class="dash-order__thumb dash-order__thumb--empty"><i class="fas fa-birthday-cake"></i></span>`;
+          const image = orderItemImagePath(item, products);
+          return adminThumbHtml(image, item.name, 'dash-order__thumb');
         }).join('');
 
         const itemsText = (order.items || [])
@@ -477,9 +473,8 @@ function viewOrder(id) {
   const products = Storage.getProducts();
 
   const itemsHtml = order.items.map(item => {
-    const product = products.find(p => p.id === item.productId)
-      || products.find(p => p.name === item.name);
-    const image = product?.image ? adminImageSrc(product.image) : '';
+    const product = findProductForOrderItem(item, products);
+    const image = orderItemImagePath(item, products);
     const description = product?.description || '';
     const category = product ? Storage.getCategoryName(product.categoryId) : '';
     const subtotal = (Number(item.price) || 0) * (Number(item.qty) || 0);
@@ -488,7 +483,7 @@ function viewOrder(id) {
       <article class="order-detail__item">
         <div class="order-detail__thumb">
           ${image
-            ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}" loading="lazy">`
+            ? adminThumbHtml(image, item.name, 'order-detail__thumb-img')
             : `<div class="order-detail__thumb-placeholder"><i class="fas fa-birthday-cake"></i></div>`}
         </div>
         <div class="order-detail__item-info">
@@ -569,10 +564,62 @@ const ADMIN_FALLBACK_IMG =
     '</svg>'
   );
 
-function adminImgTag(path, alt, className = 'table__img') {
-  const src = adminImageSrc(path) || ADMIN_FALLBACK_IMG;
+function photoApiUrl(path) {
+  const name = String(path || '').split(/[\\/]/).pop();
+  if (!name || !/\.(jpe?g|png|webp|gif)$/i.test(name)) return '';
+  const host = (location.hostname || '').toLowerCase();
+  const local =
+    location.protocol === 'file:' ||
+    !host ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    (host !== 'auroraconfeitaria.com.br' && host !== 'www.auroraconfeitaria.com.br');
+  if (local) {
+    return `https://auroraconfeitaria.com.br/api/photo.php?f=${encodeURIComponent(name)}`;
+  }
+  return `../api/photo.php?f=${encodeURIComponent(name)}`;
+}
+
+function findProductForOrderItem(item, products) {
+  const list = products || [];
+  const id = String(item?.productId || item?.id || '').trim();
+  if (id) {
+    const byId = list.find((p) => String(p.id) === id);
+    if (byId) return byId;
+  }
+  const name = String(item?.name || '').trim().toLowerCase();
+  if (!name) return null;
+  return list.find((p) => String(p.name || '').trim().toLowerCase() === name)
+    || list.find((p) => {
+      const n = String(p.name || '').trim().toLowerCase();
+      return n && (n.includes(name) || name.includes(n));
+    });
+}
+
+function orderItemImagePath(item, products) {
+  const direct = String(item?.image || '').trim();
+  if (direct && !direct.startsWith('data:')) return direct;
+  const product = findProductForOrderItem(item, products);
+  const fromProduct = String(product?.image || '').trim();
+  if (fromProduct && !fromProduct.startsWith('data:')) return fromProduct;
+  return direct.startsWith('data:') ? '' : direct;
+}
+
+function adminThumbHtml(path, alt, className) {
+  const src = adminImageSrc(path);
+  if (!src) {
+    return `<span class="${className} ${className}--empty"><i class="fas fa-birthday-cake"></i></span>`;
+  }
   const fallback = ADMIN_FALLBACK_IMG;
-  return `<img src="${src}" alt="${escapeHtml(alt || '')}" class="${className}" loading="lazy" onerror="this.onerror=null;this.src='${fallback}'">`;
+  const photo = photoApiUrl(path);
+  const onErr = photo
+    ? `if(!this.dataset.ph){this.dataset.ph='1';this.src='${photo}';}else{this.onerror=null;this.src='${fallback}';}`
+    : `this.onerror=null;this.src='${fallback}'`;
+  return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt || '')}" class="${className}" loading="lazy" onerror="${onErr}">`;
+}
+
+function adminImgTag(path, alt, className = 'table__img') {
+  return adminThumbHtml(path, alt, className);
 }
 
 /** Foto do card do site: 3:4 (retrato), tamanho fixo — sempre cabe no MySQL e aparece. */
