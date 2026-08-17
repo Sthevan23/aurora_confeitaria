@@ -606,20 +606,37 @@ function orderItemImagePath(item, products) {
 }
 
 function adminThumbHtml(path, alt, className) {
-  const src = adminImageSrc(path);
+  const known = lookupKnownPhoto('', alt);
+  const primary = path || known;
+  const src = adminImageSrc(primary);
   if (!src) {
     return `<span class="${className} ${className}--empty"><i class="fas fa-birthday-cake"></i></span>`;
   }
   const fallback = ADMIN_FALLBACK_IMG;
-  const photo = photoApiUrl(path);
-  const onErr = photo
-    ? `if(!this.dataset.ph){this.dataset.ph='1';this.src='${photo}';}else{this.onerror=null;this.src='${fallback}';}`
-    : `this.onerror=null;this.src='${fallback}'`;
+  const photo = photoApiUrl(primary);
+  const extra = path && known && known !== path ? adminImageSrc(known) : '';
+  let onErr = `this.onerror=null;this.src='${fallback}'`;
+  if (extra && photo) {
+    onErr = `if(!this.dataset.kn){this.dataset.kn='1';this.src='${extra}';}else if(!this.dataset.ph){this.dataset.ph='1';this.src='${photo}';}else{this.onerror=null;this.src='${fallback}';}`;
+  } else if (extra) {
+    onErr = `if(!this.dataset.kn){this.dataset.kn='1';this.src='${extra}';}else{this.onerror=null;this.src='${fallback}';}`;
+  } else if (photo) {
+    onErr = `if(!this.dataset.ph){this.dataset.ph='1';this.src='${photo}';}else{this.onerror=null;this.src='${fallback}';}`;
+  }
   return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt || '')}" class="${className}" loading="lazy" onerror="${onErr}">`;
 }
 
+function lookupKnownPhoto(id, name) {
+  const map = (typeof AURORA_PHOTO_MAP !== 'undefined' && AURORA_PHOTO_MAP) ? AURORA_PHOTO_MAP : {};
+  if (id && map.byId && map.byId[id]) return map.byId[id];
+  const key = String(name || '').trim().toLowerCase();
+  if (key && map.byName && map.byName[key]) return map.byName[key];
+  return '';
+}
+
 function adminImgTag(path, alt, className = 'table__img') {
-  return adminThumbHtml(path, alt, className);
+  const srcPath = path || lookupKnownPhoto('', alt);
+  return adminThumbHtml(srcPath, alt, className);
 }
 
 /** Foto do card do site: 3:4 (retrato), tamanho fixo — sempre cabe no MySQL e aparece. */
@@ -998,7 +1015,7 @@ function renderProducts() {
           ${onMenu ? '✓ No site' : '✗ Fora'}
         </button>
       </td>
-      <td data-label="Imagem">${adminImgTag(p.image, p.name)}</td>
+      <td data-label="Imagem">${adminImgTag(p.image || lookupKnownPhoto(p.id, p.name), p.name)}</td>
       <td data-label="Nome"><strong>${escapeHtml(p.name)}</strong></td>
       <td data-label="Categoria">${Storage.getCategoryName(p.categoryId)}</td>
       <td data-label="Volume">${size ? `<span class="badge badge--info">${escapeHtml(size)}</span>` : '—'}</td>

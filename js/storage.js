@@ -148,16 +148,22 @@ const Storage = (() => {
     return true;
   }
 
-  /** Preenche foto vazia com path do default-data (API 503 / cache sem data-URL). */
+  /** Preenche foto vazia ou data-URL com path conhecido (mapa + default-data). */
   function hydrateProductImages(products) {
     const defaults = (typeof AURORA_DEFAULT_DATA !== 'undefined' && Array.isArray(AURORA_DEFAULT_DATA.products))
       ? AURORA_DEFAULT_DATA.products
       : [];
-    const byId = new Map(defaults.map((p) => [p.id, p]));
-    const byName = new Map(defaults.map((p) => [String(p.name || '').trim().toLowerCase(), p]));
+    const photoMap = (typeof AURORA_PHOTO_MAP !== 'undefined' && AURORA_PHOTO_MAP) ? AURORA_PHOTO_MAP : {};
+    const byId = new Map([
+      ...Object.entries(photoMap.byId || {}),
+      ...defaults.map((p) => [p.id, p.image]),
+    ]);
+    const byName = new Map([
+      ...Object.entries(photoMap.byName || {}),
+      ...defaults.map((p) => [String(p.name || '').trim().toLowerCase(), p.image]),
+    ]);
     return (products || []).map((p) => {
       let next = p;
-      // Copo da Felicidade: sempre R$29 sem promo antiga no site
       if (next.id === 'p0') {
         next = {
           ...next,
@@ -169,9 +175,11 @@ const Storage = (() => {
       }
       const img = String(next.image || '').trim();
       if (img && !img.startsWith('data:')) return next;
-      const d = byId.get(next.id) || byName.get(String(next.name || '').trim().toLowerCase());
-      if (d && d.image && !String(d.image).startsWith('data:')) {
-        return { ...next, image: d.image };
+      const mapped = byId.get(next.id)
+        || byName.get(String(next.name || '').trim().toLowerCase());
+      const fallback = typeof mapped === 'string' ? mapped : (mapped && mapped.image);
+      if (fallback && !String(fallback).startsWith('data:')) {
+        return { ...next, image: fallback };
       }
       return { ...next, image: img.startsWith('data:') ? '' : img };
     });
@@ -502,6 +510,9 @@ const Storage = (() => {
       const remote = await res.json();
       if (!remote || !remote.settings) return false;
       cloudEnabled = true;
+      if (Array.isArray(remote.products)) {
+        remote.products = hydrateProductImages(remote.products);
+      }
       const json = JSON.stringify(remote);
       if (json === lastRemoteJson) return true;
       setMemory(remote);

@@ -29,6 +29,120 @@ function aurora_db_ready(PDO $pdo): bool {
   return aurora_table_exists($pdo, 'settings') && aurora_table_exists($pdo, 'products');
 }
 
+function aurora_norm_name(string $name): string {
+  $n = trim($name);
+  if (function_exists('mb_strtolower')) {
+    $n = mb_strtolower($n, 'UTF-8');
+  } else {
+    $n = strtolower($n);
+  }
+  return $n;
+}
+
+function aurora_photo_map(): array {
+  static $map = null;
+  if (is_array($map)) return $map;
+  $map = ['id' => [], 'name' => []];
+  $root = dirname(__DIR__);
+  foreach (['product-photos.json', 'catalog.json'] as $file) {
+    $path = $root . DIRECTORY_SEPARATOR . $file;
+    if (!is_file($path)) continue;
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') continue;
+    $data = json_decode($raw, true);
+    if (!is_array($data)) continue;
+    if (isset($data['byId']) || isset($data['byName'])) {
+      foreach (($data['byId'] ?? []) as $id => $img) {
+        $img = trim((string) $img);
+        if ($id && $img !== '' && !str_starts_with($img, 'data:')) {
+          $map['id'][(string) $id] = $img;
+        }
+      }
+      foreach (($data['byName'] ?? []) as $name => $img) {
+        $img = trim((string) $img);
+        $key = aurora_norm_name((string) $name);
+        if ($key !== '' && $img !== '' && !str_starts_with($img, 'data:')) {
+          $map['name'][$key] = $img;
+        }
+      }
+      continue;
+    }
+    foreach (($data['products'] ?? []) as $p) {
+      if (!is_array($p)) continue;
+      $img = trim((string) ($p['image'] ?? ''));
+      if ($img === '' || str_starts_with($img, 'data:')) continue;
+      if (!empty($p['id'])) $map['id'][(string) $p['id']] = $img;
+      $key = aurora_norm_name((string) ($p['name'] ?? ''));
+      if ($key !== '') $map['name'][$key] = $img;
+    }
+  }
+  return $map;
+}
+
+function aurora_product_image_on_disk(string $img): bool {
+  if ($img === '' || str_starts_with($img, 'data:') || str_starts_with($img, 'http')) {
+    return false;
+  }
+  $name = basename(str_replace('\\', '/', $img));
+  if ($name === '' || $name === '.' || $name === '..') return false;
+  $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'products' . DIRECTORY_SEPARATOR . $name;
+  return is_file($path);
+}
+
+function aurora_lookup_photo(string $id, string $name): string {
+  $map = aurora_photo_map();
+  if ($id !== '' && !empty($map['id'][$id])) return (string) $map['id'][$id];
+  $key = aurora_norm_name($name);
+  if ($key !== '' && !empty($map['name'][$key])) return (string) $map['name'][$key];
+  return '';
+}
+
+/**
+ * Se a foto do MySQL sumiu (Reimplantar) ou veio vazia, usa o mapa/catalogo.
+ * Grava o path de volta só quando mudou — senão o painel volta a "Sem foto".
+ */
+function aurora_fill_missing_product_images(PDO $pdo, array &$products): void {
+  $blobNames = [];
+  try {
+    if (aurora_table_exists($pdo, 'product_images')) {
+      foreach ($pdo->query('SELECT filename FROM product_images') as $row) {
+        $fn = basename((string) ($row['filename'] ?? ''));
+        if ($fn !== '') $blobNames[$fn] = true;
+      }
+    }
+  } catch (Throwable $e) {
+    $blobNames = [];
+  }
+
+  $updates = [];
+  foreach ($products as &$p) {
+    $img = trim((string) ($p['image'] ?? ''));
+    $file = $img !== '' ? basename(str_replace('\\', '/', $img)) : '';
+    $ok = aurora_product_image_on_disk($img) || ($file !== '' && isset($blobNames[$file]));
+    if ($ok) continue;
+
+    $fallback = aurora_lookup_photo((string) ($p['id'] ?? ''), (string) ($p['name'] ?? ''));
+    if ($fallback === '') {
+      if (str_starts_with($img, 'data:')) $p['image'] = '';
+      continue;
+    }
+    if ($fallback === $img) continue;
+    $p['image'] = $fallback;
+    if (!empty($p['id'])) $updates[(string) $p['id']] = $fallback;
+  }
+  unset($p);
+
+  if (!$updates) return;
+  try {
+    $stmt = $pdo->prepare('UPDATE products SET image = ? WHERE id = ?');
+    foreach ($updates as $id => $path) {
+      $stmt->execute([$path, $id]);
+    }
+  } catch (Throwable $e) {
+    // painel ainda recebe o path preenchido nesta resposta
+  }
+}
+
 /**
  * @param 'full'|'public' $mode
  */
@@ -114,6 +228,8 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     }
     $products[] = $product;
   }
+
+  aurora_fill_missing_product_images($pdo, $products);
 
   $gallery = [];
   $galRows = $pdo->query(
