@@ -194,29 +194,21 @@ if ($jpegBytes === null || strlen($jpegBytes) < 32) {
   exit;
 }
 
-$dataUrl = 'data:image/jpeg;base64,' . base64_encode($jpegBytes);
-
-// Backup no MySQL é OBRIGATÓRIO — sem isso o Reimplantar Git apaga a foto
 $blobOk = false;
-try {
-  $blobOk = aurora_store_product_image_blob($pdo, $savedAs, $jpegBytes, 'image/jpeg');
-} catch (Throwable $e) {
-  $blobOk = false;
+for ($i = 0; $i < 2 && !$blobOk; $i++) {
+  try {
+    $blobOk = aurora_store_product_image_blob($pdo, $savedAs, $jpegBytes, 'image/jpeg');
+  } catch (Throwable $e) {
+    $blobOk = false;
+  }
 }
 
 if (!$blobOk) {
-  // Sem backup: devolve dataUrl para gravar no produto (aparece no painel/site via MySQL)
+  http_response_code(503);
   echo json_encode([
-    'ok' => true,
-    'path' => null,
-    'url' => null,
-    'bytes' => strlen($jpegBytes),
-    'dirs' => 0,
-    'anchor' => false,
-    'blob' => false,
-    'dataUrl' => $dataUrl,
-    'warn' => 'Backup MySQL falhou — usando dataUrl',
-  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    'ok' => false,
+    'error' => 'Não deu para guardar a foto com segurança. Tente de novo em alguns segundos.',
+  ], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
@@ -253,6 +245,5 @@ echo json_encode([
   'anchor' => $diskOk,
   'blob' => true,
   'dir' => $savedDirs[0] ?? null,
-  'dataUrl' => $dataUrl,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 exit;

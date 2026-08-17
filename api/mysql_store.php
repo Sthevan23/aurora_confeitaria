@@ -151,6 +151,10 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     return null;
   }
 
+  if (function_exists('aurora_protect_product_photos')) {
+    aurora_protect_product_photos($pdo);
+  }
+
   $settingsRow = $pdo->query('SELECT * FROM settings WHERE id = 1 LIMIT 1')->fetch();
   if (!$settingsRow) {
     return null;

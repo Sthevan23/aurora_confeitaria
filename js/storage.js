@@ -27,6 +27,12 @@ const Storage = (() => {
     return API.replace(/data\.php(?:\?.*)?$/, 'ping.php');
   })();
 
+  const RESTORE_PHOTOS = PING.replace(/ping\.php(?:\?.*)?$/, 'restore_photos.php');
+
+  try {
+    fetch(RESTORE_PHOTOS + (RESTORE_PHOTOS.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' }).catch(() => {});
+  } catch { /* ignore */ }
+
   let cloudEnabled = false;
   let lastRemoteJson = '';
   let pollTimer = null;
@@ -626,6 +632,9 @@ const Storage = (() => {
         return { ok: false, reason: 'auth', error: result.error || '' };
       }
       clearApiBreaker();
+      if (result.data && Array.isArray(result.data.products)) {
+        result.data.products = hydrateProductImages(result.data.products);
+      }
       setMemory(result.data);
       lastRemoteJson = JSON.stringify(result.data);
       setAdminPassword(password);

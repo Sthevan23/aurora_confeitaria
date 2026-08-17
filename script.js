@@ -411,12 +411,26 @@ function imgSrc(path) {
   return clean;
 }
 
+function photoSrc(path) {
+  if (!path || /^(data:|blob:)/i.test(String(path))) return '';
+  const name = String(path).split(/[\\/]/).pop();
+  if (!name || !/\.(jpe?g|png|webp|gif)$/i.test(name)) return '';
+  if (isOfflineOrLocalPage()) {
+    return `${LIVE_ORIGIN}/api/photo.php?f=${encodeURIComponent(name)}`;
+  }
+  return `api/photo.php?f=${encodeURIComponent(name)}`;
+}
+
 function imgTag(path, alt, className = '') {
   const src = imgSrc(path);
   const fallback = imgSrc(FALLBACK_IMG);
+  const photo = photoSrc(path);
   const cls = className ? ` class="${className}"` : '';
   const safeAlt = String(alt || '').replace(/"/g, '&quot;');
-  return `<img${cls} src="${src}" alt="${safeAlt}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${fallback}'">`;
+  const onErr = photo
+    ? `if(!this.dataset.ph){this.dataset.ph='1';this.src='${photo}';}else{this.onerror=null;this.src='${fallback}';}`
+    : `this.onerror=null;this.src='${fallback}'`;
+  return `<img${cls} src="${src}" alt="${safeAlt}" loading="lazy" decoding="async" onerror="${onErr}">`;
 }
 
 function getPublicAssetUrl(path) {

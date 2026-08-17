@@ -227,3 +227,133 @@ function aurora_store_product_image_blob(PDO $pdo, string $filename, string $byt
   );
   return $stmt->execute([$name, $mime ?: 'image/jpeg', $bytes, strlen($bytes)]);
 }
+
+function aurora_products_dir(): string {
+  return dirname(__DIR__) . DIRECTORY_SEPARATOR . 'products';
+}
+
+function aurora_safe_photo_filename(string $name): string {
+  $name = basename(str_replace(['\\', "\0"], '', $name));
+  if ($name === '' || !preg_match('/^[a-zA-Z0-9._-]+\.(jpe?g|png|webp|gif)$/i', $name)) {
+    return '';
+  }
+  return $name;
+}
+
+/**
+ * Recoloca em products/ as fotos do MySQL que o Git apagou.
+ * Só lê o LONGBLOB dos arquivos que realmente faltam.
+ */
+function aurora_restore_missing_photos(PDO $pdo, int $limit = 40): int {
+  $dir = aurora_products_dir();
+  if (!is_dir($dir)) {
+    @mkdir($dir, 0755, true);
+  }
+  if (!is_dir($dir)) {
+    return 0;
+  }
+
+  try {
+    aurora_ensure_product_images_table($pdo);
+    $names = $pdo->query('SELECT filename FROM product_images')->fetchAll(PDO::FETCH_COLUMN);
+  } catch (Throwable $e) {
+    return 0;
+  }
+
+  $missing = [];
+  foreach ($names as $raw) {
+    $name = aurora_safe_photo_filename((string) $raw);
+    if ($name === '') continue;
+    $path = $dir . DIRECTORY_SEPARATOR . $name;
+    if (!is_file($path) || filesize($path) < 32) {
+      $missing[] = $name;
+    }
+  }
+  if (!$missing) {
+    return 0;
+  }
+
+  $stmt = $pdo->prepare('SELECT mime, data FROM product_images WHERE filename = ? LIMIT 1');
+  $restored = 0;
+  foreach (array_slice($missing, 0, max(1, $limit)) as $name) {
+    try {
+      $stmt->execute([$name]);
+      $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+      continue;
+    }
+    if (!$row) continue;
+    $bin = $row['data'];
+    if (is_resource($bin)) {
+      $bin = stream_get_contents($bin);
+    }
+    if (!is_string($bin) || strlen($bin) < 32) continue;
+    $path = $dir . DIRECTORY_SEPARATOR . $name;
+    if (@file_put_contents($path, $bin) !== false) {
+      @chmod($path, 0644);
+      $restored++;
+    }
+  }
+  return $restored;
+}
+
+/**
+ * Copia fotos que já estão na pasta para o MySQL (próximo Reimplantar não apaga).
+ */
+function aurora_backup_disk_photos_to_mysql(PDO $pdo, int $limit = 20): int {
+  $dir = aurora_products_dir();
+  if (!is_dir($dir)) {
+    return 0;
+  }
+
+  $existing = [];
+  try {
+    aurora_ensure_product_images_table($pdo);
+    foreach ($pdo->query('SELECT filename FROM product_images') as $row) {
+      $fn = aurora_safe_photo_filename((string) ($row['filename'] ?? ''));
+      if ($fn !== '') $existing[$fn] = true;
+    }
+  } catch (Throwable $e) {
+    return 0;
+  }
+
+  $backed = 0;
+  $files = @scandir($dir);
+  if (!is_array($files)) {
+    return 0;
+  }
+  foreach ($files as $file) {
+    if ($backed >= $limit) break;
+    $name = aurora_safe_photo_filename((string) $file);
+    if ($name === '' || isset($existing[$name])) continue;
+    $path = $dir . DIRECTORY_SEPARATOR . $name;
+    if (!is_file($path) || filesize($path) < 32) continue;
+    $bytes = @file_get_contents($path);
+    if (!is_string($bytes) || strlen($bytes) < 32) continue;
+    $mime = 'image/jpeg';
+    if (preg_match('/\.png$/i', $name)) $mime = 'image/png';
+    elseif (preg_match('/\.webp$/i', $name)) $mime = 'image/webp';
+    elseif (preg_match('/\.gif$/i', $name)) $mime = 'image/gif';
+    try {
+      if (aurora_store_product_image_blob($pdo, $name, $bytes, $mime)) {
+        $backed++;
+        $existing[$name] = true;
+      }
+    } catch (Throwable $e) {
+      continue;
+    }
+  }
+  return $backed;
+}
+
+function aurora_protect_product_photos(PDO $pdo): void {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  try {
+    aurora_restore_missing_photos($pdo, 40);
+    aurora_backup_disk_photos_to_mysql($pdo, 20);
+  } catch (Throwable $e) {
+    // login/site seguem mesmo se o restore falhar
+  }
+}

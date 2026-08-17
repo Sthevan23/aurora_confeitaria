@@ -17,6 +17,17 @@
       "</svg>"
     );
 
+  function photoSrc(path) {
+    if (!path || /^(data:|blob:)/i.test(String(path))) return '';
+    const name = String(path).split(/[\\/]/).pop();
+    if (!name || !/\.(jpe?g|png|webp|gif)$/i.test(name)) return '';
+    const host = (location.hostname || '').toLowerCase();
+    if (location.protocol === 'file:' || !host || host === 'localhost' || host === '127.0.0.1') {
+      return `https://auroraconfeitaria.com.br/api/photo.php?f=${encodeURIComponent(name)}`;
+    }
+    return `api/photo.php?f=${encodeURIComponent(name)}`;
+  }
+
   function imgSrc(path) {
     if (!path) path = FALLBACK_IMG;
     const raw = String(path).trim();
@@ -138,7 +149,9 @@
         <article class="cart-line" data-key="${escapeHtml(item.key)}">
           <div class="cart-line__media">
             <img class="cart-line__img" src="${imgSrc(item.image)}" alt="" loading="lazy"
-              onerror="this.onerror=null;this.src='${imgSrc(FALLBACK_IMG)}'">
+              onerror="${photoSrc(item.image)
+                ? `if(!this.dataset.ph){this.dataset.ph='1';this.src='${photoSrc(item.image)}';}else{this.onerror=null;this.src='${imgSrc(FALLBACK_IMG)}';}`
+                : `this.onerror=null;this.src='${imgSrc(FALLBACK_IMG)}'`}">
           </div>
           <div class="cart-line__body">
             <div class="cart-line__top">

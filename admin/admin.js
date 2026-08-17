@@ -747,18 +747,16 @@ async function uploadAdminImage(file) {
       body: form,
     });
     const result = await res.json().catch(() => ({}));
-    // Path só vale se tiver backup no banco (senão some no Reimplantar)
     if (res.ok && result.ok && result.path && result.blob === true) {
       return result.path;
     }
-    if (res.ok && result.ok && typeof result.dataUrl === 'string' && result.dataUrl.startsWith('data:image/')) {
-      return result.dataUrl;
+    throw new Error(result.error || 'Não deu para guardar a foto no servidor. Tente de novo.');
+  } catch (err) {
+    if (err && err.message && !/failed to fetch|networkerror/i.test(err.message)) {
+      throw err;
     }
-  } catch {
-    // cai no dataUrl
+    throw new Error('Não deu para enviar a foto. Tente de novo.');
   }
-
-  return dataUrl;
 }
 
 function bindImageUpload(fileInputId, pathInputId, previewId) {
