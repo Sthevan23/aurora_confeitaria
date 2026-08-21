@@ -29,6 +29,49 @@ const Cart = window.AuroraCart;
 let cartItems = Cart ? Cart.getItems() : loadCartFallback();
 let appliedCoupon = Cart ? Cart.getCoupon() : loadAppliedCouponFallback();
 let lightboxQty = 1;
+let bodyScrollY = 0;
+let bodyScrollLocks = 0;
+
+function lockBodyScroll() {
+  bodyScrollLocks += 1;
+  if (bodyScrollLocks > 1) return;
+  bodyScrollY = window.scrollY || window.pageYOffset || 0;
+  document.documentElement.classList.add('is-scroll-locked');
+  document.body.classList.add('is-scroll-locked');
+  document.body.style.top = `-${bodyScrollY}px`;
+}
+
+function unlockBodyScroll() {
+  bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
+  if (bodyScrollLocks > 0) return;
+  document.documentElement.classList.remove('is-scroll-locked');
+  document.body.classList.remove('is-scroll-locked');
+  document.body.style.top = '';
+  window.scrollTo(0, bodyScrollY);
+}
+
+function isLightboxOpen() {
+  return !!document.getElementById('order-lightbox')?.classList.contains('is-open');
+}
+
+function isCartOpen() {
+  return !!document.getElementById('cart-drawer')?.classList.contains('is-open');
+}
+
+function focusLightboxOptions() {
+  const scroll = document.getElementById('lightbox-scroll');
+  const flavors = document.getElementById('lightbox-flavors');
+  const qty = document.getElementById('lightbox-qty-stepper');
+  const target = (!flavors?.hidden && flavors) || qty || scroll;
+  if (!target) return;
+  requestAnimationFrame(() => {
+    if (scroll) scroll.scrollTop = 0;
+    target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (!flavors?.hidden) {
+      document.getElementById('acc-flavor')?.classList.add('is-open');
+    }
+  });
+}
 
 function loadCartFallback() {
   try {
@@ -713,11 +756,11 @@ function productCardHTML(p, { bestSeller = false } = {}) {
     : `<button type="button" class="btn btn--secondary btn--sm" data-order="${p.id}">Adicionar</button>`;
 
   return `
-    <article class="product-card${unavailable ? ' product-card--unavailable' : ''}">
-      <button type="button" class="product-card__img"${orderAttr} aria-label="${unavailable ? `${p.name} indisponível` : `Ver e adicionar ${p.name}`}" ${unavailable ? 'disabled' : ''}>
+    <article class="product-card${unavailable ? ' product-card--unavailable' : ''}"${orderAttr ? ` ${orderAttr.trim()}` : ''} role="${unavailable ? 'group' : 'button'}" tabindex="${unavailable ? '-1' : '0'}" aria-label="${unavailable ? `${p.name} indisponível` : `Ver e adicionar ${p.name}`}">
+      <div class="product-card__img">
         ${imgTag(p.image, p.name)}
         ${badge}${size}
-      </button>
+      </div>
       <div class="product-card__body">
         <span class="product-card__category">${Storage.getCategoryName(p.categoryId)}</span>
         <h3 class="product-card__name">${p.name}</h3>
@@ -734,7 +777,21 @@ function productCardHTML(p, { bestSeller = false } = {}) {
 
 function bindProductOrderButtons(root) {
   root?.querySelectorAll('[data-order]').forEach((el) => {
-    el.addEventListener('click', () => openLightbox(el.dataset.order));
+    const open = (e) => {
+      // botão Adicionar também tem data-order; evita disparo duplo no card
+      if (el.matches('.product-card') && e.target.closest('button[data-order]')) return;
+      e.preventDefault();
+      openLightbox(el.dataset.order || el.closest('[data-order]')?.dataset.order);
+    };
+    el.addEventListener('click', open);
+    if (el.matches('.product-card')) {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openLightbox(el.dataset.order);
+        }
+      });
+    }
   });
 }
 
@@ -984,16 +1041,16 @@ function openLightbox(productId) {
   const lb = document.getElementById('order-lightbox');
   lb.hidden = false;
   lb.classList.add('is-open');
-  document.body.style.overflow = 'hidden';
+  lockBodyScroll();
+  focusLightboxOptions();
 }
 
 function closeLightbox() {
   const lb = document.getElementById('order-lightbox');
+  if (!lb?.classList.contains('is-open')) return;
   lb.classList.remove('is-open');
   lb.hidden = true;
-  if (!document.getElementById('cart-drawer')?.classList.contains('is-open')) {
-    document.body.style.overflow = '';
-  }
+  unlockBodyScroll();
   selectedProduct = null;
 }
 
@@ -1012,6 +1069,7 @@ function addCurrentProductToCart() {
       error.hidden = false;
     }
     document.getElementById('acc-flavor')?.classList.add('is-open');
+    focusLightboxOptions();
     return;
   }
 
@@ -1359,20 +1417,19 @@ function openCart() {
   }
   renderCartUI();
   fillCustomerFields();
+  const wasOpen = drawer.classList.contains('is-open');
   drawer.hidden = false;
   drawer.classList.add('is-open');
-  document.body.style.overflow = 'hidden';
+  if (!wasOpen) lockBodyScroll();
   bindPhoneMask(document.getElementById('cart-phone'));
 }
 
 function closeCart() {
   const drawer = document.getElementById('cart-drawer');
-  if (!drawer) return;
+  if (!drawer || !drawer.classList.contains('is-open')) return;
   drawer.classList.remove('is-open');
   drawer.hidden = true;
-  if (!document.getElementById('order-lightbox')?.classList.contains('is-open')) {
-    document.body.style.overflow = '';
-  }
+  unlockBodyScroll();
 }
 
 async function checkoutCart() {
@@ -1657,10 +1714,12 @@ function initHeader() {
   window.addEventListener('scroll', onScroll, { passive: true });
 
   function setMenuOpen(open) {
+    const wasOpen = nav.classList.contains('is-open');
     nav.classList.toggle('is-open', open);
     toggle.classList.toggle('is-open', open);
     toggle.setAttribute('aria-expanded', String(open));
-    document.body.style.overflow = open ? 'hidden' : '';
+    if (open && !wasOpen) lockBodyScroll();
+    if (!open && wasOpen) unlockBodyScroll();
   }
 
   toggle?.addEventListener('click', () => {
@@ -1679,6 +1738,9 @@ function initHeader() {
 function initLightbox() {
   document.getElementById('lightbox-close')?.addEventListener('click', closeLightbox);
   document.getElementById('lightbox-backdrop')?.addEventListener('click', closeLightbox);
+  document.getElementById('lightbox-media')?.addEventListener('click', () => {
+    focusLightboxOptions();
+  });
   document.getElementById('order-lightbox')?.addEventListener('click', (e) => {
     if (e.target.id === 'order-lightbox') closeLightbox();
   });

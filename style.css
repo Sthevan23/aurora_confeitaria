@@ -62,6 +62,20 @@ html {
   scroll-behavior: smooth;
 }
 
+html.is-scroll-locked,
+html.is-scroll-locked body {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+body.is-scroll-locked {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -902,6 +916,7 @@ p {
 
 .product-card--unavailable {
   opacity: 0.78;
+  cursor: default;
 }
 
 .product-card--unavailable .product-card__img {
@@ -959,6 +974,7 @@ p {
   box-shadow: var(--shadow-soft);
   display: flex;
   flex-direction: column;
+  cursor: pointer;
   transition:
     transform 280ms var(--ease-out),
     box-shadow 280ms var(--ease-out);
@@ -3441,16 +3457,20 @@ p {
 /* Modal produto (delivery style) */
 .order-lightbox__panel--product {
   grid-template-columns: minmax(280px, 1.1fr) minmax(300px, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .order-lightbox__panel--product .order-lightbox__media {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 1 / -1;
   padding: 0;
   background: #1f140c;
   overflow: hidden;
   align-self: stretch;
+  border: 0;
+  cursor: default;
+  display: grid;
+  place-items: stretch;
 }
 
 .order-lightbox__panel--product .order-lightbox__media img {
@@ -3461,15 +3481,26 @@ p {
   object-position: center;
   border-radius: 0;
   display: block;
+  pointer-events: none;
+}
+
+.order-lightbox__panel--product .order-lightbox__intro {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1;
+  gap: 0.25rem;
+  padding: 1.35rem 3.25rem 0.35rem 1.25rem;
+  align-content: start;
 }
 
 .order-lightbox__panel--product .order-lightbox__info {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
+  min-height: 0;
 }
 
 .order-lightbox__panel--product .order-lightbox__scroll {
-  padding-top: 1.5rem;
+  padding-top: 0.35rem;
 }
 
 .order-lightbox__add {
@@ -3954,51 +3985,66 @@ p {
 
 @media (max-width: 820px) {
   .order-lightbox__panel--product {
-    grid-template-columns: 1fr;
+    grid-template-columns: 88px minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
-    max-height: min(92dvh, 720px);
-    height: auto;
+    max-height: min(88dvh, 720px);
+    height: min(88dvh, 720px);
   }
 
   .order-lightbox__panel--product .order-lightbox__handle {
     display: block;
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 1;
   }
 
   .order-lightbox__panel--product .order-lightbox__media {
     grid-column: 1;
     grid-row: 2;
-    width: 100%;
+    width: auto;
     height: auto;
     min-height: 0;
     max-height: none;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: auto;
     overflow: hidden;
-    place-items: stretch;
-    padding: 0;
-    background: #1f140c;
+    place-items: start stretch;
+    padding: 0.2rem 0 0.75rem 0.9rem;
+    background: transparent;
+    align-self: start;
+    border: 0;
+    cursor: pointer;
   }
 
   .order-lightbox__panel--product .order-lightbox__media img {
-    width: 100%;
-    height: 100%;
+    width: 88px;
+    height: 110px;
     max-height: none;
     object-fit: cover !important;
     object-position: center;
-    border-radius: 0;
-    box-shadow: none;
+    border-radius: 0.85rem;
+    box-shadow: 0 4px 14px rgba(88, 56, 24, 0.12);
     display: block;
+    pointer-events: none;
+  }
+
+  .order-lightbox__panel--product .order-lightbox__intro {
+    display: grid;
+    grid-column: 2;
+    grid-row: 2;
+    padding: 0.35rem 2.6rem 0.75rem 0.7rem;
+    gap: 0.15rem;
+    align-content: center;
   }
 
   .order-lightbox__panel--product .order-lightbox__info {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 3;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .order-lightbox__panel--product .order-lightbox__title {
-    font-size: 1.25rem;
-    -webkit-line-clamp: unset;
+    font-size: 1.05rem;
+    -webkit-line-clamp: 2;
   }
 
   .order-lightbox__panel--product .order-lightbox__desc {
@@ -4006,7 +4052,12 @@ p {
   }
 
   .order-lightbox__panel--product .order-lightbox__scroll {
-    padding: 0.85rem 1rem 0.5rem;
+    padding: 0 0.9rem 0.5rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .header__cart-label {

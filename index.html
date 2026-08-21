@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=38">
+  <link rel="stylesheet" href="style.css?v=39">
 </head>
 <body>
   <header class="header" id="header">
@@ -348,14 +348,16 @@
     <div class="order-lightbox__panel order-lightbox__panel--product">
       <div class="order-lightbox__handle" aria-hidden="true"></div>
       <button type="button" class="order-lightbox__close" id="lightbox-close" aria-label="Fechar">×</button>
-      <div class="order-lightbox__media">
+      <button type="button" class="order-lightbox__media" id="lightbox-media" aria-label="Ver opções do produto">
         <img id="lightbox-img" src="" alt="">
+      </button>
+      <div class="order-lightbox__intro">
+        <span class="order-lightbox__category" id="lightbox-category"></span>
+        <h3 class="order-lightbox__title" id="lightbox-title"></h3>
+        <p class="order-lightbox__price" id="lightbox-unit-price"></p>
       </div>
       <div class="order-lightbox__info">
-        <div class="order-lightbox__scroll">
-          <span class="order-lightbox__category" id="lightbox-category"></span>
-          <h3 class="order-lightbox__title" id="lightbox-title"></h3>
-          <p class="order-lightbox__price" id="lightbox-unit-price"></p>
+        <div class="order-lightbox__scroll" id="lightbox-scroll">
           <p class="order-lightbox__desc" id="lightbox-desc"></p>
           <div id="lightbox-flavors" hidden></div>
           <label class="order-field order-field--notes">
@@ -388,6 +390,6 @@
   <script src="js/product-photos.js?v=1"></script>
   <script src="js/storage.js?v=57"></script>
   <script src="js/cart-shared.js?v=4"></script>
-  <script src="script.js?v=57"></script>
+  <script src="script.js?v=58"></script>
 </body>
 </html>
