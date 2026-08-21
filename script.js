@@ -449,7 +449,8 @@ function imgSrc(path) {
   if (isOfflineOrLocalPage()) {
     return `${LIVE_ORIGIN}/${clean}`;
   }
-  return clean;
+  // Absolute from site root — evita quebrar em /carrinho etc.
+  return `/${clean}`;
 }
 
 function photoSrc(path) {
@@ -459,7 +460,7 @@ function photoSrc(path) {
   if (isOfflineOrLocalPage()) {
     return `${LIVE_ORIGIN}/api/photo.php?f=${encodeURIComponent(name)}`;
   }
-  return `api/photo.php?f=${encodeURIComponent(name)}`;
+  return `/api/photo.php?f=${encodeURIComponent(name)}`;
 }
 
 function imgTag(path, alt, className = '') {
@@ -468,8 +469,9 @@ function imgTag(path, alt, className = '') {
   const photo = photoSrc(path);
   const cls = className ? ` class="${className}"` : '';
   const safeAlt = String(alt || '').replace(/"/g, '&quot;');
+  // 1) arquivo  2) backup MySQL  3) placeholder — sem loop
   const onErr = photo
-    ? `if(!this.dataset.ph){this.dataset.ph='1';this.src='${photo}';}else{this.onerror=null;this.src='${fallback}';}`
+    ? `if(!this.dataset.ph){this.dataset.ph='1';this.onerror=null;this.src='${photo}';this.onerror=function(){this.onerror=null;this.src='${fallback}';};}else{this.onerror=null;this.src='${fallback}';}`
     : `this.onerror=null;this.src='${fallback}'`;
   return `<img${cls} src="${src}" alt="${safeAlt}" loading="lazy" decoding="async" onerror="${onErr}">`;
 }

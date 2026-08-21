@@ -17,17 +17,6 @@
       "</svg>"
     );
 
-  function photoSrc(path) {
-    if (!path || /^(data:|blob:)/i.test(String(path))) return '';
-    const name = String(path).split(/[\\/]/).pop();
-    if (!name || !/\.(jpe?g|png|webp|gif)$/i.test(name)) return '';
-    const host = (location.hostname || '').toLowerCase();
-    if (location.protocol === 'file:' || !host || host === 'localhost' || host === '127.0.0.1') {
-      return `https://auroraconfeitaria.com.br/api/photo.php?f=${encodeURIComponent(name)}`;
-    }
-    return `api/photo.php?f=${encodeURIComponent(name)}`;
-  }
-
   function imgSrc(path) {
     if (!path) path = FALLBACK_IMG;
     const raw = String(path).trim();
@@ -37,7 +26,18 @@
     if (location.protocol === 'file:' || !host || host === 'localhost' || host === '127.0.0.1') {
       return `https://auroraconfeitaria.com.br/${clean}`;
     }
-    return clean;
+    return `/${clean}`;
+  }
+
+  function photoSrc(path) {
+    if (!path || /^(data:|blob:)/i.test(String(path))) return '';
+    const name = String(path).split(/[\\/]/).pop();
+    if (!name || !/\.(jpe?g|png|webp|gif)$/i.test(name)) return '';
+    const host = (location.hostname || '').toLowerCase();
+    if (location.protocol === 'file:' || !host || host === 'localhost' || host === '127.0.0.1') {
+      return `https://auroraconfeitaria.com.br/api/photo.php?f=${encodeURIComponent(name)}`;
+    }
+    return `/api/photo.php?f=${encodeURIComponent(name)}`;
   }
 
   function onlyDigits(v) {

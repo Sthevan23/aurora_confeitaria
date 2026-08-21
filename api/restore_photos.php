@@ -23,12 +23,13 @@ if ($fp && !flock($fp, LOCK_EX | LOCK_NB)) {
 try {
   require_once __DIR__ . '/db.php';
   $pdo = aurora_db(false);
-  $restored = aurora_restore_missing_photos($pdo, 40);
+  $restored = aurora_restore_missing_photos($pdo, 80);
   $backed = 0;
   $stamp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_photo_backup_' . md5(__DIR__);
-  $backupDue = $restored > 0 || !is_file($stamp) || (filemtime($stamp) < (time() - 180));
+  $force = isset($_GET['force']);
+  $backupDue = $force || $restored > 0 || !is_file($stamp) || (filemtime($stamp) < (time() - 60));
   if ($backupDue) {
-    $backed = aurora_backup_disk_photos_to_mysql($pdo, 20);
+    $backed = aurora_backup_disk_photos_to_mysql($pdo, 80);
     @file_put_contents($stamp, (string) time());
   }
   echo json_encode([

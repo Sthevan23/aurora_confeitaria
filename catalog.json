@@ -1,6 +1,6 @@
 {
-  "version": 18,
-  "generatedAt": "2026-08-11T16:22:08+00:00",
+  "version": 16,
+  "generatedAt": "2026-08-21T20:34:05+00:00",
   "settings": {
     "name": "Aurora Confeitaria Artesanal",
     "tagline": "Feito com amor",
@@ -12,7 +12,7 @@
     "instagramUser": "@a.aurora.confeitaria",
     "facebook": "",
     "email": "contato@aurora.com",
-    "address": "Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil",
+    "address": "Rua Casimiro Tulio Freire, 735 - Alta Vista",
     "hours": "Pedidos pelo WhatsApp",
     "followers": "",
     "posts": "",
@@ -69,6 +69,16 @@
       "id": "catmrxiz9bq9l8h7",
       "name": "Combos",
       "slug": "combos"
+    },
+    {
+      "id": "catmsjfwries1yyd",
+      "name": "Batatas Recheadas",
+      "slug": "batatas-recheadas"
+    },
+    {
+      "id": "catmsqebkv3x7phe",
+      "name": "FESTIVAL DE FATIAS",
+      "slug": "festival-de-fatias"
     }
   ],
   "products": [
@@ -87,57 +97,49 @@
         "Morango com Ninho",
         "Brigadeiro com Ninho e Nutella",
         "Brigadeiro com Morango",
-        "Brigadeiro com Nutella"
+        "Brigadeiro com Nutella",
+        "Brigadeiro com Caramelo"
       ],
       "promoActive": false,
       "promoPrice": null,
       "promoLabel": "",
       "bestSeller": true,
-      "active": false,
+      "active": true,
       "available": true,
+      "priceFrom": true,
       "flavorPrices": {
         "Ninho com Nutella": 29,
         "Morango com Ninho": 29,
         "Brigadeiro com Ninho e Nutella": 29,
         "Brigadeiro com Morango": 29,
-        "Brigadeiro com Nutella": 29
+        "Brigadeiro com Nutella": 29,
+        "Brigadeiro com Caramelo": 29
       }
     },
     {
-      "id": "p-copo-morango",
-      "name": "Bombom de Morango",
-      "description": "Camadas de morangos frescos, brigadeiro cremoso de leite ninho e ganache de chocolate nobre .",
-      "price": 15,
-      "categoryId": "cat-potes",
-      "image": "products/6aceecd0-e407-4478-b511-f03af2e22e65.jpg",
-      "featured": true,
-      "slug": "copo-morango-ninho-chocolate",
-      "size": "140ml",
-      "flavors": [],
-      "promoActive": false,
-      "promoPrice": null,
-      "promoLabel": "Promoção",
-      "bestSeller": false,
-      "active": true,
-      "available": true
-    },
-    {
       "id": "p-coxinha",
-      "name": "Coxinha de Costela com Cream Cheese",
-      "description": "Opção salgada do cardápio: coxinha de costela desfiada com cream cheese.",
+      "name": "Coxinha de Costela com Cream Cheese ou Cheddar",
+      "description": "Massa perfeita, leve e nada enjoativa, muita costela selecionada desfiada com o azedinho do cream cheese ou o defumadinho do cheddar, embas impecáveis e saciam muito bem !",
       "price": 24.9,
       "categoryId": "cat-salgados",
       "image": "products/dcf6f873-6760-4663-a0e4-b5ffb87e0898.jpg",
       "featured": true,
       "slug": "coxinha-costela-cream-cheese",
       "size": "200g",
-      "flavors": [],
+      "flavors": [
+        "Cheddar",
+        "Cream Cheese"
+      ],
       "promoActive": false,
       "promoPrice": null,
-      "promoLabel": "Promoção",
+      "promoLabel": "",
       "bestSeller": true,
-      "active": false,
-      "available": true
+      "active": true,
+      "available": true,
+      "flavorPrices": {
+        "Cheddar": 0,
+        "Cream Cheese": 0
+      }
     },
     {
       "id": "p-afoga",
@@ -152,49 +154,22 @@
       "flavors": [
         "Kinder",
         "Ninho com Nutella",
-        "Ninho com Geleia de Morangos",
         "Ninho com Nutella e Morango",
         "Brigadeiro com Nutella",
         "Caramelo com Brigadeiro"
       ],
       "promoActive": false,
       "promoPrice": null,
-      "promoLabel": "Promoção",
+      "promoLabel": "",
       "bestSeller": true,
       "active": true,
       "available": true,
       "flavorPrices": {
         "Kinder": 13,
         "Ninho com Nutella": 13,
-        "Ninho com Geleia de Morangos": 13,
         "Ninho com Nutella e Morango": 13,
         "Brigadeiro com Nutella": 13,
         "Caramelo com Brigadeiro": 13
-      }
-    },
-    {
-      "id": "p-minipote",
-      "name": "Mini Bolo de Pote",
-      "description": "Mini bolo de pote 140 ml — R$ 8 cada ou 2 por R$ 15. Escolha o sabor.",
-      "price": 8,
-      "categoryId": "cat-potes",
-      "image": "products/aurora-mini-bolo-pote.jpg",
-      "featured": true,
-      "slug": "mini-bolo-de-pote",
-      "size": "140ml",
-      "flavors": [
-        "Ninho com Maracujá",
-        "Ninho com Geleia de Morango"
-      ],
-      "promoActive": false,
-      "promoPrice": null,
-      "promoLabel": "Promoção",
-      "bestSeller": true,
-      "active": true,
-      "available": true,
-      "flavorPrices": {
-        "Ninho com Maracujá": 8,
-        "Ninho com Geleia de Morango": 8
       }
     },
     {
@@ -208,37 +183,8 @@
       "slug": "cookies-premium",
       "size": "130g",
       "flavors": [
-        "Nutella",
         "RedVelvet com brigadeiro de cream cheese",
         "Kinder Bueno"
-      ],
-      "promoActive": false,
-      "promoPrice": null,
-      "promoLabel": "Promoção",
-      "bestSeller": true,
-      "active": true,
-      "available": true,
-      "flavorPrices": {
-        "Nutella": 18,
-        "RedVelvet com brigadeiro de cream cheese": 18,
-        "Kinder Bueno": 18
-      }
-    },
-    {
-      "id": "p-patinha",
-      "name": "Brownie Patinha",
-      "description": "Item exclusivo da Aurora criado para apoiar uma ONG de animais da cidade — por isso o nome Patinha. A base é brownie, geralmente com brigadeiro cremoso de ninho e geleia de morango para equilibrar o sabor. Também temos outros sabores!",
-      "price": 15,
-      "categoryId": "cat-especiais",
-      "image": "products/679de717-08f0-4c2d-a601-7bb8bae07bc4.jpg",
-      "featured": true,
-      "slug": "brownie-patinha",
-      "size": "",
-      "flavors": [
-        "Ninho com Geleia de Morango",
-        "Ninho com Nutella",
-        "Ferrero",
-        "Kinder"
       ],
       "promoActive": false,
       "promoPrice": null,
@@ -247,10 +193,8 @@
       "active": true,
       "available": true,
       "flavorPrices": {
-        "Ninho com Geleia de Morango": 15,
-        "Ninho com Nutella": 15,
-        "Ferrero": 15,
-        "Kinder": 15
+        "RedVelvet com brigadeiro de cream cheese": 18,
+        "Kinder Bueno": 18
       }
     },
     {
@@ -293,75 +237,21 @@
       "flavors": [
         "Kinder",
         "Brigadeiro",
-        "Ninho com Nutella",
+        "Ferrer",
         "Maracujá"
       ],
       "promoActive": false,
       "promoPrice": null,
-      "promoLabel": "Promoção",
+      "promoLabel": "",
       "bestSeller": false,
       "active": true,
       "available": true,
       "flavorPrices": {
         "Kinder": 15,
         "Brigadeiro": 15,
-        "Ninho com Nutella": 15,
+        "Ferrer": 15,
         "Maracujá": 15
       }
-    },
-    {
-      "id": "pmrv1kv71rmabn",
-      "name": "Bolo de Cenoura Individual",
-      "description": "Bolo de cenoura caseiro com massa bem fofinha e de cobertura bem chocolatuda !",
-      "price": 10,
-      "categoryId": "cat-bolos",
-      "image": "products/bolo-cenoura-pequeno.jpg",
-      "featured": false,
-      "slug": "bolo-de-cenoura-individual-kv72",
-      "size": "",
-      "flavors": [],
-      "promoActive": false,
-      "promoPrice": null,
-      "promoLabel": "",
-      "bestSeller": false,
-      "active": true,
-      "available": true
-    },
-    {
-      "id": "pmrv1om4wen3q1",
-      "name": "Bolo de Cenoura Pequeno",
-      "description": "Bolo de Cenoura com a massa fofinha e muito recheio cremoso bem chocolatudo ! \nServe 2 a 3 pessoas",
-      "price": 30,
-      "categoryId": "cat-bolos",
-      "image": "products/bolo-cenoura-pequeno.jpg",
-      "featured": false,
-      "slug": "bolo-de-cenoura-pequeno-om4x",
-      "size": "",
-      "flavors": [],
-      "promoActive": true,
-      "promoPrice": 25,
-      "promoLabel": "Promoção",
-      "bestSeller": false,
-      "active": true,
-      "available": true
-    },
-    {
-      "id": "pms20fjel79y1l",
-      "name": "Torta de Limão",
-      "description": "Fantástica, limão na medida certa, bem equilibrada derrete na boca uma verdadeira experiência cada colherada!",
-      "price": 25,
-      "categoryId": "cat-especiais",
-      "image": "products/torta-limao.jpg",
-      "featured": true,
-      "slug": "torta-de-limao-fjel",
-      "size": "",
-      "flavors": [],
-      "promoActive": false,
-      "promoPrice": null,
-      "promoLabel": "",
-      "bestSeller": false,
-      "active": true,
-      "available": true
     },
     {
       "id": "pms6hkz6qf352s",
@@ -369,49 +259,13 @@
       "description": "Base em brownie molhadinho, mousse de chocolate meio amargo e caramelo com flor de sal, incrível equilibrada agrada a paladares exigentes !",
       "price": 23,
       "categoryId": "cat-especiais",
-      "image": "products/torta-brownie-caramelo.jpg",
+      "image": "products/4d8b7465-2346-c225-1eb8-4dc70184d8ef.jpg",
       "featured": true,
       "slug": "torta-brownie-com-caramelo-e-chocolate-kz6q",
       "size": "",
       "flavors": [],
-      "promoActive": false,
-      "promoPrice": null,
-      "promoLabel": "",
-      "bestSeller": false,
-      "active": true,
-      "available": true
-    },
-    {
-      "id": "pms6hmg0hdz60c",
-      "name": "Bolo Gelado Ninho c Morango",
-      "description": "Incrivelmente delicioso molhadinho e geladiinho acompanha calda de ninho !",
-      "price": 12,
-      "categoryId": "cat-bolos",
-      "image": "products/copo-morango-creme.jpg",
-      "featured": false,
-      "slug": "bolo-gelado-ninho-c-morango-mg0h",
-      "size": "200g",
-      "flavors": [],
       "promoActive": true,
-      "promoPrice": 10,
-      "promoLabel": "Promoção",
-      "bestSeller": true,
-      "active": true,
-      "available": true
-    },
-    {
-      "id": "pms7qn3n8ihrjo",
-      "name": "Bolo Gelado Prestigio",
-      "description": "massa de chocolate molhadinha recheio de brigadeiro de coco com um toque de brigadeiro de chocolate meio amargo, tudo feito com chocolate nobre e aquela qualidade que só a Aurora proporciona!",
-      "price": 12,
-      "categoryId": "cat-bolos",
-      "image": "products/27cca0b6-2fd5-4d60-8c72-92a1e8097364.jpg",
-      "featured": true,
-      "slug": "bolo-gelado-prestigio-n3n8",
-      "size": "200g",
-      "flavors": [],
-      "promoActive": true,
-      "promoPrice": 10,
+      "promoPrice": 17.9,
       "promoLabel": "Promoção",
       "bestSeller": false,
       "active": true,
@@ -423,7 +277,7 @@
       "description": "Massa de chocolate molhadinha recheio bem abundante de mousse de chocolate brigadeiro meio amargo e caramelo levemente salgado",
       "price": 12,
       "categoryId": "cat-bolos",
-      "image": "products/torta-brownie-caramelo.jpg",
+      "image": "products/23b1612c-468b-1770-e2f2-abe9c0b6a8c7.jpg",
       "featured": true,
       "slug": "bolo-de-chococaramelo-pjvq",
       "size": "200g",
@@ -441,7 +295,7 @@
       "description": "delicioso molhadinho doce na medida certa !",
       "price": 18,
       "categoryId": "cat-especiais",
-      "image": "products/aurora-mini-bolo-pote.jpg",
+      "image": "products/ce3ef53c-0b85-970a-215b-50d4fec5a9ff.jpg",
       "featured": true,
       "slug": "pao-de-mel-no-pote-hmla",
       "size": "150ml",
@@ -454,30 +308,12 @@
       "available": true
     },
     {
-      "id": "pmsaq19smjrb67",
-      "name": "Enroladão de Presunto e Queijo",
-      "description": "Massa da nossa deliciosa coxinha com muuito presunto e queijo frito na hora !",
-      "price": 16.9,
-      "categoryId": "cat-salgados",
-      "image": "products/dcf6f873-6760-4663-a0e4-b5ffb87e0898.jpg",
-      "featured": true,
-      "slug": "enroladao-de-presunto-e-queijo-19sm",
-      "size": "",
-      "flavors": [],
-      "promoActive": false,
-      "promoPrice": null,
-      "promoLabel": "",
-      "bestSeller": true,
-      "active": true,
-      "available": true
-    },
-    {
       "id": "pmsez5om6la6lj",
       "name": "Combo Coxinha",
-      "description": "Combo perfeito, acompanha uma coxinha de costela com cream cheese, um afogadinho de brownie sortido e uma coca 200ml ! \nFritamos a coxinha na hora .",
-      "price": 30,
+      "description": "Combo perfeito, acompanha uma coxinha de costela com cream cheese ou cheddar, um bolo de pote sortido e uma refrigerante 200ml ! \nFritamos a coxinha na hora .",
+      "price": 37.9,
       "categoryId": "cat-salgados",
-      "image": "products/dcf6f873-6760-4663-a0e4-b5ffb87e0898.jpg",
+      "image": "products/c88dc0a3-6e03-4180-fc40-6b5a57e42a25.jpg",
       "featured": true,
       "slug": "combo-coxinha-5om6",
       "size": "",
@@ -488,6 +324,104 @@
       "bestSeller": true,
       "active": true,
       "available": true
+    },
+    {
+      "id": "pmsjg9qd1xag3j",
+      "name": "Bolo de Pote",
+      "description": "Recheio cremoso com sabor intenso, feito com chocolate de verdade, uma verdadeira experiência ✨",
+      "price": 15,
+      "categoryId": "cat-bolos",
+      "image": "products/3ae4767b-fa14-3f28-1846-7f2936f4ff7c.jpg",
+      "featured": false,
+      "slug": "bolo-de-pote-9qd1",
+      "size": "150m",
+      "flavors": [
+        "Ninho com Nutella",
+        "Limao com Chocolate",
+        "Kitkat",
+        "Chocolate com Caramelo Crocante levemente salgado"
+      ],
+      "promoActive": false,
+      "promoPrice": null,
+      "promoLabel": "",
+      "bestSeller": true,
+      "active": true,
+      "available": true,
+      "flavorPrices": {
+        "Ninho com Nutella": 15,
+        "Limao com Chocolate": 15,
+        "Kitkat": 15,
+        "Chocolate com Caramelo Crocante levemente salgado": 15
+      }
+    },
+    {
+      "id": "pmsqel9jf9zjha",
+      "name": "Festival de Fatias",
+      "description": "Cada fatia tem aproximadamente 300gr e acompanha calda de NINHO ou CHOCOLATE de cortesia, é importante colocar qual a sua preferência nas observações do pedido, caso não seja informado mandaremos sem a calda !\n\n3 fatias por R$65",
+      "price": 25,
+      "categoryId": "catmsqebkv3x7phe",
+      "image": "products/75451d67-160a-131a-c893-f5c6d130836d.jpg",
+      "featured": true,
+      "slug": "pre-venda-ultimo-festival-de-fatias-em-nosso-atelie-l9jf",
+      "size": "300g",
+      "flavors": [
+        "Ninho com Nutella",
+        "Ferrero Rocher",
+        "Kinder Bueno",
+        "Olho de Sogra",
+        "Floresta Negra",
+        "Abacaxi com coco",
+        "Maracujá com Brigadeiro",
+        "Prestígio",
+        "Chocolatuda",
+        "Ninho com Morango e Brigadeiro"
+      ],
+      "promoActive": true,
+      "promoPrice": 20,
+      "promoLabel": "Promoção",
+      "bestSeller": true,
+      "active": true,
+      "available": true,
+      "flavorPrices": {
+        "Ninho com Nutella": 25,
+        "Ferrero Rocher": 25,
+        "Kinder Bueno": 25,
+        "Olho de Sogra": 25,
+        "Floresta Negra": 25,
+        "Abacaxi com coco": 25,
+        "Maracujá com Brigadeiro": 25,
+        "Prestígio": 25,
+        "Chocolatuda": 25,
+        "Ninho com Morango e Brigadeiro": 25
+      }
+    },
+    {
+      "id": "pmt33lgtfo6uhe",
+      "name": "Combos Cesta Maluca",
+      "description": "A Cesta Maluca Aurora é uma experiência surpresa para quem ama doces e adora ser surpreendido!\n\nVocê escolhe qual cesta quer receber e nós cuidamos de todo o resto. A combinação é escolhida pela nossa equipe com muito carinho, utilizando as delícias disponíveis na Aurora no momento do pedido.\n\n✨ Você paga:\n\n* 🎀 Cesta Aurora — R$ 29,90 → recebe produtos que valem no mínimo R$ 40,00\n* 💗 Cesta Prime — R$ 44,90 → recebe produtos que valem no mínimo R$ 60,00\n* 👑 Cesta Premium — R$ 59,90 → recebe produtos que valem no mínimo R$ 80,00\n\n🤫 E o que vem dentro?\n\nEssa é a parte mais divertida: é surpresa! 😍\n\nA composição pode incluir diferentes delícias da Aurora, de acordo com a disponibilidade do dia. Você não escolhe os produtos — nós escolhemos uma combinação deliciosa para você.\n\nO conteúdo varia conforme a disponibilidade, mas uma coisa é garantida: você vai receber produtos com valor superior ao que pagou. 💗",
+      "price": 0,
+      "categoryId": "cat-especiais",
+      "image": "products/b4f03817-3403-ff85-5dd2-c9741f09b698.jpg",
+      "featured": true,
+      "slug": "combos-cesta-maluca-lgtf",
+      "size": "",
+      "flavors": [
+        "Cesta Aurora",
+        "Cesta Prime",
+        "Cesta Premium"
+      ],
+      "promoActive": false,
+      "promoPrice": null,
+      "promoLabel": "",
+      "bestSeller": true,
+      "active": true,
+      "available": true,
+      "priceFrom": true,
+      "flavorPrices": {
+        "Cesta Aurora": 30,
+        "Cesta Prime": 45,
+        "Cesta Premium": 60
+      }
     }
   ],
   "reviews": [],
@@ -504,13 +438,5 @@
     "products/ebaf8618-a5e9-4874-9cfd-9d085da4a193.jpg",
     "products/dcf6f873-6760-4663-a0e4-b5ffb87e0898.jpg"
   ],
-  "coupons": [
-    {
-      "code": "QUARTOU",
-      "type": "percent",
-      "value": 10,
-      "minOrder": 50,
-      "label": "10% de desconto"
-    }
-  ]
+  "coupons": []
 }

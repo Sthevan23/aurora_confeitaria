@@ -4,7 +4,7 @@
  */
 const Storage = (() => {
   const KEY = 'aurora_confeitaria_data';
-  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v8';
+  const PUBLIC_CACHE_KEY = 'aurora_public_catalog_v9';
   const API_DOWN_KEY = 'aurora_api_down_until';
   const DATA_VERSION = 20;
   const PRODUCTION_API = 'https://auroraconfeitaria.com.br/api/data.php';
