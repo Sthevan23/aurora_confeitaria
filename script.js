@@ -35,7 +35,7 @@ let bodyScrollLocks = 0;
 function lockBodyScroll() {
   bodyScrollLocks += 1;
   if (bodyScrollLocks > 1) return;
-  bodyScrollY = window.scrollY || window.pageYOffset || 0;
+  bodyScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
   document.documentElement.classList.add('is-scroll-locked');
   document.body.classList.add('is-scroll-locked');
   document.body.style.top = `-${bodyScrollY}px`;
@@ -44,33 +44,22 @@ function lockBodyScroll() {
 function unlockBodyScroll() {
   bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
   if (bodyScrollLocks > 0) return;
+  const y = bodyScrollY;
   document.documentElement.classList.remove('is-scroll-locked');
   document.body.classList.remove('is-scroll-locked');
   document.body.style.top = '';
-  window.scrollTo(0, bodyScrollY);
-}
-
-function isLightboxOpen() {
-  return !!document.getElementById('order-lightbox')?.classList.contains('is-open');
-}
-
-function isCartOpen() {
-  return !!document.getElementById('cart-drawer')?.classList.contains('is-open');
+  // instant: evita animação e “puxão” pra baixo ao fechar o modal
+  window.scrollTo({ top: y, left: 0, behavior: 'auto' });
 }
 
 function focusLightboxOptions() {
   const scroll = document.getElementById('lightbox-scroll');
   const flavors = document.getElementById('lightbox-flavors');
-  const qty = document.getElementById('lightbox-qty-stepper');
-  const target = (!flavors?.hidden && flavors) || qty || scroll;
-  if (!target) return;
-  requestAnimationFrame(() => {
-    if (scroll) scroll.scrollTop = 0;
-    target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    if (!flavors?.hidden) {
-      document.getElementById('acc-flavor')?.classList.add('is-open');
-    }
-  });
+  if (scroll) scroll.scrollTop = 0;
+  // Nunca usar scrollIntoView aqui — isso mexe no scroll da página
+  if (!flavors?.hidden) {
+    document.getElementById('acc-flavor')?.classList.add('is-open');
+  }
 }
 
 function loadCartFallback() {
@@ -1048,6 +1037,10 @@ function openLightbox(productId) {
 function closeLightbox() {
   const lb = document.getElementById('order-lightbox');
   if (!lb?.classList.contains('is-open')) return;
+  const active = document.activeElement;
+  if (active && lb.contains(active) && typeof active.blur === 'function') {
+    active.blur();
+  }
   lb.classList.remove('is-open');
   lb.hidden = true;
   unlockBodyScroll();

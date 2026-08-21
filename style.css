@@ -60,6 +60,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-anchor: none;
 }
 
 html.is-scroll-locked,
