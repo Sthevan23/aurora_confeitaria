@@ -2682,7 +2682,9 @@ p {
 .order-lightbox__desc {
   margin: 0;
   color: var(--color-brown-soft);
-  font-size: 0.94rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-line;
 }
 
 .order-acc {
@@ -4048,7 +4050,11 @@ p {
   }
 
   .order-lightbox__panel--product .order-lightbox__desc {
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
   }
 
   .order-lightbox__panel--product .order-lightbox__scroll {
