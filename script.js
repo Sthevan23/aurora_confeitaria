@@ -87,21 +87,24 @@ function syncFulfillmentUI(value) {
 
   const deliveryNote = document.getElementById('cart-delivery-note');
   const pickupNote = document.getElementById('cart-pickup-note');
+  const addressWrap = document.getElementById('cart-address-wrap');
   const checkoutOpen = !document.getElementById('cart-checkout')?.hidden;
   const hasItems = cartItems.length > 0 && checkoutOpen;
   if (deliveryNote) deliveryNote.hidden = !(hasItems && mode === 'entrega');
   if (pickupNote) pickupNote.hidden = !(hasItems && mode === 'retirada');
+  if (addressWrap) addressWrap.hidden = !(hasItems && mode === 'entrega');
 }
 
-function fulfillmentWhatsAppBlock(mode) {
+function fulfillmentWhatsAppBlock(mode, address = '') {
   const fee = formatDeliveryFeeText();
   const note = getDeliveryNote();
+  const addr = String(address || '').trim();
   if (mode === 'entrega') {
     return (
       `FORMA: Entrega\n` +
       `Taxa região central: ${fee}\n` +
       `${note}\n` +
-      `(Confirmar endereço no WhatsApp)`
+      (addr ? `Endereço: ${addr}` : '(Informar endereço no WhatsApp)')
     );
   }
   return (
@@ -151,25 +154,28 @@ function loadCustomer() {
     const raw = localStorage.getItem(CUSTOMER_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     if (!parsed || typeof parsed !== 'object') {
-      return { nome: '', sobrenome: '', phone: '' };
+      return { nome: '', sobrenome: '', phone: '', address: '' };
     }
     return {
       nome: String(parsed.nome || '').trim(),
       sobrenome: String(parsed.sobrenome || '').trim(),
       phone: String(parsed.phone || '').replace(/\D/g, ''),
+      address: String(parsed.address || '').trim(),
     };
   } catch {
-    return { nome: '', sobrenome: '', phone: '' };
+    return { nome: '', sobrenome: '', phone: '', address: '' };
   }
 }
 
-function saveCustomer({ nome, sobrenome, phone }) {
+function saveCustomer({ nome, sobrenome, phone, address } = {}) {
+  const prev = loadCustomer();
   const data = {
-    nome: String(nome || '').trim(),
-    sobrenome: String(sobrenome || '').trim(),
-    phone: String(phone || '').replace(/\D/g, '').slice(0, 11),
+    nome: String(nome !== undefined ? nome : prev.nome).trim(),
+    sobrenome: String(sobrenome !== undefined ? sobrenome : prev.sobrenome).trim(),
+    phone: String(phone !== undefined ? phone : prev.phone).replace(/\D/g, '').slice(0, 11),
+    address: String(address !== undefined ? address : prev.address).trim().slice(0, 280),
   };
-  if (!data.nome && !data.sobrenome && !data.phone) return;
+  if (!data.nome && !data.sobrenome && !data.phone && !data.address) return;
   localStorage.setItem(CUSTOMER_KEY, JSON.stringify(data));
 }
 
@@ -186,6 +192,7 @@ function readCustomerFromCart() {
     nome: document.getElementById('cart-nome')?.value.trim() || '',
     sobrenome: document.getElementById('cart-sobrenome')?.value.trim() || '',
     phone: document.getElementById('cart-phone')?.value || '',
+    address: document.getElementById('cart-address')?.value.trim() || '',
   };
 }
 
@@ -220,8 +227,10 @@ function fillCustomerFields() {
   const cartNome = document.getElementById('cart-nome');
   const cartSobrenome = document.getElementById('cart-sobrenome');
   const cartPhone = document.getElementById('cart-phone');
+  const cartAddress = document.getElementById('cart-address');
   if (cartNome) cartNome.value = c.nome;
   if (cartSobrenome) cartSobrenome.value = c.sobrenome;
+  if (cartAddress) cartAddress.value = c.address || '';
   if (cartPhone) {
     cartPhone.value = c.phone ? formatPhoneBR(c.phone) : '';
     bindPhoneMask(cartPhone);
@@ -461,7 +470,7 @@ function buildOrderWhatsAppMessage({ product, fullName, phone, flavor, unit }) {
   });
 }
 
-function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty }) {
+function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty, address }) {
   const s = Storage.getSettings();
   const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
   const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
@@ -525,7 +534,7 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
     `TOTAL A PAGAR: ${Storage.formatCurrency(total)}\n` +
     `--------------------------------\n` +
     `${loyaltyBlock}` +
-    `${fulfillmentWhatsAppBlock(mode)}\n` +
+    `${fulfillmentWhatsAppBlock(mode, address)}\n` +
     `--------------------------------\n\n` +
     `Aguardo confirmação de disponibilidade e pagamento.\n\n` +
     `Obrigado!`
@@ -1371,9 +1380,13 @@ async function checkoutCart() {
   const btn = document.getElementById('cart-checkout-btn');
   const nome = document.getElementById('cart-nome')?.value.trim() || '';
   const sobrenome = document.getElementById('cart-sobrenome')?.value.trim() || '';
+  const address = document.getElementById('cart-address')?.value.trim() || '';
   const phoneInput = document.getElementById('cart-phone');
   if (phoneInput) phoneInput.value = formatPhoneBR(phoneInput.value);
   const phone = normalizePhoneBR(phoneInput?.value || '');
+  const fulfillment = setFulfillment(
+    document.querySelector('input[name="cart-fulfillment"]:checked')?.value || getFulfillment()
+  );
 
   if (!cartItems.length) {
     if (error) {
@@ -1397,12 +1410,17 @@ async function checkoutCart() {
     phoneInput?.focus();
     return;
   }
+  if (fulfillment === 'entrega' && address.length < 8) {
+    if (error) {
+      error.textContent = 'Informe o endereço completo para entrega.';
+      error.hidden = false;
+    }
+    document.getElementById('cart-address')?.focus();
+    return;
+  }
 
   if (error) error.hidden = true;
-  saveCustomer({ nome, sobrenome, phone });
-  const fulfillment = setFulfillment(
-    document.querySelector('input[name="cart-fulfillment"]:checked')?.value || getFulfillment()
-  );
+  saveCustomer({ nome, sobrenome, phone, address });
   const fullName = `${nome} ${sobrenome}`;
   const discount = cartDiscount();
   const payable = cartPayable();
@@ -1421,6 +1439,7 @@ async function checkoutCart() {
 
   const notesParts = [
     fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
+    fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
     itemsSnapshot.map((i) => {
       const flavorBit = i.flavor ? ` (${i.flavor})` : '';
       const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -1440,6 +1459,7 @@ async function checkoutCart() {
   const saved = await Storage.createPublicOrder({
     fullName,
     whatsapp: phone,
+    address: fulfillment === 'entrega' ? address : '',
     items: itemsSnapshot.map((item) => ({
       productId: item.productId,
       name: item.name,
@@ -1469,6 +1489,7 @@ async function checkoutCart() {
     phone,
     items: itemsSnapshot,
     fulfillment,
+    address: fulfillment === 'entrega' ? address : '',
     loyalty: saved?.loyalty || null,
   });
   clearCart();

@@ -241,6 +241,9 @@
     }
     if (deliveryLabel) deliveryLabel.textContent = `${Cart.formatMoney(fee)} no centro`;
 
+    const addressWrap = document.getElementById('cart-page-address-wrap');
+    if (addressWrap) addressWrap.hidden = mode !== 'entrega';
+
     // Cupom: mostra se existir cupom ativo no admin
     const couponBox = document.getElementById('cart-page-coupon');
     const hasActive = (Storage.getCoupons?.() || []).some((c) => c.active !== false && c.code);
@@ -324,8 +327,10 @@
     const nome = document.getElementById('cart-page-nome');
     const sobrenome = document.getElementById('cart-page-sobrenome');
     const phone = document.getElementById('cart-page-phone');
+    const address = document.getElementById('cart-page-address');
     if (nome) nome.value = c.nome;
     if (sobrenome) sobrenome.value = c.sobrenome;
+    if (address) address.value = c.address || '';
     if (phone) {
       phone.value = c.phone ? formatPhoneBR(c.phone) : '';
       bindPhoneMask(phone);
@@ -335,6 +340,15 @@
     const ent = document.getElementById('cart-page-fulfillment-entrega');
     if (ret) ret.checked = mode === 'retirada';
     if (ent) ent.checked = mode === 'entrega';
+  }
+
+  function saveFormCustomer() {
+    Cart.saveCustomer({
+      nome: document.getElementById('cart-page-nome')?.value || '',
+      sobrenome: document.getElementById('cart-page-sobrenome')?.value || '',
+      phone: document.getElementById('cart-page-phone')?.value || '',
+      address: document.getElementById('cart-page-address')?.value || '',
+    });
   }
 
   function applyCoupon() {
@@ -390,9 +404,13 @@
     const btn = document.getElementById('cart-page-checkout');
     const nome = document.getElementById('cart-page-nome')?.value.trim() || '';
     const sobrenome = document.getElementById('cart-page-sobrenome')?.value.trim() || '';
+    const address = document.getElementById('cart-page-address')?.value.trim() || '';
     const phoneInput = document.getElementById('cart-page-phone');
     if (phoneInput) phoneInput.value = formatPhoneBR(phoneInput.value);
     const phone = onlyDigits(phoneInput?.value || '');
+    const fulfillment = Cart.setFulfillment(
+      document.querySelector('input[name="cart-page-fulfillment"]:checked')?.value || Cart.getFulfillment()
+    );
 
     if (!Cart.getItems().length) {
       if (error) { error.textContent = 'Adicione pelo menos um item.'; error.hidden = false; }
@@ -407,12 +425,14 @@
       phoneInput?.focus();
       return;
     }
+    if (fulfillment === 'entrega' && address.length < 8) {
+      if (error) { error.textContent = 'Informe o endereço completo para entrega.'; error.hidden = false; }
+      document.getElementById('cart-page-address')?.focus();
+      return;
+    }
 
     if (error) error.hidden = true;
-    Cart.saveCustomer({ nome, sobrenome, phone });
-    const fulfillment = Cart.setFulfillment(
-      document.querySelector('input[name="cart-page-fulfillment"]:checked')?.value || Cart.getFulfillment()
-    );
+    Cart.saveCustomer({ nome, sobrenome, phone, address });
     const fullName = `${nome} ${sobrenome}`;
     const payable = Cart.payable();
     const disc = Cart.discount();
@@ -421,6 +441,7 @@
 
     const notesParts = [
       fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
+      fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
       snapshot.map((i) => {
         const flavorBit = i.flavor ? ` (${i.flavor})` : '';
         const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -440,6 +461,7 @@
     const saved = await Storage.createPublicOrder({
       fullName,
       whatsapp: phone,
+      address: fulfillment === 'entrega' ? address : '',
       items: snapshot.map((item) => ({
         productId: item.productId,
         name: item.name,
@@ -468,6 +490,7 @@
       fullName,
       phone,
       fulfillment,
+      address: fulfillment === 'entrega' ? address : '',
       loyalty: saved.loyalty || null,
     });
     Cart.clear();
@@ -500,14 +523,8 @@
       });
     });
 
-    ['cart-page-nome', 'cart-page-sobrenome', 'cart-page-phone'].forEach((id) => {
-      document.getElementById(id)?.addEventListener('change', () => {
-        Cart.saveCustomer({
-          nome: document.getElementById('cart-page-nome')?.value || '',
-          sobrenome: document.getElementById('cart-page-sobrenome')?.value || '',
-          phone: document.getElementById('cart-page-phone')?.value || '',
-        });
-      });
+    ['cart-page-nome', 'cart-page-sobrenome', 'cart-page-phone', 'cart-page-address'].forEach((id) => {
+      document.getElementById(id)?.addEventListener('change', saveFormCustomer);
     });
 
     const phoneEl = document.getElementById('cart-page-phone');
@@ -515,11 +532,7 @@
     phoneEl?.addEventListener('input', scheduleLoyaltyRefresh);
     phoneEl?.addEventListener('blur', () => {
       scheduleLoyaltyRefresh();
-      Cart.saveCustomer({
-        nome: document.getElementById('cart-page-nome')?.value || '',
-        sobrenome: document.getElementById('cart-page-sobrenome')?.value || '',
-        phone: phoneEl.value || '',
-      });
+      saveFormCustomer();
     });
     refreshLoyalty();
   }

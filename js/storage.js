@@ -1072,9 +1072,10 @@ const Storage = (() => {
     return computeLoyaltyFromOrders(getOrders(), phone);
   }
 
-  async function createPublicOrder({ fullName, whatsapp, items, total, notes }) {
+  async function createPublicOrder({ fullName, whatsapp, items, total, notes, address }) {
     const phone = String(whatsapp || '').replace(/\D/g, '');
     const name = String(fullName || '').trim();
+    const clientAddress = String(address || '').trim().slice(0, 280);
     if (!name || phone.length < 10 || !items || !items.length) {
       return { ok: false, error: 'Dados incompletos' };
     }
@@ -1095,11 +1096,12 @@ const Storage = (() => {
 
     let client = data.clients.find((c) => String(c.phone || '').replace(/\D/g, '') === phone);
     if (!client) {
-      client = { id: generateId('c'), name, email: '', phone, address: '' };
+      client = { id: generateId('c'), name, email: '', phone, address: clientAddress };
       data.clients.push(client);
     } else {
       client.name = name;
       client.phone = phone;
+      if (clientAddress) client.address = clientAddress;
     }
 
     const catalog = data.products || [];

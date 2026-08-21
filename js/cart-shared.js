@@ -161,25 +161,28 @@ window.AuroraCart = (() => {
       const raw = localStorage.getItem(CUSTOMER_KEY);
       const parsed = raw ? JSON.parse(raw) : null;
       if (!parsed || typeof parsed !== 'object') {
-        return { nome: '', sobrenome: '', phone: '' };
+        return { nome: '', sobrenome: '', phone: '', address: '' };
       }
       return {
         nome: String(parsed.nome || '').trim(),
         sobrenome: String(parsed.sobrenome || '').trim(),
         phone: String(parsed.phone || '').replace(/\D/g, ''),
+        address: String(parsed.address || '').trim(),
       };
     } catch {
-      return { nome: '', sobrenome: '', phone: '' };
+      return { nome: '', sobrenome: '', phone: '', address: '' };
     }
   }
 
-  function saveCustomer({ nome, sobrenome, phone }) {
+  function saveCustomer({ nome, sobrenome, phone, address } = {}) {
+    const prev = loadCustomer();
     const data = {
-      nome: String(nome || '').trim(),
-      sobrenome: String(sobrenome || '').trim(),
-      phone: String(phone || '').replace(/\D/g, '').slice(0, 11),
+      nome: String(nome !== undefined ? nome : prev.nome).trim(),
+      sobrenome: String(sobrenome !== undefined ? sobrenome : prev.sobrenome).trim(),
+      phone: String(phone !== undefined ? phone : prev.phone).replace(/\D/g, '').slice(0, 11),
+      address: String(address !== undefined ? address : prev.address).trim().slice(0, 280),
     };
-    if (!data.nome && !data.sobrenome && !data.phone) return;
+    if (!data.nome && !data.sobrenome && !data.phone && !data.address) return;
     localStorage.setItem(CUSTOMER_KEY, JSON.stringify(data));
   }
 
@@ -220,15 +223,16 @@ window.AuroraCart = (() => {
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   }
 
-  function fulfillmentBlock(mode) {
+  function fulfillmentBlock(mode, address = '') {
     const fee = formatMoney(getDeliveryFee());
     const note = getDeliveryNote();
+    const addr = String(address || '').trim();
     if (mode === 'entrega') {
       return (
         `FORMA: Entrega\n` +
         `Taxa região central: ${fee}\n` +
         `${note}\n` +
-        `(Confirmar endereço no WhatsApp)`
+        (addr ? `Endereço: ${addr}` : '(Informar endereço no WhatsApp)')
       );
     }
     return (
@@ -237,7 +241,7 @@ window.AuroraCart = (() => {
     );
   }
 
-  function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty }) {
+  function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty, address }) {
     const s = typeof Storage !== 'undefined' ? Storage.getSettings() : {};
     const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
     const list = getItems();
@@ -283,7 +287,7 @@ window.AuroraCart = (() => {
       `${couponBlock}\n` +
       `*Total:* ${formatMoney(total)}\n` +
       `${loyaltyBlock}\n` +
-      `${fulfillmentBlock(mode)}\n\n` +
+      `${fulfillmentBlock(mode, address)}\n\n` +
       `Aguardo confirmação 😊`
     );
   }
