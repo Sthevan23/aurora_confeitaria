@@ -140,13 +140,17 @@
     if (summary) summary.hidden = false;
 
     wrap.innerHTML = items.map((item) => {
-      const line = (Number(item.price) || 0) * (Number(item.qty) || 0);
+      const unit = Number(item.price) || 0;
+      const line = unit * (Number(item.qty) || 0);
       const meta = [item.size, item.flavor].filter(Boolean).join(' · ');
       const notes = item.notes
         ? `<p class="cart-line__notes"><i class="fa-regular fa-comment"></i> ${escapeHtml(item.notes)}</p>`
         : '';
+      const priceWarn = unit <= 0
+        ? `<p class="cart-line__warn">Escolha o sabor para ver o preço — remova e adicione de novo pelo cardápio.</p>`
+        : '';
       return `
-        <article class="cart-line" data-key="${escapeHtml(item.key)}">
+        <article class="cart-line ${unit <= 0 ? 'cart-line--warn' : ''}" data-key="${escapeHtml(item.key)}">
           <div class="cart-line__media">
             <img class="cart-line__img" src="${imgSrc(item.image)}" alt="" loading="lazy"
               onerror="${photoSrc(item.image)
@@ -162,13 +166,14 @@
             </div>
             ${meta ? `<p class="cart-line__meta">${escapeHtml(meta)}</p>` : ''}
             ${notes}
+            ${priceWarn}
             <div class="cart-line__foot">
               <div class="qty-stepper" data-qty-key="${escapeHtml(item.key)}">
                 <button type="button" class="qty-stepper__btn" data-qty-delta="-1" aria-label="Diminuir">−</button>
                 <span class="qty-stepper__value">${item.qty}</span>
                 <button type="button" class="qty-stepper__btn qty-stepper__btn--plus" data-qty-delta="1" aria-label="Aumentar">+</button>
               </div>
-              <strong class="cart-line__price">${Cart.formatMoney(line)}</strong>
+              <strong class="cart-line__price">${unit > 0 ? Cart.formatMoney(line) : 'Escolha o sabor'}</strong>
             </div>
           </div>
         </article>
@@ -340,6 +345,10 @@
     const ent = document.getElementById('cart-page-fulfillment-entrega');
     if (ret) ret.checked = mode === 'retirada';
     if (ent) ent.checked = mode === 'entrega';
+    const pay = Cart.getPayment();
+    document.querySelectorAll('input[name="cart-page-payment"]').forEach((el) => {
+      el.checked = el.value === pay;
+    });
   }
 
   function saveFormCustomer() {
@@ -416,6 +425,14 @@
       if (error) { error.textContent = 'Adicione pelo menos um item.'; error.hidden = false; }
       return;
     }
+    const zeroItems = Cart.zeroPriceItems();
+    if (zeroItems.length) {
+      if (error) {
+        error.textContent = 'Escolha o sabor de cada item com preço zerado antes de finalizar.';
+        error.hidden = false;
+      }
+      return;
+    }
     if (!nome || !sobrenome) {
       if (error) { error.textContent = 'Preencha nome e sobrenome.'; error.hidden = false; }
       return;
@@ -431,6 +448,10 @@
       return;
     }
 
+    const payment = Cart.setPayment(
+      document.querySelector('input[name="cart-page-payment"]:checked')?.value || Cart.getPayment()
+    );
+
     if (error) error.hidden = true;
     Cart.saveCustomer({ nome, sobrenome, phone, address });
     const fullName = `${nome} ${sobrenome}`;
@@ -442,6 +463,7 @@
     const notesParts = [
       fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
       fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
+      `Pagamento: ${Cart.paymentLabel(payment)}`,
       snapshot.map((i) => {
         const flavorBit = i.flavor ? ` (${i.flavor})` : '';
         const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -491,6 +513,7 @@
       phone,
       fulfillment,
       address: fulfillment === 'entrega' ? address : '',
+      payment,
       loyalty: saved.loyalty || null,
     });
     Cart.clear();
@@ -503,6 +526,7 @@
 
   async function boot() {
     await Storage.initCloud({ full: false }).catch(() => false);
+    Cart.repairItemPrices();
     fillCustomer();
     renderAll();
 
@@ -520,6 +544,12 @@
       el.addEventListener('change', () => {
         Cart.setFulfillment(el.value);
         renderSummary();
+      });
+    });
+
+    document.querySelectorAll('input[name="cart-page-payment"]').forEach((el) => {
+      el.addEventListener('change', () => {
+        if (el.checked) Cart.setPayment(el.value);
       });
     });
 

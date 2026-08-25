@@ -1068,7 +1068,7 @@ function formatFlavorsForEditor(product) {
   if (!flavors.length) return '';
   return flavors.map((f) => {
     const price = prices[f];
-    return price != null && price !== '' ? `${f} = ${price}` : f;
+    return price != null && price !== '' && Number(price) > 0 ? `${f} = ${price}` : f;
   }).join('\n');
 }
 
@@ -1086,7 +1086,8 @@ function parseFlavorsFromEditor(raw) {
         const price = parseFloat(match[2].replace(',', '.'));
         if (!name) return;
         flavors.push(name);
-        if (Number.isFinite(price) && price >= 0) flavorPrices[name] = price;
+        // 0 = sem preço próprio (usa o preço do produto)
+        if (Number.isFinite(price) && price > 0) flavorPrices[name] = price;
         return;
       }
       flavors.push(line);

@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=41">
+  <link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
   <header class="header" id="header">
@@ -164,7 +164,7 @@
             <span>03</span>
             <div>
               <h3>Retirada ou entrega</h3>
-              <p id="order-pickup">Retire em Rua dos Expedicionários, 237, Boa Esperança MG. Entrega: R$&nbsp;7,00 na região central · bairros mais afastados, consultar.</p>
+              <p id="order-pickup">Retire em Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG. Entrega: R$&nbsp;7,00 na região central · bairros mais afastados, consultar.</p>
             </div>
           </li>
         </ol>
@@ -199,7 +199,7 @@
               <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
               <span>
                 <small>Retirada</small>
-                <strong>Rua dos Expedicionários, 237 · Boa Esperança, MG</strong>
+                <strong>Rua Casimiro Túlio Freire, 735 · Alta Vista, Boa Esperança MG</strong>
               </span>
             </a>
             <div class="contact__delivery" aria-label="Taxa de entrega">
@@ -244,7 +244,7 @@
         </a>
         <a id="footer-place" href="#" target="_blank" rel="noopener">
           <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-          <span>Rua dos Expedicionários, 237</span>
+          <span>Rua Casimiro Túlio Freire, 735 - Alta Vista</span>
         </a>
       </div>
     </div>
@@ -317,7 +317,7 @@
             Entrega: <strong>R$ 7,00</strong> região central · bairros mais afastados, consultar no WhatsApp
           </p>
           <p class="cart-drawer__delivery cart-drawer__delivery--pickup" id="cart-pickup-note" hidden>
-            Retirada em <strong>Rua dos Expedicionários, 237</strong> · Boa Esperança, MG
+            Retirada em <strong>Rua Casimiro Túlio Freire, 735 - Alta Vista</strong> · Boa Esperança, MG
           </p>
           <p class="cart-checkout__label">Dados para finalizar</p>
           <div class="cart-checkout__fields">
@@ -331,6 +331,30 @@
               <textarea id="cart-address" rows="3" maxlength="280" placeholder="Rua, número, bairro, referência…" autocomplete="street-address"></textarea>
             </label>
             <p class="cart-address__hint">Informe rua, número e bairro para a entrega.</p>
+          </div>
+          <p class="cart-checkout__label cart-checkout__label--spaced">Forma de pagamento</p>
+          <div class="payment" role="radiogroup" aria-label="Forma de pagamento">
+            <label class="payment__option">
+              <input type="radio" name="cart-payment" value="pix" id="cart-payment-pix" checked>
+              <span>
+                <strong>Pix</strong>
+                <small>Pagamento instantâneo</small>
+              </span>
+            </label>
+            <label class="payment__option">
+              <input type="radio" name="cart-payment" value="dinheiro" id="cart-payment-dinheiro">
+              <span>
+                <strong>Dinheiro</strong>
+                <small>Na entrega ou retirada</small>
+              </span>
+            </label>
+            <label class="payment__option">
+              <input type="radio" name="cart-payment" value="cartao" id="cart-payment-cartao">
+              <span>
+                <strong>Cartão</strong>
+                <small>Link de crédito</small>
+              </span>
+            </label>
           </div>
           <p class="cart-drawer__error" id="cart-error" hidden></p>
           <button type="button" class="btn btn--secondary" id="cart-checkout-btn">Finalizar pedido</button>
@@ -386,10 +410,10 @@
 
   <div class="cart-feedback" id="cart-feedback" hidden aria-live="polite"></div>
 
-  <script src="js/default-data.js?v=19"></script>
+  <script src="js/default-data.js?v=20"></script>
   <script src="js/product-photos.js?v=2"></script>
   <script src="js/storage.js?v=58"></script>
-  <script src="js/cart-shared.js?v=4"></script>
-  <script src="script.js?v=60"></script>
+  <script src="js/cart-shared.js?v=6"></script>
+  <script src="script.js?v=63"></script>
 </body>
 </html>

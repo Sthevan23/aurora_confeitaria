@@ -31,6 +31,7 @@ let appliedCoupon = Cart ? Cart.getCoupon() : loadAppliedCouponFallback();
 let lightboxQty = 1;
 let bodyScrollY = 0;
 let bodyScrollLocks = 0;
+let bodyTouchBlocker = null;
 
 function lockBodyScroll() {
   bodyScrollLocks += 1;
@@ -39,24 +40,89 @@ function lockBodyScroll() {
   document.documentElement.classList.add('is-scroll-locked');
   document.body.classList.add('is-scroll-locked');
   document.body.style.top = `-${bodyScrollY}px`;
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
+
+  // Impede o fundo de rolar no iOS/Android enquanto o modal está aberto
+  if (!bodyTouchBlocker) {
+    bodyTouchBlocker = (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) {
+        e.preventDefault();
+        return;
+      }
+      const scrollable = target.closest(
+        '.order-lightbox__scroll, .order-lightbox__info, .cart-drawer__body, .flavor-options, textarea, input, select'
+      );
+      if (scrollable) return;
+      e.preventDefault();
+    };
+    document.addEventListener('touchmove', bodyTouchBlocker, { passive: false });
+  }
+}
+
+function restoreScrollY(y) {
+  const html = document.documentElement;
+  const prev = html.style.scrollBehavior;
+  html.style.scrollBehavior = 'auto';
+  window.scrollTo(0, y);
+  // Duplo rAF + timeout: captura puxão do foco/layout ao destravar
+  requestAnimationFrame(() => {
+    window.scrollTo(0, y);
+    requestAnimationFrame(() => {
+      window.scrollTo(0, y);
+      html.style.scrollBehavior = prev;
+    });
+  });
+  setTimeout(() => {
+    const cur = window.scrollY || window.pageYOffset || 0;
+    if (Math.abs(cur - y) > 1) window.scrollTo(0, y);
+  }, 0);
+  setTimeout(() => {
+    const cur = window.scrollY || window.pageYOffset || 0;
+    if (Math.abs(cur - y) > 1) window.scrollTo(0, y);
+  }, 80);
 }
 
 function unlockBodyScroll() {
   bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
   if (bodyScrollLocks > 0) return;
-  const y = bodyScrollY;
+  const y = bodyScrollY || 0;
+  if (bodyTouchBlocker) {
+    document.removeEventListener('touchmove', bodyTouchBlocker);
+    bodyTouchBlocker = null;
+  }
   document.documentElement.classList.remove('is-scroll-locked');
   document.body.classList.remove('is-scroll-locked');
   document.body.style.top = '';
-  // instant: evita animação e “puxão” pra baixo ao fechar o modal
-  window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
+  restoreScrollY(y);
+}
+
+function blurWithoutScroll() {
+  const active = document.activeElement;
+  if (active && active !== document.body && typeof active.blur === 'function') {
+    active.blur();
+  }
+  try {
+    const prevTab = document.body.getAttribute('tabindex');
+    document.body.setAttribute('tabindex', '-1');
+    document.body.focus({ preventScroll: true });
+    if (prevTab === null) document.body.removeAttribute('tabindex');
+    else document.body.setAttribute('tabindex', prevTab);
+  } catch {
+    /* ignore */
+  }
 }
 
 function focusLightboxOptions() {
   const scroll = document.getElementById('lightbox-scroll');
   const flavors = document.getElementById('lightbox-flavors');
   if (scroll) scroll.scrollTop = 0;
-  // Nunca usar scrollIntoView aqui — isso mexe no scroll da página
+  // Nunca usar scrollIntoView / focus aqui — isso mexe no scroll da página
   if (!flavors?.hidden) {
     document.getElementById('acc-flavor')?.classList.add('is-open');
   }
@@ -141,7 +207,7 @@ function fulfillmentWhatsAppBlock(mode, address = '') {
   }
   return (
     `FORMA: Retirada no local\n` +
-    `Endereço: Rua dos Expedicionários, 237, Boa Esperança MG`
+    `Endereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
   );
 }
 
@@ -406,20 +472,26 @@ function displayPrice(product, flavor) {
 }
 
 function resolveProductPrice(product, flavor) {
-  if (flavor && product.flavorPrices && product.flavorPrices[flavor] != null) {
+  const base = typeof Storage !== 'undefined' && Storage.productDisplayPrice
+    ? Number(Storage.productDisplayPrice(product)) || 0
+    : Number(product?.price) || 0;
+
+  if (flavor && product?.flavorPrices && product.flavorPrices[flavor] != null) {
     const flavorPrice = Number(product.flavorPrices[flavor]);
-    // Se o sabor usa o preço cheio e há promoção, mantém a promo
-    if (
-      product.promoActive &&
-      product.promoPrice != null &&
-      Number(product.price) > 0 &&
-      flavorPrice === Number(product.price)
-    ) {
-      return Number(product.promoPrice);
+    // 0 no admin = “sem preço próprio” → usa o valor do produto
+    if (Number.isFinite(flavorPrice) && flavorPrice > 0) {
+      if (
+        product.promoActive &&
+        product.promoPrice != null &&
+        Number(product.price) > 0 &&
+        flavorPrice === Number(product.price)
+      ) {
+        return Number(product.promoPrice);
+      }
+      return flavorPrice;
     }
-    return flavorPrice;
   }
-  return Storage.productDisplayPrice(product);
+  return base;
 }
 
 const FALLBACK_IMG =
@@ -504,7 +576,7 @@ function buildOrderWhatsAppMessage({ product, fullName, phone, flavor, unit }) {
   });
 }
 
-function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty, address }) {
+function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty, address, payment }) {
   const s = Storage.getSettings();
   const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
   const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
@@ -512,6 +584,9 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
   const discount = coupon ? Storage.calcCouponDiscount(coupon, subtotal) : 0;
   const total = Math.max(0, subtotal - discount);
   const mode = fulfillment === 'entrega' || fulfillment === 'retirada' ? fulfillment : getFulfillment();
+  const pay = payment || (Cart?.getPayment?.() || 'pix');
+  const payLabel = Cart?.paymentLabel?.(pay)
+    || (pay === 'dinheiro' ? 'Dinheiro' : pay === 'cartao' ? 'Link para cartão de crédito' : 'Pix');
   const lines = items.map((item) => {
     const qty = Number(item.qty) || 1;
     const unit = Number(item.price) || 0;
@@ -566,6 +641,7 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
     `${lines}\n` +
     `${couponBlock}` +
     `TOTAL A PAGAR: ${Storage.formatCurrency(total)}\n` +
+    `PAGAMENTO: ${payLabel}\n` +
     `--------------------------------\n` +
     `${loyaltyBlock}` +
     `${fulfillmentWhatsAppBlock(mode, address)}\n` +
@@ -583,7 +659,7 @@ function applySettings() {
   const s = Storage.getSettings();
   const address =
     s.address ||
-    'Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil';
+    'Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG';
   const placeShort = 'Boa Esperança, MG';
   const ig = s.instagram || 'https://www.instagram.com/a.aurora.confeitaria';
   const igUser = s.instagramUser || '@a.aurora.confeitaria';
@@ -598,7 +674,7 @@ function applySettings() {
     .replace(/,\s*Brasil\s*$/i, '')
     .replace(/,\s*\d{5}-?\d{3}\s*$/i, '')
     .replace(/,\s*Boa Esperança.*/i, '')
-    .trim() || 'Rua dos Expedicionários, 237';
+    .trim() || 'Rua Casimiro Túlio Freire, 735 - Alta Vista';
 
   const contactAddress = document.getElementById('contact-address');
   if (contactAddress) {
@@ -647,6 +723,11 @@ function applySettings() {
   if (cartDeliveryNote) {
     cartDeliveryNote.innerHTML =
       `Entrega: <strong>${feeLabel}</strong> região central · ${getDeliveryNote()} no WhatsApp`;
+  }
+  const cartPickupNote = document.getElementById('cart-pickup-note');
+  if (cartPickupNote) {
+    cartPickupNote.innerHTML =
+      `Retirada em <strong>${addressShort}</strong> · Boa Esperança, MG`;
   }
 
   const heroBg = document.getElementById('hero-bg');
@@ -772,6 +853,8 @@ function bindProductOrderButtons(root) {
       // botão Adicionar também tem data-order; evita disparo duplo no card
       if (el.matches('.product-card') && e.target.closest('button[data-order]')) return;
       e.preventDefault();
+      // Evita o browser manter o foco no card e rolar a página ao fechar o modal
+      if (typeof el.blur === 'function') el.blur();
       openLightbox(el.dataset.order || el.closest('[data-order]')?.dataset.order);
     };
     el.addEventListener('click', open);
@@ -779,6 +862,7 @@ function bindProductOrderButtons(root) {
       el.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
+          if (typeof el.blur === 'function') el.blur();
           openLightbox(el.dataset.order);
         }
       });
@@ -1030,23 +1114,26 @@ function openLightbox(productId) {
   updateLightboxTotals();
 
   const lb = document.getElementById('order-lightbox');
+  const alreadyOpen = lb?.classList.contains('is-open');
   lb.hidden = false;
   lb.classList.add('is-open');
-  lockBodyScroll();
+  if (!alreadyOpen) lockBodyScroll();
+  // Tira o foco do card do produto (evita o browser “puxar” a página até ele)
+  blurWithoutScroll();
   focusLightboxOptions();
 }
 
 function closeLightbox() {
   const lb = document.getElementById('order-lightbox');
   if (!lb?.classList.contains('is-open')) return;
-  const active = document.activeElement;
-  if (active && lb.contains(active) && typeof active.blur === 'function') {
-    active.blur();
-  }
+  const savedY = bodyScrollY;
+  blurWithoutScroll();
   lb.classList.remove('is-open');
   lb.hidden = true;
   unlockBodyScroll();
   selectedProduct = null;
+  // Rede de segurança se o foco do card tentar rolar a página de novo
+  setTimeout(() => restoreScrollY(savedY), 0);
 }
 
 function addCurrentProductToCart() {
@@ -1060,7 +1147,7 @@ function addCurrentProductToCart() {
     if (error) {
       error.textContent = qty > 1
         ? 'Escolha o sabor de cada unidade.'
-        : 'Escolha um sabor.';
+        : 'Escolha o sabor para continuar.';
       error.hidden = false;
     }
     document.getElementById('acc-flavor')?.classList.add('is-open');
@@ -1068,44 +1155,53 @@ function addCurrentProductToCart() {
     return;
   }
 
-  if (error) error.hidden = true;
-
-  const notes = document.getElementById('lightbox-notes')?.value.trim() || '';
-
+  // Monta o preço real de cada unidade (ignora sabor com R$ 0 no banco)
+  const pricedLines = [];
   if (productHasFlavors(product)) {
     const counts = new Map();
     selectedFlavors.slice(0, qty).forEach((flavor) => {
       counts.set(flavor, (counts.get(flavor) || 0) + 1);
     });
     counts.forEach((n, flavor) => {
-      const unit = resolveProductPrice(product, flavor);
-      const detail = [product.size, flavor].filter(Boolean).join(' · ');
-      addToCart({
-        productId: product.id,
-        name: product.name,
-        price: unit,
-        qty: n,
-        flavor,
-        size: product.size || '',
-        detail,
-        image: product.image,
-        notes,
-      });
+      pricedLines.push({ flavor, qty: n, price: resolveProductPrice(product, flavor) });
     });
   } else {
-    const unit = resolveProductPrice(product, '');
+    pricedLines.push({ flavor: '', qty, price: resolveProductPrice(product, '') });
+  }
+
+  const bad = pricedLines.find((line) => !(Number(line.price) > 0));
+  if (bad) {
+    if (error) {
+      error.textContent = productHasFlavors(product)
+        ? 'Escolha o sabor para ver o preço.'
+        : 'Preço indisponível. Fale conosco no WhatsApp.';
+      error.hidden = false;
+    }
+    if (productHasFlavors(product)) {
+      document.getElementById('acc-flavor')?.classList.add('is-open');
+      focusLightboxOptions();
+    }
+    return;
+  }
+
+  if (error) error.hidden = true;
+
+  const notes = document.getElementById('lightbox-notes')?.value.trim() || '';
+
+  pricedLines.forEach((line) => {
+    const detail = [product.size, line.flavor].filter(Boolean).join(' · ');
     addToCart({
       productId: product.id,
       name: product.name,
-      price: unit,
-      qty,
-      flavor: '',
+      price: line.price,
+      qty: line.qty,
+      flavor: line.flavor,
       size: product.size || '',
-      detail: product.size || '',
+      detail,
       image: product.image,
       notes,
     });
-  }
+  });
 
   if (addBtn) {
     addBtn.classList.add('is-added');
@@ -1114,6 +1210,7 @@ function addCurrentProductToCart() {
   }
   showCartFeedback('Produto adicionado');
   pulseCartBadge();
+  blurWithoutScroll();
 
   setTimeout(() => {
     closeLightbox();
@@ -1166,6 +1263,10 @@ function continueShopping() {
 }
 
 function renderCartUI() {
+  if (Cart) {
+    Cart.repairItemPrices?.();
+    cartItems = Cart.getItems();
+  }
   const countEl = document.getElementById('cart-count');
   const itemsEl = document.getElementById('cart-items');
   const subtotalEl = document.getElementById('cart-subtotal');
@@ -1291,13 +1392,17 @@ function renderCartUI() {
   syncFulfillmentUI(getFulfillment());
 
   itemsEl.innerHTML = cartItems.map((item) => {
-    const sub = (Number(item.price) || 0) * (Number(item.qty) || 0);
+    const unit = Number(item.price) || 0;
+    const sub = unit * (Number(item.qty) || 0);
     const flavorLine = item.flavor
       ? `<p class="cart-item__meta"><strong>Sabor:</strong> ${item.flavor}</p>`
       : '';
     const sizeLine = item.size
       ? `<p class="cart-item__meta">${item.size}</p>`
       : '';
+    const priceLine = unit > 0
+      ? `<p class="cart-item__price">${Storage.formatCurrency(sub)}</p>`
+      : `<p class="cart-item__price cart-item__price--warn">Escolha o sabor</p>`;
     return `
       <article class="cart-item" data-key="${item.key}">
         ${imgTag(item.image, item.name, 'cart-item__img')}
@@ -1305,7 +1410,7 @@ function renderCartUI() {
           <h3 class="cart-item__name">${item.name}</h3>
           ${flavorLine}
           ${sizeLine}
-          <p class="cart-item__price">${Storage.formatCurrency(item.price)}</p>
+          ${priceLine}
           <div class="cart-item__row">
             <div class="cart-qty" role="group" aria-label="Quantidade">
               <button type="button" class="cart-qty__btn" data-cart-qty="-1" aria-label="Diminuir">−</button>
@@ -1447,6 +1552,14 @@ async function checkoutCart() {
     }
     return;
   }
+  const zeroItems = cartItems.filter((item) => !(Number(item.price) > 0));
+  if (zeroItems.length) {
+    if (error) {
+      error.textContent = 'Escolha o sabor de cada item com preço zerado antes de finalizar.';
+      error.hidden = false;
+    }
+    return;
+  }
   if (!nome || !sobrenome) {
     if (error) {
       error.textContent = 'Preencha nome e sobrenome.';
@@ -1471,6 +1584,10 @@ async function checkoutCart() {
     return;
   }
 
+  const payment = Cart?.setPayment?.(
+    document.querySelector('input[name="cart-payment"]:checked')?.value || Cart.getPayment()
+  ) || document.querySelector('input[name="cart-payment"]:checked')?.value || 'pix';
+
   if (error) error.hidden = true;
   saveCustomer({ nome, sobrenome, phone, address });
   const fullName = `${nome} ${sobrenome}`;
@@ -1492,6 +1609,7 @@ async function checkoutCart() {
   const notesParts = [
     fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
     fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
+    `Pagamento: ${Cart?.paymentLabel?.(payment) || payment}`,
     itemsSnapshot.map((i) => {
       const flavorBit = i.flavor ? ` (${i.flavor})` : '';
       const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -1542,6 +1660,7 @@ async function checkoutCart() {
     items: itemsSnapshot,
     fulfillment,
     address: fulfillment === 'entrega' ? address : '',
+    payment,
     loyalty: saved?.loyalty || null,
   });
   clearCart();
@@ -1775,6 +1894,15 @@ function initCart() {
     input.addEventListener('change', () => {
       if (input.checked) setFulfillment(input.value);
     });
+  });
+  document.querySelectorAll('input[name="cart-payment"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.checked && Cart?.setPayment) Cart.setPayment(input.value);
+    });
+  });
+  const pay = Cart?.getPayment?.() || 'pix';
+  document.querySelectorAll('input[name="cart-payment"]').forEach((el) => {
+    el.checked = el.value === pay;
   });
   document.getElementById('cart-coupon-apply')?.addEventListener('click', applyCartCoupon);
   document.getElementById('cart-coupon-remove')?.addEventListener('click', () => {

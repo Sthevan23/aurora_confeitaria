@@ -7,6 +7,7 @@ window.AuroraCart = (() => {
   const CUSTOMER_KEY = 'aurora_customer_v1';
   const COUPON_KEY = 'aurora_coupon_v1';
   const FULFILLMENT_KEY = 'aurora_fulfillment_v1';
+  const PAYMENT_KEY = 'aurora_payment_v1';
 
   let items = loadItems();
   let coupon = loadCoupon();
@@ -21,6 +22,42 @@ window.AuroraCart = (() => {
   function onChange(fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);
+  }
+
+  function resolveItemPrice(item) {
+    const stored = Number(item?.price);
+    if (Number.isFinite(stored) && stored > 0) return stored;
+    if (typeof Storage === 'undefined') return 0;
+    const products = Storage.getProducts?.() || [];
+    const product = products.find((p) => String(p.id) === String(item?.productId || ''))
+      || products.find((p) => String(p.name || '').trim().toLowerCase() === String(item?.name || '').trim().toLowerCase());
+    if (!product) return 0;
+    const flavor = String(item?.flavor || '').trim();
+    const map = product.flavorPrices;
+    if (flavor && map && map[flavor] != null) {
+      const fp = Number(map[flavor]);
+      if (Number.isFinite(fp) && fp > 0) return fp;
+    }
+    if (typeof Storage.productDisplayPrice === 'function') {
+      return Number(Storage.productDisplayPrice(product)) || 0;
+    }
+    return Number(product.price) || 0;
+  }
+
+  function repairItemPrices() {
+    let changed = false;
+    items = items.map((item) => {
+      const fixed = resolveItemPrice(item);
+      if (fixed > 0 && Number(item.price) !== fixed) {
+        changed = true;
+        return { ...item, price: fixed };
+      }
+      return item;
+    });
+    if (changed) {
+      localStorage.setItem(CART_KEY, JSON.stringify(items));
+    }
+    return changed;
   }
 
   function loadItems() {
@@ -39,6 +76,7 @@ window.AuroraCart = (() => {
   }
 
   function getItems() {
+    repairItemPrices();
     return items.slice();
   }
 
@@ -51,7 +89,13 @@ window.AuroraCart = (() => {
   }
 
   function subtotal() {
+    repairItemPrices();
     return items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+  }
+
+  function zeroPriceItems() {
+    repairItemPrices();
+    return items.filter((item) => !(Number(item.price) > 0));
   }
 
   function loadCoupon() {
@@ -117,14 +161,20 @@ window.AuroraCart = (() => {
     const key = lineKey(item.productId, item.flavor, item.size, notes);
     const existing = items.find((row) => row.key === key);
     const qty = Math.max(1, Number(item.qty) || 1);
+    const price = Number(item.price) > 0 ? Number(item.price) : resolveItemPrice(item);
+    if (!(price > 0)) {
+      notify('price-error');
+      return false;
+    }
     if (existing) {
       existing.qty = (Number(existing.qty) || 0) + qty;
+      if (!(Number(existing.price) > 0)) existing.price = price;
     } else {
       items.push({
         key,
         productId: item.productId,
         name: item.name,
-        price: Number(item.price) || 0,
+        price,
         qty,
         flavor: item.flavor || '',
         size: item.size || '',
@@ -134,6 +184,7 @@ window.AuroraCart = (() => {
       });
     }
     persist();
+    return true;
   }
 
   function updateQty(key, qty) {
@@ -223,6 +274,25 @@ window.AuroraCart = (() => {
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   }
 
+  function getPayment() {
+    const saved = localStorage.getItem(PAYMENT_KEY);
+    if (saved === 'dinheiro' || saved === 'cartao' || saved === 'pix') return saved;
+    return 'pix';
+  }
+
+  function setPayment(value) {
+    const next = value === 'dinheiro' || value === 'cartao' ? value : 'pix';
+    localStorage.setItem(PAYMENT_KEY, next);
+    notify('payment');
+    return next;
+  }
+
+  function paymentLabel(value) {
+    if (value === 'dinheiro') return 'Dinheiro';
+    if (value === 'cartao') return 'Link para cartão de crédito';
+    return 'Pix';
+  }
+
   function fulfillmentBlock(mode, address = '') {
     const fee = formatMoney(getDeliveryFee());
     const note = getDeliveryNote();
@@ -237,13 +307,14 @@ window.AuroraCart = (() => {
     }
     return (
       `FORMA: Retirada no local\n` +
-      `Endereço: Rua dos Expedicionários, 237, Boa Esperança MG`
+      `Endereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
     );
   }
 
-  function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty, address }) {
+  function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty, address, payment }) {
     const s = typeof Storage !== 'undefined' ? Storage.getSettings() : {};
     const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
+    repairItemPrices();
     const list = getItems();
     const sub = subtotal();
     const live = refreshCoupon();
@@ -253,6 +324,7 @@ window.AuroraCart = (() => {
     const mode = fulfillment === 'entrega' ? 'entrega' : 'retirada';
     const fee = mode === 'entrega' ? getDeliveryFee() : 0;
     const total = Math.max(0, sub - disc + fee);
+    const pay = payment || getPayment();
 
     const lines = list.map((item) => {
       const qty = Number(item.qty) || 1;
@@ -286,6 +358,7 @@ window.AuroraCart = (() => {
       `*Itens:*\n${lines}\n` +
       `${couponBlock}\n` +
       `*Total:* ${formatMoney(total)}\n` +
+      `*Pagamento:* ${paymentLabel(pay)}\n` +
       `${loyaltyBlock}\n` +
       `${fulfillmentBlock(mode, address)}\n\n` +
       `Aguardo confirmação 😊`
@@ -300,17 +373,18 @@ window.AuroraCart = (() => {
 
   // multi-aba
   window.addEventListener('storage', (e) => {
-    if ([CART_KEY, COUPON_KEY, CUSTOMER_KEY, FULFILLMENT_KEY].includes(e.key)) {
+    if ([CART_KEY, COUPON_KEY, CUSTOMER_KEY, FULFILLMENT_KEY, PAYMENT_KEY].includes(e.key)) {
       syncFromStorage();
     }
   });
 
   return {
-    CART_KEY, CUSTOMER_KEY, COUPON_KEY, FULFILLMENT_KEY,
+    CART_KEY, CUSTOMER_KEY, COUPON_KEY, FULFILLMENT_KEY, PAYMENT_KEY,
     onChange, getItems, count, subtotal, discount, payable,
-    addItem, updateQty, removeItem, clear,
+    addItem, updateQty, removeItem, clear, zeroPriceItems, repairItemPrices,
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,
+    getPayment, setPayment, paymentLabel,
     getDeliveryFee, getDeliveryNote, formatMoney, formatPhoneBR,
     buildWhatsAppMessage, syncFromStorage,
   };

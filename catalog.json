@@ -12,7 +12,7 @@
     "instagramUser": "@a.aurora.confeitaria",
     "facebook": "",
     "email": "contato@aurora.com",
-    "address": "Rua Casimiro Tulio Freire, 735 - Alta Vista",
+    "address": "Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG",
     "hours": "Pedidos pelo WhatsApp",
     "followers": "",
     "posts": "",
@@ -137,8 +137,8 @@
       "active": true,
       "available": true,
       "flavorPrices": {
-        "Cheddar": 0,
-        "Cream Cheese": 0
+        "Cheddar": 24.9,
+        "Cream Cheese": 24.9
       }
     },
     {

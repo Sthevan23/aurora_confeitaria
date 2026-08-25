@@ -63,8 +63,15 @@ html {
   overflow-anchor: none;
 }
 
-html.is-scroll-locked,
-html.is-scroll-locked body {
+html.is-scroll-locked {
+  scroll-behavior: auto !important;
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  height: 100%;
+}
+
+html.is-scroll-locked body,
+body.is-scroll-locked {
   overflow: hidden !important;
   overscroll-behavior: none;
 }
@@ -1634,13 +1641,64 @@ p {
 
 .fulfillment__option input:checked + span {
   border-color: var(--color-pink);
-  background: color-mix(in srgb, var(--color-pink) 10%, #fff);
+  background: color-mix(in srgb, var(--color-pink) 8%, #fff);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-pink) 35%, transparent);
 }
 
 .fulfillment__option input:focus-visible + span {
-  outline: 2px solid var(--color-pink);
+  outline: 2px solid rgba(252, 120, 144, 0.45);
   outline-offset: 2px;
+}
+
+.payment {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.payment__option {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.payment__option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.payment__option span {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1.5px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.payment__option strong {
+  font-size: 0.92rem;
+  color: var(--color-brown);
+}
+
+.payment__option small {
+  color: var(--color-brown-soft);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.payment__option input:checked + span {
+  border-color: var(--color-pink);
+  background: color-mix(in srgb, var(--color-pink) 8%, #fff);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-pink) 35%, transparent);
+}
+
+@media (min-width: 720px) {
+  .payment {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .contact__aside-links a:hover {
@@ -3504,6 +3562,7 @@ p {
 
 .order-lightbox__panel--product .order-lightbox__scroll {
   padding-top: 0.35rem;
+  overscroll-behavior: contain;
 }
 
 .order-lightbox__add {
@@ -3767,6 +3826,20 @@ p {
   margin: 0.25rem 0 0;
   font-size: 0.84rem;
   color: var(--color-brown-soft);
+}
+
+.cart-line__warn {
+  margin: 0.4rem 0 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, #e8a317 16%, #fff);
+  color: #8a5a00;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.cart-line--warn {
+  border-color: color-mix(in srgb, #e8a317 45%, var(--color-line));
 }
 
 .cart-line__notes i {

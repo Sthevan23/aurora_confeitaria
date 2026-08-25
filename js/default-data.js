@@ -11,7 +11,7 @@ const AURORA_DEFAULT_DATA = {
     "instagramUser": "@a.aurora.confeitaria",
     "facebook": "",
     "email": "contato@aurora.com",
-    "address": "Rua dos Expedicionários, 237, Boa Esperança MG, 37170-000, Brasil",
+    "address": "Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG",
     "hours": "Pedidos pelo WhatsApp",
     "deliveryFee": 7,
     "deliveryNote": "Bairros mais afastados: consultar",
