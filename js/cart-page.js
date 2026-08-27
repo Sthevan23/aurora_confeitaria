@@ -338,6 +338,11 @@
     renderSummary();
   }
 
+  function syncPaymentNote(pay) {
+    const note = document.getElementById('cart-page-payment-card-note');
+    if (note) note.hidden = pay !== 'cartao';
+  }
+
   function fillCustomer() {
     const c = Cart.loadCustomer();
     const nome = document.getElementById('cart-page-nome');
@@ -360,6 +365,7 @@
     document.querySelectorAll('input[name="cart-page-payment"]').forEach((el) => {
       el.checked = el.value === pay;
     });
+    syncPaymentNote(pay);
   }
 
   function saveFormCustomer() {
@@ -474,7 +480,7 @@
     const notesParts = [
       fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
       fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
-      `Pagamento: ${Cart.paymentLabel(payment)}`,
+      `Pagamento: ${Cart.paymentWhatsAppLine(payment).replace(/\n/g, ' — ')}`,
       snapshot.map((i) => {
         const flavorBit = i.flavor ? ` (${i.flavor})` : '';
         const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -560,7 +566,10 @@
 
     document.querySelectorAll('input[name="cart-page-payment"]').forEach((el) => {
       el.addEventListener('change', () => {
-        if (el.checked) Cart.setPayment(el.value);
+        if (el.checked) {
+          Cart.setPayment(el.value);
+          syncPaymentNote(el.value);
+        }
       });
     });
 

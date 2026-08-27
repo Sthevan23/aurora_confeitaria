@@ -601,7 +601,8 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
   const mode = fulfillment === 'entrega' || fulfillment === 'retirada' ? fulfillment : getFulfillment();
   const pay = payment || (Cart?.getPayment?.() || 'pix');
   const payLabel = Cart?.paymentLabel?.(pay)
-    || (pay === 'dinheiro' ? 'Dinheiro' : pay === 'cartao' ? 'Link para cartão de crédito' : 'Pix');
+    || (pay === 'dinheiro' ? 'Dinheiro' : pay === 'cartao' ? 'Link para cartão de crédito (repasse da taxa)' : 'Pix');
+  const payNote = pay === 'cartao' ? 'Obs.: taxa do cartão repassada ao cliente.\n' : '';
   const lines = items.map((item) => {
     const qty = Number(item.qty) || 1;
     const unit = Number(item.price) || 0;
@@ -657,6 +658,7 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
     `${couponBlock}` +
     `TOTAL A PAGAR: ${Storage.formatCurrency(total)}\n` +
     `PAGAMENTO: ${payLabel}\n` +
+    `${payNote}` +
     `--------------------------------\n` +
     `${loyaltyBlock}` +
     `${fulfillmentWhatsAppBlock(mode, address)}\n` +
@@ -1624,7 +1626,7 @@ async function checkoutCart() {
   const notesParts = [
     fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
     fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
-    `Pagamento: ${Cart?.paymentLabel?.(payment) || payment}`,
+    `Pagamento: ${Cart?.paymentWhatsAppLine?.(payment)?.replace(/\n/g, ' — ') || Cart?.paymentLabel?.(payment) || payment}`,
     itemsSnapshot.map((i) => {
       const flavorBit = i.flavor ? ` (${i.flavor})` : '';
       const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -1898,6 +1900,11 @@ function initLightbox() {
   });
 }
 
+function syncPaymentNote(pay) {
+  const note = document.getElementById('cart-payment-card-note');
+  if (note) note.hidden = pay !== 'cartao';
+}
+
 function initCart() {
   renderCartUI();
   // Header vai para cart.html — não abre mais o drawer
@@ -1913,12 +1920,14 @@ function initCart() {
   document.querySelectorAll('input[name="cart-payment"]').forEach((input) => {
     input.addEventListener('change', () => {
       if (input.checked && Cart?.setPayment) Cart.setPayment(input.value);
+      if (input.checked) syncPaymentNote(input.value);
     });
   });
   const pay = Cart?.getPayment?.() || 'pix';
   document.querySelectorAll('input[name="cart-payment"]').forEach((el) => {
     el.checked = el.value === pay;
   });
+  syncPaymentNote(pay);
   document.getElementById('cart-coupon-apply')?.addEventListener('click', applyCartCoupon);
   document.getElementById('cart-coupon-remove')?.addEventListener('click', () => {
     const msg = document.getElementById('cart-coupon-msg');

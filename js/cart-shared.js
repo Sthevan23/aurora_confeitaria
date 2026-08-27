@@ -320,8 +320,16 @@ window.AuroraCart = (() => {
 
   function paymentLabel(value) {
     if (value === 'dinheiro') return 'Dinheiro';
-    if (value === 'cartao') return 'Link para cartão de crédito';
+    if (value === 'cartao') return 'Link para cartão de crédito (repasse da taxa)';
     return 'Pix';
+  }
+
+  function paymentWhatsAppLine(value) {
+    const label = paymentLabel(value);
+    if (value === 'cartao') {
+      return `${label}\nObs.: taxa do cartão repassada ao cliente.`;
+    }
+    return label;
   }
 
   function fulfillmentBlock(mode, address = '') {
@@ -389,7 +397,7 @@ window.AuroraCart = (() => {
       `*Itens:*\n${lines}\n` +
       `${couponBlock}\n` +
       `*Total:* ${formatMoney(total)}\n` +
-      `*Pagamento:* ${paymentLabel(pay)}\n` +
+      `*Pagamento:* ${paymentWhatsAppLine(pay)}\n` +
       `${loyaltyBlock}\n` +
       `${fulfillmentBlock(mode, address)}\n\n` +
       `Aguardo confirmação 😊`
@@ -415,7 +423,7 @@ window.AuroraCart = (() => {
     addItem, updateQty, removeItem, clear, zeroPriceItems, repairItemPrices, repairItemImages, repairCartItems,
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,
-    getPayment, setPayment, paymentLabel,
+    getPayment, setPayment, paymentLabel, paymentWhatsAppLine,
     getDeliveryFee, getDeliveryNote, formatMoney, formatPhoneBR,
     buildWhatsAppMessage, syncFromStorage,
   };

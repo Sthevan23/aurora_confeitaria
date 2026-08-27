@@ -3892,6 +3892,17 @@ p {
   margin: 0;
 }
 
+.payment__note {
+  margin: 0.55rem 0 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, #e8a317 14%, #fff);
+  border: 1px solid color-mix(in srgb, #e8a317 35%, var(--color-line));
+  color: #7a5200;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
 .cart-summary__row {
   display: flex;
   justify-content: space-between;
