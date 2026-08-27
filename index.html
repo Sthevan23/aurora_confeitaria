@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=43">
+  <link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
   <header class="header" id="header">
@@ -296,7 +296,33 @@
           <button type="button" class="cart-coupon__remove" id="cart-coupon-remove" hidden>Remover cupom</button>
         </div>
         <div class="cart-checkout" id="cart-checkout" hidden>
-          <p class="cart-checkout__label">Como prefere receber?</p>
+          <div class="cart-payment cart-payment--top">
+            <p class="cart-checkout__label">Forma de pagamento</p>
+            <div class="payment" role="radiogroup" aria-label="Forma de pagamento">
+              <label class="payment__option">
+                <input type="radio" name="cart-payment" value="pix" id="cart-payment-pix" checked>
+                <span>
+                  <strong>Pix</strong>
+                  <small>Pagamento instantâneo</small>
+                </span>
+              </label>
+              <label class="payment__option">
+                <input type="radio" name="cart-payment" value="dinheiro" id="cart-payment-dinheiro">
+                <span>
+                  <strong>Dinheiro</strong>
+                  <small>Na entrega ou retirada</small>
+                </span>
+              </label>
+              <label class="payment__option">
+                <input type="radio" name="cart-payment" value="cartao" id="cart-payment-cartao">
+                <span>
+                  <strong>Cartão</strong>
+                  <small>Link de crédito</small>
+                </span>
+              </label>
+            </div>
+          </div>
+          <p class="cart-checkout__label cart-checkout__label--spaced">Como prefere receber?</p>
           <div class="fulfillment" role="radiogroup" aria-label="Entrega ou retirada">
             <label class="fulfillment__option">
               <input type="radio" name="cart-fulfillment" value="retirada" id="cart-fulfillment-retirada" checked>
@@ -331,30 +357,6 @@
               <textarea id="cart-address" rows="3" maxlength="280" placeholder="Rua, número, bairro, referência…" autocomplete="street-address"></textarea>
             </label>
             <p class="cart-address__hint">Informe rua, número e bairro para a entrega.</p>
-          </div>
-          <p class="cart-checkout__label cart-checkout__label--spaced">Forma de pagamento</p>
-          <div class="payment" role="radiogroup" aria-label="Forma de pagamento">
-            <label class="payment__option">
-              <input type="radio" name="cart-payment" value="pix" id="cart-payment-pix" checked>
-              <span>
-                <strong>Pix</strong>
-                <small>Pagamento instantâneo</small>
-              </span>
-            </label>
-            <label class="payment__option">
-              <input type="radio" name="cart-payment" value="dinheiro" id="cart-payment-dinheiro">
-              <span>
-                <strong>Dinheiro</strong>
-                <small>Na entrega ou retirada</small>
-              </span>
-            </label>
-            <label class="payment__option">
-              <input type="radio" name="cart-payment" value="cartao" id="cart-payment-cartao">
-              <span>
-                <strong>Cartão</strong>
-                <small>Link de crédito</small>
-              </span>
-            </label>
           </div>
           <p class="cart-drawer__error" id="cart-error" hidden></p>
           <button type="button" class="btn btn--secondary" id="cart-checkout-btn">Finalizar pedido</button>

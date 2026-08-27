@@ -3876,6 +3876,22 @@ p {
   color: var(--color-brown-deep);
 }
 
+.cart-payment--top {
+  margin: 0 0 1rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-pink) 9%, #fff);
+  border: 1px solid color-mix(in srgb, var(--color-pink) 30%, var(--color-line));
+}
+
+.cart-payment--top .cart-checkout__label {
+  margin: 0 0 0.55rem;
+}
+
+.cart-payment--top .payment {
+  margin: 0;
+}
+
 .cart-summary__row {
   display: flex;
   justify-content: space-between;
