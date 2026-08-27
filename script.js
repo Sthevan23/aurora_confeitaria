@@ -535,10 +535,25 @@ function photoSrc(path) {
   return `/api/photo.php?f=${encodeURIComponent(name)}`;
 }
 
-function imgTag(path, alt, className = '') {
-  const src = imgSrc(path);
+function resolveProductImage(product) {
+  if (!product) return '';
+  if (window.AuroraPhotos?.resolveItemImage) {
+    return window.AuroraPhotos.resolveItemImage(
+      { productId: product.id, name: product.name, image: product.image },
+      getProducts()
+    );
+  }
+  return product.image || '';
+}
+
+function imgTag(path, alt, className = '', item = null) {
+  let resolved = path;
+  if (item && window.AuroraPhotos?.resolveItemImage) {
+    resolved = window.AuroraPhotos.resolveItemImage(item, getProducts());
+  }
+  const src = imgSrc(resolved);
   const fallback = imgSrc(FALLBACK_IMG);
-  const photo = photoSrc(path);
+  const photo = photoSrc(resolved);
   const cls = className ? ` class="${className}"` : '';
   const safeAlt = String(alt || '').replace(/"/g, '&quot;');
   // 1) arquivo  2) backup MySQL  3) placeholder — sem loop
@@ -571,7 +586,7 @@ function buildOrderWhatsAppMessage({ product, fullName, phone, flavor, unit }) {
       flavor: flavor || '',
       price: unit,
       qty: 1,
-      image: product.image,
+      image: resolveProductImage(product),
     }],
   });
 }
@@ -1198,7 +1213,7 @@ function addCurrentProductToCart() {
       flavor: line.flavor,
       size: product.size || '',
       detail,
-      image: product.image,
+      image: resolveProductImage(product),
       notes,
     });
   });
@@ -1264,7 +1279,7 @@ function continueShopping() {
 
 function renderCartUI() {
   if (Cart) {
-    Cart.repairItemPrices?.();
+    Cart.repairCartItems?.();
     cartItems = Cart.getItems();
   }
   const countEl = document.getElementById('cart-count');
@@ -1405,7 +1420,7 @@ function renderCartUI() {
       : `<p class="cart-item__price cart-item__price--warn">Escolha o sabor</p>`;
     return `
       <article class="cart-item" data-key="${item.key}">
-        ${imgTag(item.image, item.name, 'cart-item__img')}
+        ${imgTag(item.image, item.name, 'cart-item__img', item)}
         <div class="cart-item__info">
           <h3 class="cart-item__name">${item.name}</h3>
           ${flavorLine}
@@ -1804,7 +1819,7 @@ async function finalizeOrder() {
       flavor: flavor || '',
       price: unit,
       qty: 1,
-      image: product.image,
+      image: resolveProductImage(product),
     }],
   });
 

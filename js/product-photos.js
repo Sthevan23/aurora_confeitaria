@@ -62,3 +62,32 @@ window.AURORA_PHOTO_MAP = {
     "cesta maluca": "products/b4f03817-3403-ff85-5dd2-c9741f09b698.jpg"
   }
 };
+
+(function () {
+  const map = window.AURORA_PHOTO_MAP || { byId: {}, byName: {} };
+
+  function lookupKnownPhoto(id, name) {
+    if (id && map.byId && map.byId[id]) return map.byId[id];
+    const key = String(name || '').trim().toLowerCase();
+    if (key && map.byName && map.byName[key]) return map.byName[key];
+    return '';
+  }
+
+  function resolveItemImage(item, products) {
+    const direct = String(item?.image || '').trim();
+    if (direct && !direct.startsWith('data:')) return direct;
+
+    const known = lookupKnownPhoto(item?.productId, item?.name);
+    if (known) return known;
+
+    const list = Array.isArray(products) ? products : [];
+    const product = list.find((p) => String(p.id) === String(item?.productId || ''))
+      || list.find((p) => String(p.name || '').trim().toLowerCase() === String(item?.name || '').trim().toLowerCase());
+    const fromProduct = String(product?.image || '').trim();
+    if (fromProduct && !fromProduct.startsWith('data:')) return fromProduct;
+
+    return known || direct;
+  }
+
+  window.AuroraPhotos = { lookupKnownPhoto, resolveItemImage };
+})();

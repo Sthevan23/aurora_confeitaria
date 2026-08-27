@@ -60,6 +60,37 @@ window.AuroraCart = (() => {
     return changed;
   }
 
+  function resolveItemImage(item) {
+    const direct = String(item?.image || '').trim();
+    if (direct && !direct.startsWith('data:')) return direct;
+    if (window.AuroraPhotos?.resolveItemImage) {
+      const products = typeof Storage !== 'undefined' ? Storage.getProducts?.() || [] : [];
+      return window.AuroraPhotos.resolveItemImage(item, products);
+    }
+    return direct;
+  }
+
+  function repairItemImages() {
+    let changed = false;
+    items = items.map((item) => {
+      const fixed = resolveItemImage(item);
+      if (fixed && fixed !== item.image) {
+        changed = true;
+        return { ...item, image: fixed };
+      }
+      return item;
+    });
+    if (changed) {
+      localStorage.setItem(CART_KEY, JSON.stringify(items));
+    }
+    return changed;
+  }
+
+  function repairCartItems() {
+    repairItemImages();
+    repairItemPrices();
+  }
+
   function loadItems() {
     try {
       const raw = localStorage.getItem(CART_KEY);
@@ -76,7 +107,7 @@ window.AuroraCart = (() => {
   }
 
   function getItems() {
-    repairItemPrices();
+    repairCartItems();
     return items.slice();
   }
 
@@ -89,12 +120,12 @@ window.AuroraCart = (() => {
   }
 
   function subtotal() {
-    repairItemPrices();
+    repairCartItems();
     return items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
   }
 
   function zeroPriceItems() {
-    repairItemPrices();
+    repairCartItems();
     return items.filter((item) => !(Number(item.price) > 0));
   }
 
@@ -381,7 +412,7 @@ window.AuroraCart = (() => {
   return {
     CART_KEY, CUSTOMER_KEY, COUPON_KEY, FULFILLMENT_KEY, PAYMENT_KEY,
     onChange, getItems, count, subtotal, discount, payable,
-    addItem, updateQty, removeItem, clear, zeroPriceItems, repairItemPrices,
+    addItem, updateQty, removeItem, clear, zeroPriceItems, repairItemPrices, repairItemImages, repairCartItems,
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,
     getPayment, setPayment, paymentLabel,

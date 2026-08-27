@@ -115,6 +115,20 @@
     }
   }
 
+  function cartImageTag(item) {
+    const products = typeof Storage !== 'undefined' ? Storage.getProducts?.() || [] : [];
+    const path = window.AuroraPhotos?.resolveItemImage
+      ? window.AuroraPhotos.resolveItemImage(item, products)
+      : (item?.image || '');
+    const src = imgSrc(path);
+    const fallback = imgSrc(FALLBACK_IMG);
+    const photo = photoSrc(path);
+    const onErr = photo
+      ? `if(!this.dataset.ph){this.dataset.ph='1';this.onerror=null;this.src='${photo}';this.onerror=function(){this.onerror=null;this.src='${fallback}';};}else{this.onerror=null;this.src='${fallback}';}`
+      : `this.onerror=null;this.src='${fallback}'`;
+    return `<img class="cart-line__img" src="${src}" alt="" loading="lazy" decoding="async" onerror="${onErr}">`;
+  }
+
   function renderItems() {
     const wrap = document.getElementById('cart-page-items');
     const empty = document.getElementById('cart-page-empty');
@@ -152,10 +166,7 @@
       return `
         <article class="cart-line ${unit <= 0 ? 'cart-line--warn' : ''}" data-key="${escapeHtml(item.key)}">
           <div class="cart-line__media">
-            <img class="cart-line__img" src="${imgSrc(item.image)}" alt="" loading="lazy"
-              onerror="${photoSrc(item.image)
-                ? `if(!this.dataset.ph){this.dataset.ph='1';this.src='${photoSrc(item.image)}';}else{this.onerror=null;this.src='${imgSrc(FALLBACK_IMG)}';}`
-                : `this.onerror=null;this.src='${imgSrc(FALLBACK_IMG)}'`}">
+            ${cartImageTag(item)}
           </div>
           <div class="cart-line__body">
             <div class="cart-line__top">
@@ -526,7 +537,7 @@
 
   async function boot() {
     await Storage.initCloud({ full: false }).catch(() => false);
-    Cart.repairItemPrices();
+    Cart.repairCartItems?.();
     fillCustomer();
     renderAll();
 
