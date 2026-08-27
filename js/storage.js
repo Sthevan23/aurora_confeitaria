@@ -767,6 +767,11 @@ const Storage = (() => {
     data.orders = orders;
     save(data);
   }
+  async function saveOrdersAsync(orders) {
+    const data = getAll();
+    data.orders = orders;
+    return saveAsync(data);
+  }
   function getFinance() {
     return getAll().finance || [];
   }
@@ -1177,7 +1182,7 @@ const Storage = (() => {
     getProducts, saveProducts, saveProductsAsync, setProductActiveAsync, publishCatalogAsync,
     getCategories, saveCategories,
     getClients, saveClients,
-    getOrders, saveOrders,
+    getOrders, saveOrders, saveOrdersAsync,
     getFinance, saveFinance, addFinanceEntry, deleteFinanceEntry, getFinanceSummary,
     getCoupons, saveCoupons, saveCouponsAsync, findCouponByCode, calcCouponDiscount,
     getReviews, getFaq, getGallery,

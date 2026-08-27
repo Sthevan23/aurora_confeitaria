@@ -392,6 +392,10 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
         'total' => (float) $row['total'],
         'status' => $row['status'],
         'date' => date('c', strtotime($row['ordered_at'])),
+        'notes' => $row['notes'] ?? '',
+        'deliveryFee' => (float) ($row['delivery_fee'] ?? 0),
+        'discount' => (float) ($row['discount'] ?? 0),
+        'waiveDelivery' => !empty($row['waive_delivery']),
       ];
     }
   }
@@ -740,8 +744,9 @@ function aurora_save_all(PDO $pdo, array $payload): void {
     $pdo->exec('DELETE FROM orders');
     $orderStmt = $pdo->prepare(
       'INSERT INTO orders (
-        id, number, client_id, client_name, client_whatsapp, total, status, ordered_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        id, number, client_id, client_name, client_whatsapp, total, status, ordered_at,
+        notes, delivery_fee, discount, waive_delivery
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $itemStmt = $pdo->prepare(
       'INSERT INTO order_items (order_id, product_id, product_name, flavor, qty, price)
@@ -763,6 +768,10 @@ function aurora_save_all(PDO $pdo, array $payload): void {
         (float) ($o['total'] ?? 0),
         $status,
         $orderedAt,
+        $o['notes'] ?? '',
+        (float) ($o['deliveryFee'] ?? 0),
+        (float) ($o['discount'] ?? 0),
+        !empty($o['waiveDelivery']) ? 1 : 0,
       ]);
 
       foreach ($o['items'] ?? [] as $item) {

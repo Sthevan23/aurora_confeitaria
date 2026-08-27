@@ -149,6 +149,32 @@ function aurora_ensure_schema(PDO $pdo): void {
       );
     }
 
+    $ordersExists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' LIMIT 1"
+    )->fetchColumn();
+    if ($ordersExists) {
+      aurora_ensure_column($pdo, 'orders', 'notes', 'TEXT NULL');
+      aurora_ensure_column(
+        $pdo,
+        'orders',
+        'delivery_fee',
+        "DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT 'Taxa motoboy'"
+      );
+      aurora_ensure_column(
+        $pdo,
+        'orders',
+        'discount',
+        "DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT 'Desconto no pedido'"
+      );
+      aurora_ensure_column(
+        $pdo,
+        'orders',
+        'waive_delivery',
+        "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = sem taxa motoboy'"
+      );
+    }
+
     @file_put_contents($flag, (string) time());
   } catch (Throwable $e) {
     // Não derruba o site se o ALTER falhar (permissão etc.)
