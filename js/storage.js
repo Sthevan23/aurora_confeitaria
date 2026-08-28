@@ -37,8 +37,7 @@ const Storage = (() => {
   let lastRemoteJson = '';
   let pollTimer = null;
   let memoryData = null;
-  let pushInFlight = false;
-  let pendingPushData = null;
+  let pushChain = Promise.resolve();
   let lastLoadFromCache = false;
   let loyaltyCache = { phone: '', at: 0, data: null };
   let loyaltyInflight = null;
@@ -537,52 +536,44 @@ const Storage = (() => {
     const password = getAdminPassword() || (data.auth && data.auth.password) || '';
     if (!password) return false;
 
-    // Evita corrida: se já está enviando, agenda o mais recente
-    if (pushInFlight) {
-      pendingPushData = data;
-      return false;
-    }
-
-    pushInFlight = true;
-    try {
-      const payload = JSON.stringify({ data });
-      // Foto em data-URL deixa o JSON grande — dá mais tempo
-      const timeoutMs = payload.length > 400000 ? 90000 : 25000;
-      const res = await apiFetch(API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Password': password,
-        },
-        body: payload,
-      }, timeoutMs, { force: true });
-
-      let result = {};
+    const run = async () => {
       try {
-        result = await res.json();
-      } catch {
-        result = {};
-      }
+        const payload = JSON.stringify({ data });
+        // Foto em data-URL deixa o JSON grande — dá mais tempo
+        const timeoutMs = payload.length > 400000 ? 90000 : 25000;
+        const res = await apiFetch(API, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Password': password,
+          },
+          body: payload,
+        }, timeoutMs, { force: true });
 
-      if (res.ok && result.ok !== false) {
-        setMemory(data);
-        lastRemoteJson = JSON.stringify(data);
-        cloudEnabled = true;
-        return true;
+        let result = {};
+        try {
+          result = await res.json();
+        } catch {
+          result = {};
+        }
+
+        if (res.ok && result.ok !== false) {
+          setMemory(data);
+          lastRemoteJson = JSON.stringify(data);
+          cloudEnabled = true;
+          return true;
+        }
+        console.warn('[Aurora] Falha ao salvar na nuvem', res.status, result);
+        return false;
+      } catch (err) {
+        console.warn('[Aurora] Erro de rede ao salvar', err);
+        return false;
       }
-      console.warn('[Aurora] Falha ao salvar na nuvem', res.status, result);
-      return false;
-    } catch (err) {
-      console.warn('[Aurora] Erro de rede ao salvar', err);
-      return false;
-    } finally {
-      pushInFlight = false;
-      if (pendingPushData) {
-        const next = pendingPushData;
-        pendingPushData = null;
-        await pushToCloud(next);
-      }
-    }
+    };
+
+    const task = pushChain.then(run, run);
+    pushChain = task.catch(() => false);
+    return task;
   }
 
   async function loginOfflineFallback(email, password) {
@@ -732,12 +723,46 @@ const Storage = (() => {
     const data = getAll();
     data.categories = applyCategorySortOrders(data.categories || [], categoryIds);
     data.products = applyProductSortOrders(data.products || [], productIds);
-    const ok = await saveAsync(data);
-    if (!ok) return false;
+    setMemory(data);
+    notifyUpdated();
+
+    const password = getAdminPassword();
+    if (!password) return false;
+
     try {
-      await publishCatalogAsync();
-    } catch { /* ignore */ }
-    return true;
+      clearApiBreaker();
+      const res = await apiFetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({
+          action: 'save_catalog_order',
+          categoryIds: categoryIds || [],
+          productIds: productIds || [],
+        }),
+      }, 25000, { force: true });
+
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
+      if (res.ok && result.ok !== false) {
+        lastRemoteJson = JSON.stringify(data);
+        cloudEnabled = true;
+        return true;
+      }
+
+      console.warn('[Aurora] Falha ao salvar ordem do cardápio', res.status, result);
+      return pushToCloud(data);
+    } catch (err) {
+      console.warn('[Aurora] Erro ao salvar ordem do cardápio', err);
+      return pushToCloud(data);
+    }
   }
 
   function saveProducts(products) {

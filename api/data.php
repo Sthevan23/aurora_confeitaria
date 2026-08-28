@@ -301,6 +301,37 @@ if ($method === 'POST') {
     }
   }
 
+  // Atualiza só a ordem do cardápio (leve — não regrava tudo)
+  if ($actionName === 'save_catalog_order') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    $categoryIds = $body['categoryIds'] ?? [];
+    $productIds = $body['productIds'] ?? [];
+    if (!is_array($categoryIds) || !is_array($productIds)) {
+      json_out(['error' => 'Ordem inválida'], 400);
+    }
+    try {
+      aurora_save_catalog_order($pdo, $categoryIds, $productIds);
+      $wrote = false;
+      try {
+        $wrote = aurora_write_public_catalog($pdo);
+      } catch (Throwable $e) {
+        $wrote = false;
+      }
+      if (!$wrote) {
+        json_out([
+          'ok' => false,
+          'error' => 'Ordem salva no banco, mas não atualizou catalog.json (permissão?).',
+        ], 500);
+      }
+      json_out(['ok' => true, 'catalog' => true, 'ts' => time()]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao salvar ordem', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
   // Publica cardápio MySQL → catalog.json (site estático)
   if ($actionName === 'publish_catalog') {
     $auth = aurora_get_auth($pdo);

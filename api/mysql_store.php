@@ -537,10 +537,57 @@ function aurora_get_auth(PDO $pdo): array {
   ];
 }
 
+function aurora_ensure_sort_order_columns(PDO $pdo): void {
+  foreach (['categories', 'products'] as $table) {
+    try {
+      $col = $pdo->query("SHOW COLUMNS FROM `$table` LIKE 'sort_order'")->fetch();
+      if (!$col) {
+        $pdo->exec("ALTER TABLE `$table` ADD COLUMN `sort_order` INT NOT NULL DEFAULT 0");
+      }
+    } catch (Throwable $e) {
+      // ignore — falha explícita virá no UPDATE/INSERT
+    }
+  }
+}
+
+function aurora_save_catalog_order(PDO $pdo, array $categoryIds, array $productIds): void {
+  if (!aurora_db_ready($pdo)) {
+    throw new RuntimeException('Tabelas MySQL não encontradas. Importe api/aurora_mysql.sql no phpMyAdmin.');
+  }
+
+  aurora_ensure_sort_order_columns($pdo);
+
+  $pdo->beginTransaction();
+  try {
+    $catStmt = $pdo->prepare('UPDATE categories SET sort_order = ? WHERE id = ?');
+    foreach (array_values($categoryIds) as $i => $id) {
+      $id = trim((string) $id);
+      if ($id === '') continue;
+      $catStmt->execute([(int) $i, $id]);
+    }
+
+    $prodStmt = $pdo->prepare('UPDATE products SET sort_order = ? WHERE id = ?');
+    foreach (array_values($productIds) as $i => $id) {
+      $id = trim((string) $id);
+      if ($id === '') continue;
+      $prodStmt->execute([(int) $i, $id]);
+    }
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+      $pdo->rollBack();
+    }
+    throw $e;
+  }
+}
+
 function aurora_save_all(PDO $pdo, array $payload): void {
   if (!aurora_db_ready($pdo)) {
     throw new RuntimeException('Tabelas MySQL não encontradas. Importe api/aurora_mysql.sql no phpMyAdmin.');
   }
+
+  aurora_ensure_sort_order_columns($pdo);
 
   $pdo->beginTransaction();
   try {

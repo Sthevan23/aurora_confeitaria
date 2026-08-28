@@ -1671,7 +1671,13 @@ function openCatalogOrderModal(focus = 'products') {
       try {
         const ok = await Storage.saveCatalogOrderAsync(categoryOrder, productOrder);
         if (!ok) {
-          showToast('Não sincronizou com o servidor. Tente de novo.', 'error');
+          const offline = sessionStorage.getItem('admin_offline') === '1' || Storage.isCloudEnabled?.() === false;
+          showToast(
+            offline
+              ? 'API offline. Toque em “API offline” no topo para reconectar e tente de novo.'
+              : 'Não sincronizou com o servidor. Tente de novo.',
+            'error',
+          );
           return;
         }
         closeModal();
