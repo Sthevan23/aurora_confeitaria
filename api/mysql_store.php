@@ -538,6 +538,11 @@ function aurora_get_auth(PDO $pdo): array {
 }
 
 function aurora_ensure_sort_order_columns(PDO $pdo): void {
+  if (function_exists('aurora_ensure_column')) {
+    aurora_ensure_column($pdo, 'categories', 'sort_order', 'INT NOT NULL DEFAULT 0');
+    aurora_ensure_column($pdo, 'products', 'sort_order', 'INT NOT NULL DEFAULT 0');
+    return;
+  }
   foreach (['categories', 'products'] as $table) {
     try {
       $col = $pdo->query("SHOW COLUMNS FROM `$table` LIKE 'sort_order'")->fetch();
@@ -548,6 +553,85 @@ function aurora_ensure_sort_order_columns(PDO $pdo): void {
       // ignore — falha explícita virá no UPDATE/INSERT
     }
   }
+}
+
+/**
+ * Atualiza só a ordem no catalog.json existente (rápido — não recarrega MySQL).
+ */
+function aurora_patch_catalog_json_order(array $categoryIds, array $productIds): bool {
+  $root = dirname(__DIR__);
+  $paths = [
+    $root . DIRECTORY_SEPARATOR . 'catalog.json',
+    $root . DIRECTORY_SEPARATOR . 'catalog.live.json',
+    $root . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'catalog.json',
+  ];
+
+  $source = null;
+  foreach ($paths as $path) {
+    if (!is_file($path)) continue;
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || $raw === '') continue;
+    $data = json_decode($raw, true);
+    if (!is_array($data) || !isset($data['products'])) continue;
+    $source = $data;
+    break;
+  }
+  if (!$source) return false;
+
+  $catMap = [];
+  foreach (array_values($categoryIds) as $i => $id) {
+    $id = trim((string) $id);
+    if ($id !== '') $catMap[$id] = (int) $i;
+  }
+  $prodMap = [];
+  foreach (array_values($productIds) as $i => $id) {
+    $id = trim((string) $id);
+    if ($id !== '') $prodMap[$id] = (int) $i;
+  }
+
+  if (!empty($source['categories']) && is_array($source['categories'])) {
+    foreach ($source['categories'] as &$cat) {
+      if (!is_array($cat)) continue;
+      $cid = (string) ($cat['id'] ?? '');
+      if ($cid !== '' && isset($catMap[$cid])) {
+        $cat['sortOrder'] = $catMap[$cid];
+      }
+    }
+    unset($cat);
+    usort($source['categories'], static function ($a, $b) {
+      $diff = ((int) ($a['sortOrder'] ?? 0)) - ((int) ($b['sortOrder'] ?? 0));
+      if ($diff !== 0) return $diff;
+      return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    });
+  }
+
+  if (!empty($source['products']) && is_array($source['products'])) {
+    foreach ($source['products'] as &$prod) {
+      if (!is_array($prod)) continue;
+      $pid = (string) ($prod['id'] ?? '');
+      if ($pid !== '' && isset($prodMap[$pid])) {
+        $prod['sortOrder'] = $prodMap[$pid];
+      }
+    }
+    unset($prod);
+    usort($source['products'], static function ($a, $b) {
+      $diff = ((int) ($a['sortOrder'] ?? 0)) - ((int) ($b['sortOrder'] ?? 0));
+      if ($diff !== 0) return $diff;
+      return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    });
+  }
+
+  $source['generatedAt'] = gmdate('c');
+  $json = json_encode($source, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  if ($json === false) return false;
+
+  $ok = false;
+  foreach ($paths as $path) {
+    if (@file_put_contents($path, $json) !== false) {
+      $ok = true;
+    }
+  }
+  return $ok;
 }
 
 function aurora_save_catalog_order(PDO $pdo, array $categoryIds, array $productIds): void {

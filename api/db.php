@@ -110,6 +110,15 @@ function aurora_ensure_schema(PDO $pdo): void {
         'available',
         "TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Disponivel para pedido no site'"
       );
+      aurora_ensure_column($pdo, 'products', 'sort_order', 'INT NOT NULL DEFAULT 0');
+    }
+
+    $categoriesExists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'categories' LIMIT 1"
+    )->fetchColumn();
+    if ($categoriesExists) {
+      aurora_ensure_column($pdo, 'categories', 'sort_order', 'INT NOT NULL DEFAULT 0');
     }
 
     $settingsExists = $pdo->query(

@@ -1669,13 +1669,13 @@ function openCatalogOrderModal(focus = 'products') {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
       }
       try {
-        const ok = await Storage.saveCatalogOrderAsync(categoryOrder, productOrder);
-        if (!ok) {
+        const result = await Storage.saveCatalogOrderAsync(categoryOrder, productOrder);
+        if (!result?.ok) {
           const offline = sessionStorage.getItem('admin_offline') === '1' || Storage.isCloudEnabled?.() === false;
           showToast(
-            offline
+            result?.error || (offline
               ? 'API offline. Toque em “API offline” no topo para reconectar e tente de novo.'
-              : 'Não sincronizou com o servidor. Tente de novo.',
+              : 'Não sincronizou com o servidor. Tente de novo.'),
             'error',
           );
           return;
@@ -1683,7 +1683,12 @@ function openCatalogOrderModal(focus = 'products') {
         closeModal();
         renderProducts();
         renderCategories();
-        showToast('Ordem do cardápio atualizada no site!', 'success');
+        showToast(
+          result.catalog === false
+            ? 'Ordem salva no banco. Se o site não mudar, toque em “API offline” no topo para republicar.'
+            : 'Ordem do cardápio atualizada no site!',
+          'success',
+        );
       } catch {
         showToast('Erro ao salvar ordem.', 'error');
       } finally {

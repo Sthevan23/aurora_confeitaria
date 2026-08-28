@@ -727,7 +727,9 @@ const Storage = (() => {
     notifyUpdated();
 
     const password = getAdminPassword();
-    if (!password) return false;
+    if (!password) {
+      return { ok: false, error: 'Faça login de novo no painel.' };
+    }
 
     try {
       clearApiBreaker();
@@ -742,7 +744,7 @@ const Storage = (() => {
           categoryIds: categoryIds || [],
           productIds: productIds || [],
         }),
-      }, 25000, { force: true });
+      }, 12000, { force: true });
 
       let result = {};
       try {
@@ -754,14 +756,23 @@ const Storage = (() => {
       if (res.ok && result.ok !== false) {
         lastRemoteJson = JSON.stringify(data);
         cloudEnabled = true;
-        return true;
+        return {
+          ok: true,
+          catalog: result.catalog !== false,
+        };
       }
 
+      const msg = result.error
+        || result.detail
+        || (res.status === 401 ? 'Senha inválida. Faça login de novo.' : '')
+        || (res.status === 503 ? 'Servidor ocupado. Aguarde 1 minuto e tente de novo.' : '')
+        || 'Não sincronizou com o servidor.';
+
       console.warn('[Aurora] Falha ao salvar ordem do cardápio', res.status, result);
-      return pushToCloud(data);
+      return { ok: false, error: msg };
     } catch (err) {
       console.warn('[Aurora] Erro ao salvar ordem do cardápio', err);
-      return pushToCloud(data);
+      return { ok: false, error: 'Sem conexão com o servidor. Verifique a internet e tente de novo.' };
     }
   }
 

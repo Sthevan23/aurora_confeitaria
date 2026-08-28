@@ -211,8 +211,8 @@ if ($method === 'POST') {
     json_out(['ok' => true, 'data' => $stored]);
   }
 
-  // Pedido / fidelidade — conexão leve (sem ALTER/schema) pra não estourar processos
-  if ($actionName === 'loyalty_status' || $actionName === 'create_order') {
+  // Pedido / fidelidade / ordem do cardápio — conexão leve (sem ALTER/schema pesado)
+  if ($actionName === 'loyalty_status' || $actionName === 'create_order' || $actionName === 'save_catalog_order') {
     try {
       $pdo = aurora_db(false);
     } catch (Throwable $e) {
@@ -314,19 +314,12 @@ if ($method === 'POST') {
     }
     try {
       aurora_save_catalog_order($pdo, $categoryIds, $productIds);
-      $wrote = false;
-      try {
-        $wrote = aurora_write_public_catalog($pdo);
-      } catch (Throwable $e) {
-        $wrote = false;
-      }
-      if (!$wrote) {
-        json_out([
-          'ok' => false,
-          'error' => 'Ordem salva no banco, mas não atualizou catalog.json (permissão?).',
-        ], 500);
-      }
-      json_out(['ok' => true, 'catalog' => true, 'ts' => time()]);
+      $catalog = aurora_patch_catalog_json_order($categoryIds, $productIds);
+      json_out([
+        'ok' => true,
+        'catalog' => $catalog,
+        'ts' => time(),
+      ]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao salvar ordem', 'detail' => $e->getMessage()], 500);
     }
@@ -398,6 +391,10 @@ if ($method === 'POST') {
   }
 
   // Salvamento completo (admin)
+  if ($actionName !== '') {
+    json_out(['error' => 'Ação não reconhecida'], 400);
+  }
+
   $payload = $body['data'] ?? $body;
   if (!is_array($payload) || !isset($payload['settings'])) {
     json_out(['error' => 'Dados incompletos'], 400);
