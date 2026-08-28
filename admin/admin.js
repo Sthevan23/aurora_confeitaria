@@ -2168,7 +2168,9 @@ function loyaltyBadgeHtml(loyalty) {
 }
 
 function renderClients() {
-  const clients = Storage.getClients();
+  const clients = (Storage.getClients() || []).slice().sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' })
+  );
   const orders = Storage.getOrders();
   const tbody = document.querySelector('#clients-table tbody');
 
