@@ -387,7 +387,7 @@ window.AuroraCart = (() => {
         `(Favor confirmar o brinde neste atendimento)\n`;
     } else if (loyalty && loyalty.total > 0) {
       loyaltyBlock =
-        `\n⭐ Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos` +
+        `\n⭐ Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos finalizados` +
         (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde\n` : '\n');
     }
 

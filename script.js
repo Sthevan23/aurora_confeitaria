@@ -643,7 +643,7 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
       `--------------------------------\n`;
   } else if (loyalty && loyalty.total > 0) {
     loyaltyBlock =
-      `Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos` +
+      `Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos finalizados` +
       (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde\n` : '\n') +
       `--------------------------------\n`;
   }
@@ -810,9 +810,26 @@ function renderMarquee() {
 
 function renderFilters() {
   const box = document.getElementById('category-filter');
-  box.innerHTML = FILTERS.map((key) => {
-    const label = CATEGORY_LABELS[key] || key;
-    return `<button type="button" class="filter-btn ${activeFilter === key ? 'is-active' : ''}" data-filter="${key}">${label}</button>`;
+  if (!box) return;
+
+  const categories = typeof Storage !== 'undefined' && Storage.getCategories
+    ? Storage.getCategories()
+    : [];
+  const buttons = [{ key: 'all', label: 'Todos' }];
+  if (categories.length) {
+    categories.forEach((c) => buttons.push({ key: c.id, label: c.name || c.id }));
+  } else {
+    FILTERS.filter((key) => key !== 'all').forEach((key) => {
+      buttons.push({ key, label: CATEGORY_LABELS[key] || key });
+    });
+  }
+
+  box.innerHTML = buttons.map(({ key, label }) => {
+    const safe = String(label)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/"/g, '&quot;');
+    return `<button type="button" class="filter-btn ${activeFilter === key ? 'is-active' : ''}" data-filter="${key}">${safe}</button>`;
   }).join('');
 
   box.querySelectorAll('.filter-btn').forEach((btn) => {
@@ -983,11 +1000,76 @@ function lightboxLineTotal(product) {
   return sum;
 }
 
+function productLightboxDescription(product) {
+  const raw = String(product?.description || '').trim();
+  if (!raw) return '';
+  if (!productHasFlavors(product)) return raw;
+
+  let cleaned = raw
+    .replace(/\.\s*Escolha o sabor:.+$/is, '.')
+    .replace(/\s*Escolha o sabor:.+$/is, '')
+    .replace(/\s*—\s*R\$\s*[\d.,]+.+$/g, '')
+    .trim();
+  cleaned = cleaned.replace(/\.\s*$/, '').trim();
+  if (!cleaned) {
+    const firstSentence = raw.match(/^[^.!?]+[.!?]/)?.[0]?.trim();
+    return firstSentence || raw;
+  }
+  if (cleaned.length > 120) {
+    const short = cleaned.match(/^[^.!?]+[.!?]/)?.[0]?.trim();
+    return short && short.length >= 20 ? short : `${cleaned.slice(0, 117).trim()}…`;
+  }
+  return cleaned.endsWith('.') ? cleaned : `${cleaned}.`;
+}
+
+function buildFlavorOptionsHtml(product, flavors, unitIdx, current) {
+  return flavors.map((f) => {
+    const price = resolveProductPrice(product, f);
+    const priceHtml = Number.isFinite(price) && price > 0
+      ? `<span class="flavor-option-card__price">${Storage.formatCurrency(price)}</span>`
+      : '';
+    const active = current === f;
+    const safe = String(f).replace(/"/g, '&quot;');
+    const label = String(f).replace(/</g, '&lt;');
+    return `
+      <label class="flavor-option-card${active ? ' is-active' : ''}">
+        <input type="radio" name="order-flavor-${unitIdx}" value="${safe}" ${active ? 'checked' : ''}>
+        <span class="flavor-option-card__body">
+          <span class="flavor-option-card__name">${label}</span>
+          ${priceHtml}
+        </span>
+      </label>`;
+  }).join('');
+}
+
+function bindLightboxFlavorInputs(product, multi) {
+  const flavorRoot = document.getElementById('acc-flavor');
+  document.querySelectorAll('#lightbox-flavors .flavor-unit').forEach((unitEl) => {
+    const unitIdx = Number(unitEl.dataset.unit) || 0;
+    unitEl.querySelectorAll('.flavor-option-card input[type="radio"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        selectedFlavors[unitIdx] = input.value;
+        unitEl.querySelectorAll('.flavor-option-card').forEach((card) => card.classList.remove('is-active'));
+        input.closest('.flavor-option-card')?.classList.add('is-active');
+        const summary = document.getElementById('flavor-summary');
+        if (summary) summary.textContent = flavorSummaryText(product);
+        updateLightboxTotals();
+
+        const done = allLightboxFlavorsSelected(product);
+        flavorRoot?.classList.toggle('is-done', done);
+        if (multi) {
+          flavorRoot?.classList.add('is-open');
+        }
+      });
+    });
+  });
+}
+
 function flavorSummaryText(product) {
   const qty = Math.max(1, lightboxQty);
   syncFlavorSlots(qty);
   const picked = selectedFlavors.slice(0, qty).filter(Boolean);
-  if (!picked.length) return 'obrigatório';
+  if (!picked.length) return 'Obrigatório';
   if (picked.length < qty) return `${picked.length}/${qty} escolhidos`;
   if (qty === 1) {
     const p = resolveProductPrice(product, picked[0]);
@@ -1031,69 +1113,48 @@ function renderLightboxFlavors() {
 
   const unitsHtml = Array.from({ length: qty }, (_, unitIdx) => {
     const current = selectedFlavors[unitIdx] || '';
-    const options = flavors.map((f) => {
-      const price = resolveProductPrice(product, f);
-      const fp = Number.isFinite(price) && price > 0
-        ? ` — ${Storage.formatCurrency(price)}`
-        : '';
-      const active = current === f;
-      const safe = String(f).replace(/"/g, '&quot;');
-      const label = String(f).replace(/</g, '&lt;');
-      return `
-        <label class="${active ? 'is-active' : ''}">
-          <input type="radio" name="order-flavor-${unitIdx}" value="${safe}" ${active ? 'checked' : ''}>
-          <span>${label}${fp}</span>
-        </label>`;
-    }).join('');
-
+    const options = buildFlavorOptionsHtml(product, flavors, unitIdx, current);
     return `
       <div class="flavor-unit" data-unit="${unitIdx}">
         ${multi ? `<p class="flavor-unit__label">Unidade ${unitIdx + 1}</p>` : ''}
-        <div class="flavor-options">${options}</div>
+        <div class="flavor-options flavor-options--stacked">${options}</div>
       </div>`;
   }).join('');
 
   flavorsBox.hidden = false;
+
+  if (!multi) {
+    flavorsBox.innerHTML = `
+      <section class="product-flavors ${allDone ? 'is-done' : ''}" id="acc-flavor">
+        <header class="product-flavors__head">
+          <h4 class="product-flavors__title">Escolha o sabor</h4>
+          <span class="product-flavors__badge" id="flavor-summary">${flavorSummaryText(product)}</span>
+        </header>
+        <div class="flavor-units">${unitsHtml}</div>
+      </section>
+    `;
+    bindLightboxFlavorInputs(product, false);
+    return;
+  }
+
   flavorsBox.innerHTML = `
-    <div class="order-acc ${allDone && !multi ? '' : 'is-open'} ${allDone ? 'is-done' : ''}" id="acc-flavor">
+    <div class="order-acc is-open ${allDone ? 'is-done' : ''}" id="acc-flavor">
       <button type="button" class="order-acc__head" id="acc-flavor-toggle">
-        <span class="order-acc__title">${multi ? 'Escolha o sabor de cada unidade *' : 'Escolha o sabor *'}</span>
+        <span class="order-acc__title">Escolha o sabor de cada unidade</span>
         <span class="order-acc__summary" id="flavor-summary">${flavorSummaryText(product)}</span>
         <span class="order-acc__chevron">▾</span>
       </button>
       <div class="order-acc__body"><div class="order-acc__inner">
-        ${multi ? '<p class="flavor-units__hint">Pode ser o mesmo sabor ou sabores diferentes.</p>' : ''}
+        <p class="flavor-units__hint">Pode ser o mesmo sabor ou sabores diferentes.</p>
         <div class="flavor-units">${unitsHtml}</div>
       </div></div>
     </div>
   `;
 
-  const flavorAcc = document.getElementById('acc-flavor');
   document.getElementById('acc-flavor-toggle')?.addEventListener('click', () => {
-    flavorAcc?.classList.toggle('is-open');
+    document.getElementById('acc-flavor')?.classList.toggle('is-open');
   });
-
-  flavorsBox.querySelectorAll('.flavor-unit').forEach((unitEl) => {
-    const unitIdx = Number(unitEl.dataset.unit) || 0;
-    unitEl.querySelectorAll('input[type="radio"]').forEach((input) => {
-      input.addEventListener('change', () => {
-        selectedFlavors[unitIdx] = input.value;
-        unitEl.querySelectorAll('label').forEach((l) => l.classList.remove('is-active'));
-        input.closest('label')?.classList.add('is-active');
-        const summary = document.getElementById('flavor-summary');
-        if (summary) summary.textContent = flavorSummaryText(product);
-        updateLightboxTotals();
-
-        const done = allLightboxFlavorsSelected(product);
-        flavorAcc?.classList.toggle('is-done', done);
-        if (done && !multi) {
-          flavorAcc?.classList.remove('is-open');
-        } else if (multi) {
-          flavorAcc?.classList.add('is-open');
-        }
-      });
-    });
-  });
+  bindLightboxFlavorInputs(product, true);
 }
 
 function openLightbox(productId) {
@@ -1112,7 +1173,13 @@ function openLightbox(productId) {
   }
   document.getElementById('lightbox-category').textContent = Storage.getCategoryName(product.categoryId);
   document.getElementById('lightbox-title').textContent = product.name;
-  document.getElementById('lightbox-desc').textContent = product.description || '';
+  const descEl = document.getElementById('lightbox-desc');
+  const descText = productLightboxDescription(product);
+  if (descEl) {
+    descEl.textContent = descText;
+    descEl.hidden = !descText;
+  }
+  document.getElementById('lightbox-scroll')?.classList.toggle('has-flavors', productHasFlavors(product));
   document.getElementById('order-error').hidden = true;
   const notes = document.getElementById('lightbox-notes');
   if (notes) notes.value = '';

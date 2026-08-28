@@ -302,9 +302,9 @@
       if (loyalty.eligible) {
         msg.textContent = `Brinde liberado: ${loyalty.gift || '1 brinde surpresa da Aurora'}!`;
       } else if (loyalty.total === 0) {
-        msg.textContent = `A cada ${goal} pedidos neste WhatsApp, você ganha um brinde.`;
+        msg.textContent = `A cada ${goal} pedidos finalizados neste WhatsApp, você ganha um brinde.`;
       } else {
-        msg.textContent = `${loyalty.total} pedido${loyalty.total === 1 ? '' : 's'} neste número · faltam ${loyalty.remaining} para o brinde.`;
+        msg.textContent = `${loyalty.total} pedido${loyalty.total === 1 ? '' : 's'} finalizado${loyalty.total === 1 ? '' : 's'} · faltam ${loyalty.remaining} para o brinde.`;
       }
     }
   }

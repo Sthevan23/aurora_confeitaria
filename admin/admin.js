@@ -341,6 +341,16 @@ function renderDashboard() {
 /* --- Pedidos --- */
 let orderFilter = 'all';
 
+function isOrderToday(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
+}
+
 function initOrderFilters() {
   document.getElementById('order-status-tabs').addEventListener('click', (e) => {
     if (!e.target.classList.contains('filter-tab')) return;
@@ -353,10 +363,21 @@ function initOrderFilters() {
 
 function renderOrders() {
   let orders = Storage.getOrders();
-  if (orderFilter !== 'all') orders = orders.filter(o => o.status === orderFilter);
+  if (orderFilter === 'today') {
+    orders = orders.filter((o) => isOrderToday(o.date));
+  } else if (orderFilter !== 'all') {
+    orders = orders.filter((o) => o.status === orderFilter);
+  }
   orders = orders.slice().reverse();
 
   const tbody = document.querySelector('#orders-table tbody');
+  if (!orders.length) {
+    const emptyMsg = orderFilter === 'today'
+      ? 'Nenhum pedido registrado hoje.'
+      : 'Nenhum pedido neste filtro.';
+    tbody.innerHTML = `<tr><td colspan="7" class="table__empty">${emptyMsg}</td></tr>`;
+    return;
+  }
   tbody.innerHTML = orders.map(o => `
     <tr class="order-row mobile-card" onclick="viewOrder('${o.id}')" title="Ver detalhes do pedido">
       <td data-label="Nº"><strong>${o.number}</strong></td>
@@ -370,10 +391,12 @@ function renderOrders() {
       <td data-label="Data">${formatDate(o.date)}</td>
       <td data-label="Ações">
         <div class="table__actions" onclick="event.stopPropagation()">
-          <button class="btn--icon edit" onclick="editOrder('${o.id}')" title="Editar pedido"><i class="fas fa-edit"></i></button>
-          <button class="btn--icon edit" onclick="editOrderStatus('${o.id}')" title="Alterar Status"><i class="fas fa-exchange-alt"></i></button>
-          <button class="btn--icon edit" onclick="viewOrder('${o.id}')" title="Ver Detalhes"><i class="fas fa-eye"></i></button>
-          <button class="btn--icon delete" onclick="deleteOrder('${o.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
+          <button type="button" class="btn btn--secondary btn--sm order-edit-btn" onclick="editOrder('${o.id}')" title="Editar pedido">
+            <i class="fas fa-edit"></i> Editar
+          </button>
+          <button type="button" class="btn--icon edit" onclick="editOrderStatus('${o.id}')" title="Alterar status"><i class="fas fa-exchange-alt"></i></button>
+          <button type="button" class="btn--icon edit" onclick="viewOrder('${o.id}')" title="Ver detalhes"><i class="fas fa-eye"></i></button>
+          <button type="button" class="btn--icon delete" onclick="deleteOrder('${o.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
         </div>
       </td>
     </tr>
@@ -710,6 +733,16 @@ function editOrder(id) {
   });
 }
 
+function openEditOrder(id) {
+  closeModal();
+  editOrder(id);
+}
+
+function openEditOrderStatus(id) {
+  closeModal();
+  editOrderStatus(id);
+}
+
 function editOrderStatus(id) {
   const order = Storage.getOrders().find(o => o.id === id);
   if (!order) return;
@@ -750,7 +783,7 @@ function editOrderStatus(id) {
 
   const statusSelect = document.getElementById('order-status');
 
-  document.getElementById('status-form').addEventListener('submit', (e) => {
+  document.getElementById('status-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const newStatus = statusSelect.value;
     const orders = Storage.getOrders();
@@ -779,20 +812,41 @@ function editOrderStatus(id) {
     }
 
     orders[idx].status = newStatus;
-    Storage.saveOrders(orders);
-    closeModal();
-    renderOrders();
-    renderClients();
-    renderDashboard();
-    if (document.getElementById('page-financeiro')?.classList.contains('active')) {
-      initFinanceiro();
+
+    const btn = document.querySelector('#status-form [type="submit"]');
+    const prev = btn?.innerHTML || '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
     }
-    showToast(
-      newStatus === 'finalizado'
-        ? 'Pedido finalizado! Já aparece no financeiro.'
-        : 'Status atualizado com sucesso!',
-      'success'
-    );
+
+    try {
+      const ok = await Storage.saveOrdersAsync(orders);
+      if (!ok) {
+        showToast('Não sincronizou com o servidor. Tente de novo.', 'error');
+        return;
+      }
+      closeModal();
+      renderOrders();
+      renderClients();
+      renderDashboard();
+      if (document.getElementById('page-financeiro')?.classList.contains('active')) {
+        initFinanceiro();
+      }
+      showToast(
+        newStatus === 'finalizado'
+          ? 'Pedido finalizado! Conta na fidelidade e no financeiro.'
+          : 'Status atualizado com sucesso!',
+        'success'
+      );
+    } catch {
+      showToast('Erro ao salvar status.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = prev;
+      }
+    }
   });
 }
 
@@ -832,6 +886,8 @@ function viewOrder(id) {
   }).join('');
 
   const extras = resolveOrderExtras(order);
+  const showDiscount = extras.discount > 0;
+  const showFee = extras.waiveDelivery || extras.deliveryFee > 0;
   const notesLine = order.notes
     ? `<div class="order-detail__notes"><h4><i class="fas fa-sticky-note"></i> Observações</h4><p>${escapeHtml(order.notes)}</p></div>`
     : '';
@@ -856,8 +912,8 @@ function viewOrder(id) {
 
       <div class="order-detail__breakdown">
         <div class="order-detail__breakdown-row"><span>Subtotal</span><strong>${Storage.formatCurrency(extras.subtotal)}</strong></div>
-        ${discountLine ? `<div class="order-detail__breakdown-row"><span>Desconto</span><strong>− ${Storage.formatCurrency(extras.discount)}</strong></div>` : ''}
-        ${feeLine ? `<div class="order-detail__breakdown-row"><span>Taxa motoboy</span><strong>${extras.waiveDelivery ? 'Isenta' : Storage.formatCurrency(extras.deliveryFee)}</strong></div>` : ''}
+        ${showDiscount ? `<div class="order-detail__breakdown-row"><span>Desconto</span><strong>− ${Storage.formatCurrency(extras.discount)}</strong></div>` : ''}
+        ${showFee ? `<div class="order-detail__breakdown-row"><span>Taxa motoboy</span><strong>${extras.waiveDelivery ? 'Isenta' : Storage.formatCurrency(extras.deliveryFee)}</strong></div>` : ''}
       </div>
 
       ${notesLine}
@@ -868,13 +924,13 @@ function viewOrder(id) {
       </div>
 
       <div class="modal__actions">
-        <button type="button" class="btn btn--secondary" onclick="closeModal()">Fechar</button>
-        <button type="button" class="btn btn--primary" onclick="editOrder('${order.id}')">
+        <button type="button" class="btn btn--primary" onclick="openEditOrder('${order.id}')">
           <i class="fas fa-edit"></i> Editar pedido
         </button>
-        <button type="button" class="btn btn--secondary" onclick="editOrderStatus('${order.id}')">
+        <button type="button" class="btn btn--secondary" onclick="openEditOrderStatus('${order.id}')">
           <i class="fas fa-exchange-alt"></i> Alterar status
         </button>
+        <button type="button" class="btn btn--secondary" onclick="closeModal()">Fechar</button>
       </div>
     </div>
   `, { size: 'xl' });
@@ -1220,10 +1276,17 @@ function findOrCreateClient(name, whatsapp) {
 function deleteOrder(id) {
   if (!confirm('Deseja excluir este pedido?')) return;
   const orders = Storage.getOrders().filter(o => o.id !== id);
-  Storage.saveOrders(orders);
-  renderOrders();
-  renderDashboard();
-  showToast('Pedido excluído.', 'success');
+  Storage.saveOrdersAsync(orders).then((ok) => {
+    if (!ok) {
+      showToast('Não sincronizou com o servidor. Tente de novo.', 'error');
+      return;
+    }
+    renderOrders();
+    renderDashboard();
+    showToast('Pedido excluído.', 'success');
+  }).catch(() => {
+    showToast('Erro ao excluir pedido.', 'error');
+  });
 }
 
 function openNewOrderModal() {
@@ -1305,7 +1368,7 @@ function openNewOrderModal() {
     renderTempItems();
   });
 
-  document.getElementById('new-order-form').addEventListener('submit', (e) => {
+  document.getElementById('new-order-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (tempItems.length === 0) { showToast('Adicione pelo menos um item.', 'error'); return; }
 
@@ -1336,16 +1399,219 @@ function openNewOrderModal() {
       status: 'novo',
       date: new Date().toISOString()
     });
-    Storage.saveOrders(orders);
-    closeModal();
-    renderOrders();
-    renderClients();
-    renderDashboard();
-    showToast('Pedido criado com sucesso!', 'success');
+
+    const btn = document.querySelector('#new-order-form [type="submit"]');
+    const prev = btn?.innerHTML || '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
+    }
+
+    try {
+      const ok = await Storage.saveOrdersAsync(orders);
+      if (!ok) {
+        showToast('Não sincronizou com o servidor. Tente de novo.', 'error');
+        return;
+      }
+      closeModal();
+      renderOrders();
+      renderClients();
+      renderDashboard();
+      showToast('Pedido criado com sucesso!', 'success');
+    } catch {
+      showToast('Erro ao criar pedido.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = prev;
+      }
+    }
   });
 }
 
 /* --- Produtos --- */
+function moveOrderItem(list, id, delta) {
+  const idx = list.indexOf(id);
+  if (idx < 0) return list;
+  const next = idx + delta;
+  if (next < 0 || next >= list.length) return list;
+  const copy = list.slice();
+  [copy[idx], copy[next]] = [copy[next], copy[idx]];
+  return copy;
+}
+
+function moveProductInOrder(productOrder, products, id, delta, categoryFilter = 'all') {
+  if (categoryFilter === 'all') {
+    return moveOrderItem(productOrder, id, delta);
+  }
+  const scoped = productOrder.filter((pid) => {
+    const p = products.find((item) => item.id === pid);
+    return p?.categoryId === categoryFilter;
+  });
+  const moved = moveOrderItem(scoped, id, delta);
+  if (moved === scoped) return productOrder;
+  const firstIdx = productOrder.findIndex((pid) => pid === scoped[0]);
+  if (firstIdx < 0) return productOrder;
+  const before = productOrder.slice(0, firstIdx);
+  const after = productOrder.slice(firstIdx + scoped.length);
+  return [...before, ...moved, ...after];
+}
+
+function openCatalogOrderModal(focus = 'products') {
+  const categories = Storage.sortCategoriesList(Storage.getCategories());
+  const products = Storage.sortProductsList(Storage.getProducts());
+  let categoryOrder = categories.map((c) => c.id);
+  let productOrder = products.map((p) => p.id);
+  let productFilter = 'all';
+
+  const renderModal = () => {
+    const filteredProductIds = productFilter === 'all'
+      ? productOrder.slice()
+      : productOrder.filter((id) => {
+        const p = products.find((item) => item.id === id);
+        return p?.categoryId === productFilter;
+      });
+
+    const categoryRows = categoryOrder.map((id, index) => {
+      const cat = categories.find((c) => c.id === id);
+      if (!cat) return '';
+      return `
+        <div class="catalog-order__item" data-cat-id="${cat.id}">
+          <span class="catalog-order__pos">${index + 1}</span>
+          <div class="catalog-order__main">
+            <strong>${escapeHtml(cat.name)}</strong>
+            <small>${escapeHtml(cat.slug)}</small>
+          </div>
+          <div class="catalog-order__actions">
+            <button type="button" class="btn--icon edit" data-cat-up="${cat.id}" title="Subir" ${index === 0 ? 'disabled' : ''}><i class="fas fa-arrow-up"></i></button>
+            <button type="button" class="btn--icon edit" data-cat-down="${cat.id}" title="Descer" ${index === categoryOrder.length - 1 ? 'disabled' : ''}><i class="fas fa-arrow-down"></i></button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const productRows = filteredProductIds.map((id, index) => {
+      const product = products.find((p) => p.id === id);
+      if (!product) return '';
+      const onMenu = product.active !== false;
+      const globalIndex = productOrder.indexOf(id) + 1;
+      return `
+        <div class="catalog-order__item${onMenu ? '' : ' catalog-order__item--off'}" data-prod-id="${product.id}">
+          <span class="catalog-order__pos">${globalIndex}</span>
+          <div class="catalog-order__main">
+            <strong>${escapeHtml(product.name)}</strong>
+            <small>${escapeHtml(Storage.getCategoryName(product.categoryId))}${onMenu ? '' : ' · Fora do site'}</small>
+          </div>
+          <div class="catalog-order__actions">
+            <button type="button" class="btn--icon edit" data-prod-up="${product.id}" title="Subir" ${index === 0 ? 'disabled' : ''}><i class="fas fa-arrow-up"></i></button>
+            <button type="button" class="btn--icon edit" data-prod-down="${product.id}" title="Descer" ${index === filteredProductIds.length - 1 ? 'disabled' : ''}><i class="fas fa-arrow-down"></i></button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const filterOptions = [
+      `<option value="all"${productFilter === 'all' ? ' selected' : ''}>Todos os produtos</option>`,
+      ...categories.map((c) => `<option value="${c.id}"${productFilter === c.id ? ' selected' : ''}>${escapeHtml(c.name)}</option>`),
+    ].join('');
+
+    openModal('Organizar ordem no site', `
+      <div class="catalog-order">
+        <p class="catalog-order__intro">O item <strong>1</strong> aparece primeiro no site. Use as setas para reorganizar categorias (abas) e produtos do cardápio.</p>
+        <div class="catalog-order__tabs">
+          <button type="button" class="catalog-order__tab ${focus === 'products' ? 'is-active' : ''}" data-order-tab="products"><i class="fas fa-cookie-bite"></i> Produtos</button>
+          <button type="button" class="catalog-order__tab ${focus === 'categories' ? 'is-active' : ''}" data-order-tab="categories"><i class="fas fa-tags"></i> Categorias</button>
+        </div>
+
+        <section class="catalog-order__panel ${focus === 'products' ? 'is-active' : ''}" data-order-panel="products">
+          <div class="catalog-order__toolbar">
+            <label>Filtrar por categoria
+              <select id="catalog-order-product-filter">${filterOptions}</select>
+            </label>
+          </div>
+          <div class="catalog-order__list">${productRows || '<p class="catalog-order__empty">Nenhum produto nesta categoria.</p>'}</div>
+        </section>
+
+        <section class="catalog-order__panel ${focus === 'categories' ? 'is-active' : ''}" data-order-panel="categories">
+          <div class="catalog-order__list">${categoryRows || '<p class="catalog-order__empty">Nenhuma categoria cadastrada.</p>'}</div>
+        </section>
+
+        <div class="modal__actions">
+          <button type="button" class="btn btn--secondary" onclick="closeModal()">Cancelar</button>
+          <button type="button" class="btn btn--primary" id="catalog-order-save"><i class="fas fa-save"></i> Salvar ordem no site</button>
+        </div>
+      </div>
+    `, { size: 'xl' });
+
+    document.querySelectorAll('[data-order-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        focus = btn.dataset.orderTab || 'products';
+        renderModal();
+      });
+    });
+
+    document.getElementById('catalog-order-product-filter')?.addEventListener('change', (e) => {
+      productFilter = e.target.value || 'all';
+      renderModal();
+    });
+
+    document.querySelectorAll('[data-cat-up]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        categoryOrder = moveOrderItem(categoryOrder, btn.dataset.catUp, -1);
+        renderModal();
+      });
+    });
+    document.querySelectorAll('[data-cat-down]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        categoryOrder = moveOrderItem(categoryOrder, btn.dataset.catDown, 1);
+        renderModal();
+      });
+    });
+
+    document.querySelectorAll('[data-prod-up]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        productOrder = moveProductInOrder(productOrder, products, btn.dataset.prodUp, -1, productFilter);
+        renderModal();
+      });
+    });
+    document.querySelectorAll('[data-prod-down]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        productOrder = moveProductInOrder(productOrder, products, btn.dataset.prodDown, 1, productFilter);
+        renderModal();
+      });
+    });
+
+    document.getElementById('catalog-order-save')?.addEventListener('click', async () => {
+      const btn = document.getElementById('catalog-order-save');
+      const prev = btn?.innerHTML || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando…';
+      }
+      try {
+        const ok = await Storage.saveCatalogOrderAsync(categoryOrder, productOrder);
+        if (!ok) {
+          showToast('Não sincronizou com o servidor. Tente de novo.', 'error');
+          return;
+        }
+        closeModal();
+        renderProducts();
+        renderCategories();
+        showToast('Ordem do cardápio atualizada no site!', 'success');
+      } catch {
+        showToast('Erro ao salvar ordem.', 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = prev;
+        }
+      }
+    });
+  };
+
+  renderModal();
+}
+
 function renderProducts() {
   const products = Storage.getProducts();
   const tbody = document.querySelector('#products-table tbody');
@@ -1643,6 +1909,7 @@ function openProductModal(product = null) {
         products.push({
           id: Storage.generateId('p'),
           slug: `${slug}-${Date.now().toString(36).slice(-4)}`,
+          sortOrder: Storage.nextProductSortOrder?.(products) ?? products.length,
           ...data,
         });
       }
@@ -1744,7 +2011,11 @@ function openCategoryModal(category = null) {
       const idx = categories.findIndex(c => c.id === category.id);
       categories[idx] = { ...categories[idx], ...data };
     } else {
-      categories.push({ id: Storage.generateId('cat'), ...data });
+      categories.push({
+        id: Storage.generateId('cat'),
+        sortOrder: categories.length,
+        ...data,
+      });
     }
 
     Storage.saveCategories(categories);
@@ -1776,8 +2047,8 @@ function loyaltyBadgeHtml(loyalty) {
   const goal = loyalty.goal || 15;
   const progress = loyalty.progress || 0;
   const tip = loyalty.bonus
-    ? `${loyalty.total} pedidos (${loyalty.siteTotal || 0} site + ${loyalty.bonus} fora)`
-    : `${loyalty.total} pedidos no total`;
+    ? `${loyalty.total} pedidos (${loyalty.siteTotal || 0} finalizados + ${loyalty.bonus} fora)`
+    : `${loyalty.total} pedidos finalizados no painel`;
   if (loyalty.eligible) {
     return `<span class="loyalty-pill loyalty-pill--ok" title="${escapeHtml(tip)}">${loyalty.total} · Brinde!</span>`;
   }
@@ -1845,7 +2116,7 @@ function openClientModal(client = null) {
       <div class="form-group">
         <label>Pedidos na fidelidade</label>
         <input type="number" id="cli-loyalty-total" min="0" max="999" step="1" value="${loyaltyTotal}">
-        <p class="form-hint">Pedidos pelo site: <strong id="cli-loyalty-site">${siteTotal}</strong>. Ajuste o total se ela comprou fora do site.</p>
+        <p class="form-hint">Pedidos finalizados no painel: <strong id="cli-loyalty-site">${siteTotal}</strong>. Ajuste o total se ela comprou fora do site.</p>
       </div>
       <div class="modal__actions">
         <button type="button" class="btn btn--secondary" onclick="closeModal()">Cancelar</button>
@@ -2330,6 +2601,8 @@ function initButtons() {
   document.getElementById('btn-refresh-orders')?.addEventListener('click', () => {
     refreshOrdersFromCloud();
   });
+  document.getElementById('btn-organize-catalog')?.addEventListener('click', () => openCatalogOrderModal('products'));
+  document.getElementById('btn-organize-catalog-categories')?.addEventListener('click', () => openCatalogOrderModal('categories'));
   document.getElementById('btn-publish-catalog')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-publish-catalog');
     if (btn) {
@@ -2398,12 +2671,15 @@ function showToast(message, type = '') {
 window.editProduct = editProduct;
 window.deleteProduct = deleteProduct;
 window.toggleProductActive = toggleProductActive;
+window.openCatalogOrderModal = openCatalogOrderModal;
 window.editCategory = editCategory;
 window.deleteCategory = deleteCategory;
 window.editClient = editClient;
 window.deleteClient = deleteClient;
 window.editOrderStatus = editOrderStatus;
 window.editOrder = editOrder;
+window.openEditOrder = openEditOrder;
+window.openEditOrderStatus = openEditOrderStatus;
 window.viewOrder = viewOrder;
 window.deleteOrder = deleteOrder;
 window.closeModal = closeModal;

@@ -40,6 +40,9 @@ const Storage = (() => {
   let pushInFlight = false;
   let pendingPushData = null;
   let lastLoadFromCache = false;
+  let loyaltyCache = { phone: '', at: 0, data: null };
+  let loyaltyInflight = null;
+  const LOYALTY_CACHE_MS = 45000;
 
   function emptyStore() {
     return {
@@ -679,7 +682,64 @@ const Storage = (() => {
     data.settings = { ...data.settings, ...settings };
     save(data);
   }
-  function getProducts() { return getAll().products; }
+  function getProducts() { return sortProductsList(getAll().products); }
+  function sortOrderValue(item, fallback = 9999) {
+    const n = Number(item?.sortOrder);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function sortProductsList(products) {
+    return (products || []).slice().sort((a, b) => {
+      const diff = sortOrderValue(a) - sortOrderValue(b);
+      if (diff !== 0) return diff;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+    });
+  }
+
+  function sortCategoriesList(categories) {
+    return (categories || []).slice().sort((a, b) => {
+      const diff = sortOrderValue(a) - sortOrderValue(b);
+      if (diff !== 0) return diff;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+    });
+  }
+
+  function applyProductSortOrders(products, orderedIds) {
+    const map = new Map((orderedIds || []).map((id, idx) => [id, idx]));
+    return (products || []).map((p) => ({
+      ...p,
+      sortOrder: map.has(p.id) ? map.get(p.id) : sortOrderValue(p),
+    }));
+  }
+
+  function applyCategorySortOrders(categories, orderedIds) {
+    const map = new Map((orderedIds || []).map((id, idx) => [id, idx]));
+    return (categories || []).map((c) => ({
+      ...c,
+      sortOrder: map.has(c.id) ? map.get(c.id) : sortOrderValue(c),
+    }));
+  }
+
+  function nextProductSortOrder(products) {
+    const max = (products || []).reduce(
+      (m, p) => Math.max(m, sortOrderValue(p, -1)),
+      -1,
+    );
+    return max + 1;
+  }
+
+  async function saveCatalogOrderAsync(categoryIds, productIds) {
+    const data = getAll();
+    data.categories = applyCategorySortOrders(data.categories || [], categoryIds);
+    data.products = applyProductSortOrders(data.products || [], productIds);
+    const ok = await saveAsync(data);
+    if (!ok) return false;
+    try {
+      await publishCatalogAsync();
+    } catch { /* ignore */ }
+    return true;
+  }
+
   function saveProducts(products) {
     const data = getAll();
     data.products = products;
@@ -749,7 +809,7 @@ const Storage = (() => {
       return false;
     }
   }
-  function getCategories() { return getAll().categories; }
+  function getCategories() { return sortCategoriesList(getAll().categories); }
   function saveCategories(categories) {
     const data = getAll();
     data.categories = categories;
@@ -1049,7 +1109,7 @@ const Storage = (() => {
       };
     }
     const siteTotal = (orders || []).filter((o) => {
-      if (String(o.status || '').toLowerCase() === 'cancelado') return false;
+      if (String(o.status || '').toLowerCase() !== 'finalizado') return false;
       return phonesEquivalent(phone, o.clientWhatsapp || '');
     }).length;
 
@@ -1072,9 +1132,61 @@ const Storage = (() => {
   }
 
   async function getLoyaltyStatus(whatsapp) {
-    // Sem POST na API a cada digitação no carrinho (estourava processos)
     const phone = String(whatsapp || '').replace(/\D/g, '');
-    return computeLoyaltyFromOrders(getOrders(), phone);
+    if (!phone || phone.length < 10) {
+      return computeLoyaltyFromOrders([], phone);
+    }
+
+    const now = Date.now();
+    if (
+      loyaltyCache.phone === phone
+      && loyaltyCache.data
+      && (now - loyaltyCache.at) < LOYALTY_CACHE_MS
+    ) {
+      return loyaltyCache.data;
+    }
+
+    if (location.protocol === 'file:' && !isLocalHost) {
+      return computeLoyaltyFromOrders(getOrders(), phone);
+    }
+
+    if (apiCoolingDown()) {
+      return computeLoyaltyFromOrders(getOrders(), phone);
+    }
+
+    try {
+      if (loyaltyInflight && loyaltyInflight.phone === phone) {
+        return loyaltyInflight.promise;
+      }
+
+      const promise = (async () => {
+        const res = await apiFetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'loyalty_status', phone }),
+        }, 12000);
+        const result = await res.json().catch(() => ({}));
+        if (res.ok && result.ok && result.loyalty) {
+          loyaltyCache = { phone, at: Date.now(), data: result.loyalty };
+          return result.loyalty;
+        }
+        return computeLoyaltyFromOrders(getOrders(), phone);
+      })();
+
+      loyaltyInflight = { phone, promise };
+      const data = await promise;
+      if (loyaltyInflight?.phone === phone) loyaltyInflight = null;
+      return data;
+    } catch {
+      return computeLoyaltyFromOrders(getOrders(), phone);
+    }
+  }
+
+  function invalidateLoyaltyCache(phone) {
+    const key = String(phone || '').replace(/\D/g, '');
+    if (!key || loyaltyCache.phone === key) {
+      loyaltyCache = { phone: '', at: 0, data: null };
+    }
   }
 
   async function createPublicOrder({ fullName, whatsapp, items, total, notes, address }) {
@@ -1091,11 +1203,12 @@ const Storage = (() => {
 
     const duplicate = findRecentDuplicate(data.orders, phone, items, notes);
     if (duplicate) {
+      const loyalty = await getLoyaltyStatus(phone);
       return {
         ok: true,
         order: duplicate,
         duplicated: true,
-        loyalty: computeLoyaltyFromOrders(data.orders, phone),
+        loyalty,
       };
     }
 
@@ -1156,7 +1269,9 @@ const Storage = (() => {
           if (result.loyalty) loyalty = result.loyalty;
           data.orders.push(order);
           setMemory(data);
+          invalidateLoyaltyCache(phone);
           if (!loyalty) loyalty = computeLoyaltyFromOrders(data.orders, phone);
+          if (loyalty) loyaltyCache = { phone, at: Date.now(), data: loyalty };
           return { ok: true, order, loyalty, duplicated: !!result.duplicated };
         }
         if (res.status === 503 || res.status === 403) {
@@ -1195,6 +1310,8 @@ const Storage = (() => {
     isCloudEnabled, wasLoadedFromCache, setAdminPassword, getAdminPassword,
     startCloudPolling, stopCloudPolling, notifyUpdated,
     createPublicOrder, getLoyaltyStatus, computeLoyaltyFromOrders, getApiUrl,
+    sortProductsList, sortCategoriesList, applyProductSortOrders, applyCategorySortOrders,
+    saveCatalogOrderAsync, nextProductSortOrder,
     probeCloud, reconnectCloud, apiCoolingDown, clearApiBreaker,
   };
 })();

@@ -3515,6 +3515,110 @@ p {
   border-color: var(--color-pink);
 }
 
+.product-flavors {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.product-flavors__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.product-flavors__title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-brown-deep);
+}
+
+.product-flavors__badge {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-pink-deep);
+  padding: 0.22rem 0.6rem;
+  border-radius: var(--radius-pill);
+  background: rgba(252, 120, 144, 0.12);
+  max-width: 52%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-flavors.is-done .product-flavors__badge {
+  color: #fff;
+  background: var(--color-pink);
+}
+
+.flavor-options--stacked {
+  display: grid;
+  gap: 0.45rem;
+  max-height: none;
+  overflow: visible;
+}
+
+.flavor-option-card {
+  display: block;
+  cursor: pointer;
+}
+
+.flavor-option-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.flavor-option-card__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid var(--color-line);
+  border-radius: 0.75rem;
+  background: #fff;
+  transition:
+    border-color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out);
+}
+
+.flavor-option-card__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-brown-deep);
+  line-height: 1.25;
+  text-align: left;
+}
+
+.flavor-option-card__price {
+  flex-shrink: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-pink-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.flavor-option-card.is-active .flavor-option-card__body,
+.flavor-option-card input:checked + .flavor-option-card__body {
+  border-color: var(--color-pink);
+  background: rgba(252, 120, 144, 0.08);
+  box-shadow: 0 0 0 1px rgba(252, 120, 144, 0.12);
+}
+
+.order-lightbox__footer-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 /* Modal produto (delivery style) */
 .order-lightbox__panel--product {
   grid-template-columns: minmax(280px, 1.1fr) minmax(300px, 1fr);
@@ -3550,8 +3654,9 @@ p {
   grid-column: 2;
   grid-row: 1;
   gap: 0.25rem;
-  padding: 1.35rem 3.25rem 0.35rem 1.25rem;
+  padding: 1.35rem 3.25rem 0.85rem 1.25rem;
   align-content: start;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .order-lightbox__panel--product .order-lightbox__info {
@@ -3561,8 +3666,36 @@ p {
 }
 
 .order-lightbox__panel--product .order-lightbox__scroll {
-  padding-top: 0.35rem;
+  padding-top: 0.85rem;
+  gap: 1rem;
   overscroll-behavior: contain;
+}
+
+.order-lightbox__panel--product .order-lightbox__scroll.has-flavors .order-lightbox__desc {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--color-brown);
+}
+
+.order-lightbox__panel--product .order-field--notes textarea {
+  min-height: 3.25rem;
+}
+
+.order-lightbox__panel--product .order-lightbox__actions {
+  gap: 0.65rem;
+  padding: 0.75rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+}
+
+.order-lightbox__panel--product .order-qty-row {
+  padding: 0;
+  width: 100%;
+}
+
+.order-lightbox__panel--product .flavor-options--stacked {
+  max-height: min(280px, 42vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.15rem;
 }
 
 .order-lightbox__add {
@@ -4165,6 +4298,21 @@ p {
     overscroll-behavior: contain;
     flex: 1 1 auto;
     min-height: 0;
+    gap: 0.75rem;
+  }
+
+  .order-lightbox__panel--product .flavor-option-card__body {
+    min-height: 2.55rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .order-lightbox__panel--product .flavor-option-card__name,
+  .order-lightbox__panel--product .flavor-option-card__price {
+    font-size: 0.84rem;
+  }
+
+  .order-lightbox__panel--product .order-lightbox__actions {
+    padding: 0.65rem 0.9rem calc(0.85rem + env(safe-area-inset-bottom));
   }
 
   .header__cart-label {

@@ -167,6 +167,7 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
       'id' => $row['id'],
       'name' => $row['name'],
       'slug' => $row['slug'],
+      'sortOrder' => (int) ($row['sort_order'] ?? 0),
     ];
   }
 
@@ -213,6 +214,7 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
       'promoLabel' => $row['promo_label'] ?? '',
       'bestSeller' => ((int) ($row['best_seller'] ?? 0)) === 1,
       'active' => ((int) ($row['active'] ?? 1)) === 1,
+      'sortOrder' => (int) ($row['sort_order'] ?? 0),
       'available' => array_key_exists('available', $row)
         ? (((int) ($row['available'] ?? 1)) === 1)
         : true,
@@ -624,7 +626,7 @@ function aurora_save_all(PDO $pdo, array $payload): void {
         $cat['id'] ?? ('cat-' . $i),
         $cat['name'] ?? '',
         $cat['slug'] ?? ('cat-' . $i),
-        $i,
+        (int) ($cat['sortOrder'] ?? $i),
       ]);
     }
 
@@ -684,7 +686,7 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       if ($hasAvailable) {
         $row[] = aurora_bool($p['available'] ?? true);
       }
-      $row[] = $i;
+      $row[] = (int) ($p['sortOrder'] ?? $i);
       $prodStmt->execute($row);
 
       foreach (array_values($p['flavors'] ?? []) as $fi => $flavor) {
@@ -1128,7 +1130,7 @@ function aurora_loyalty_stats_safe(PDO $pdo, string $phone): array {
 }
 
 /**
- * Fidelidade Aurora — 15 pedidos (não cancelados) = 1 brinde.
+ * Fidelidade Aurora — 15 pedidos finalizados no painel = 1 brinde.
  * Chave: WhatsApp do cliente.
  */
 function aurora_loyalty_goal(): int {
@@ -1187,6 +1189,14 @@ function aurora_phones_equivalent(string $a, string $b): bool {
   return (bool) array_intersect($ka, $kb);
 }
 
+function aurora_phone_sql_digits(string $column): string {
+  $expr = $column;
+  foreach ([' ', '-', '(', ')', '+', '.'] as $ch) {
+    $expr = "REPLACE($expr, '$ch', '')";
+  }
+  return $expr;
+}
+
 function aurora_loyalty_stats(PDO $pdo, string $phone): array {
   $goal = aurora_loyalty_goal();
   $gift = aurora_loyalty_gift();
@@ -1206,20 +1216,22 @@ function aurora_loyalty_stats(PDO $pdo, string $phone): array {
     ];
   }
 
-  // Contagem por variantes do WhatsApp (SQL — sem varrer a tabela inteira em PHP)
+  // Contagem por variantes do WhatsApp (SQL — normaliza telefone salvo com máscara)
   $placeholders = implode(',', array_fill(0, count($variants), '?'));
+  $phoneExpr = aurora_phone_sql_digits('client_whatsapp');
   $stmt = $pdo->prepare(
     "SELECT COUNT(*) FROM orders
-     WHERE status <> 'cancelado'
-       AND client_whatsapp IN ($placeholders)"
+     WHERE status = 'finalizado'
+       AND $phoneExpr IN ($placeholders)"
   );
   $stmt->execute($variants);
   $siteTotal = (int) $stmt->fetchColumn();
 
   $bonus = 0;
   try {
+    $clientPhoneExpr = aurora_phone_sql_digits('phone');
     $bStmt = $pdo->prepare(
-      "SELECT MAX(loyalty_bonus) FROM clients WHERE phone IN ($placeholders)"
+      "SELECT MAX(loyalty_bonus) FROM clients WHERE $clientPhoneExpr IN ($placeholders)"
     );
     $bStmt->execute($variants);
     $bonus = max(0, (int) $bStmt->fetchColumn());

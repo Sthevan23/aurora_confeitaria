@@ -666,6 +666,13 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 
 .table tbody tr:hover { background: #fafafa; }
 
+.table__empty {
+  padding: 2rem 1.25rem !important;
+  text-align: center;
+  color: var(--texto-claro);
+  font-weight: 600;
+}
+
 .table__img {
   width: 56px;
   height: 72px;
@@ -676,7 +683,141 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 
 .table__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
+}
+
+.order-edit-btn {
+  min-height: 34px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.catalog-order__intro {
+  margin: 0 0 1rem;
+  color: var(--texto-claro);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.catalog-order__tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.catalog-order__tab {
+  flex: 1;
+  min-height: 42px;
+  border: 1px solid rgba(93, 64, 55, 0.12);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--marrom-escuro);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.catalog-order__tab.is-active {
+  background: var(--rosa);
+  border-color: var(--rosa);
+  color: #fff;
+}
+
+.catalog-order__panel {
+  display: none;
+}
+
+.catalog-order__panel.is-active {
+  display: block;
+}
+
+.catalog-order__toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.catalog-order__toolbar label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--marrom-escuro);
+}
+
+.catalog-order__toolbar select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(93, 64, 55, 0.12);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+}
+
+.catalog-order__list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.catalog-order__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(93, 64, 55, 0.12);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.catalog-order__item--off {
+  opacity: 0.72;
+  background: #faf8f7;
+}
+
+.catalog-order__pos {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(252, 120, 144, 0.12);
+  color: var(--rosa-escuro);
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+
+.catalog-order__main {
+  min-width: 0;
+}
+
+.catalog-order__main strong {
+  display: block;
+  color: var(--marrom-escuro);
+  line-height: 1.25;
+}
+
+.catalog-order__main small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--texto-claro);
+  font-size: 0.78rem;
+}
+
+.catalog-order__actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.catalog-order__empty {
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  color: var(--texto-claro);
 }
 
 .row--off-menu {
@@ -1662,6 +1803,12 @@ body.sidebar-open {
     display: flex;
     gap: 8px;
     width: 100%;
+  }
+
+  #orders-table .table__actions .order-edit-btn {
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 42px;
   }
 
   #products-table .table__actions .btn--icon,
