@@ -53,7 +53,7 @@ function lockBodyScroll() {
         return;
       }
       const scrollable = target.closest(
-        '.order-lightbox__scroll, .order-lightbox__info, .cart-drawer__body, .flavor-options, textarea, input, select'
+        '.header__nav, .order-lightbox__scroll, .order-lightbox__info, .cart-drawer__body, .flavor-options, textarea, input, select'
       );
       if (scrollable) return;
       e.preventDefault();
@@ -100,6 +100,20 @@ function unlockBodyScroll() {
   document.body.style.right = '';
   document.body.style.width = '';
   restoreScrollY(y);
+}
+
+function forceUnlockBodyScroll() {
+  bodyScrollLocks = 0;
+  if (bodyTouchBlocker) {
+    document.removeEventListener('touchmove', bodyTouchBlocker);
+    bodyTouchBlocker = null;
+  }
+  document.documentElement.classList.remove('is-scroll-locked');
+  document.body.classList.remove('is-scroll-locked');
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
 }
 
 function blurWithoutScroll() {
@@ -1161,6 +1175,7 @@ function openLightbox(productId) {
   const product = getProducts().find((p) => p.id === productId);
   if (!product) return;
   if (product.available === false) return;
+  closeMobileNav?.();
   selectedProduct = product;
   selectedFlavors = [];
   lightboxQty = 1;
@@ -1591,14 +1606,8 @@ function applyCartCoupon() {
 function openCart() {
   const drawer = document.getElementById('cart-drawer');
   if (!drawer) return;
-  // Fecha o menu hambúrguer se estiver aberto
-  const nav = document.getElementById('nav-menu');
-  const toggle = document.getElementById('nav-toggle');
-  if (nav?.classList.contains('is-open')) {
-    nav.classList.remove('is-open');
-    toggle?.classList.remove('is-open');
-    toggle?.setAttribute('aria-expanded', 'false');
-  }
+  // Fecha o menu hambúrguer se estiver aberto (libera scroll antes de travar o drawer)
+  closeMobileNav?.();
   renderCartUI();
   fillCustomerFields();
   const wasOpen = drawer.classList.contains('is-open');
@@ -1900,10 +1909,24 @@ async function finalizeOrder() {
   openWhatsAppChat(messageWithFulfillment);
 }
 
+let closeMobileNav = null;
+
 function initHeader() {
   const header = document.getElementById('header');
   const toggle = document.getElementById('nav-toggle');
   const nav = document.getElementById('nav-menu');
+  if (!toggle || !nav) return;
+
+  let navBackdrop = document.getElementById('nav-backdrop');
+  if (!navBackdrop) {
+    navBackdrop = document.createElement('button');
+    navBackdrop.type = 'button';
+    navBackdrop.id = 'nav-backdrop';
+    navBackdrop.className = 'header__nav-backdrop';
+    navBackdrop.setAttribute('aria-label', 'Fechar menu');
+    navBackdrop.hidden = true;
+    document.body.appendChild(navBackdrop);
+  }
 
   const onScroll = () => {
     header.classList.toggle('header--scrolled', window.scrollY > 24);
@@ -1911,25 +1934,48 @@ function initHeader() {
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
 
+  function syncNavBackdrop(open) {
+    const mobile = window.innerWidth <= 860;
+    navBackdrop.hidden = !(open && mobile);
+    navBackdrop.classList.toggle('is-visible', open && mobile);
+  }
+
   function setMenuOpen(open) {
     const wasOpen = nav.classList.contains('is-open');
     nav.classList.toggle('is-open', open);
     toggle.classList.toggle('is-open', open);
     toggle.setAttribute('aria-expanded', String(open));
+    syncNavBackdrop(open);
     if (open && !wasOpen) lockBodyScroll();
     if (!open && wasOpen) unlockBodyScroll();
   }
 
-  toggle?.addEventListener('click', () => {
+  closeMobileNav = () => {
+    if (nav.classList.contains('is-open')) setMenuOpen(false);
+  };
+
+  toggle.addEventListener('click', () => {
     setMenuOpen(!nav.classList.contains('is-open'));
   });
 
-  nav?.querySelectorAll('a').forEach((a) => {
+  navBackdrop.addEventListener('click', () => setMenuOpen(false));
+
+  nav.querySelectorAll('a').forEach((a) => {
     a.addEventListener('click', () => setMenuOpen(false));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!nav.classList.contains('is-open')) return;
+    if (window.innerWidth > 860) return;
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('#nav-menu, #nav-toggle, #nav-backdrop')) return;
+    setMenuOpen(false);
   });
 
   window.addEventListener('resize', () => {
     if (window.innerWidth > 860) setMenuOpen(false);
+    else syncNavBackdrop(nav.classList.contains('is-open'));
   });
 }
 
@@ -1963,7 +2009,8 @@ function initLightbox() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (document.getElementById('cart-drawer')?.classList.contains('is-open')) closeCart();
-    else closeLightbox();
+    else if (document.getElementById('order-lightbox')?.classList.contains('is-open')) closeLightbox();
+    else closeMobileNav?.();
   });
 }
 
@@ -2128,7 +2175,25 @@ function initParallax() {
   }, { passive: true });
 }
 
+function initScrollLockSafety() {
+  forceUnlockBodyScroll();
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) forceUnlockBodyScroll();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (bodyScrollLocks > 0) return;
+    if (
+      document.getElementById('order-lightbox')?.classList.contains('is-open')
+      || document.getElementById('cart-drawer')?.classList.contains('is-open')
+      || document.getElementById('nav-menu')?.classList.contains('is-open')
+    ) return;
+    forceUnlockBodyScroll();
+  });
+}
+
 async function boot() {
+  initScrollLockSafety();
   Storage.init();
   let status = false;
   try {
