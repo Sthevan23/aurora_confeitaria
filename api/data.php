@@ -211,8 +211,14 @@ if ($method === 'POST') {
     json_out(['ok' => true, 'data' => $stored]);
   }
 
-  // Pedido / fidelidade / ordem do cardápio — conexão leve (sem ALTER/schema pesado)
-  if ($actionName === 'loyalty_status' || $actionName === 'create_order' || $actionName === 'save_catalog_order') {
+  // Pedido / fidelidade / ordem / produto unitário — conexão leve (sem ALTER/schema pesado)
+  if (
+    $actionName === 'loyalty_status'
+    || $actionName === 'create_order'
+    || $actionName === 'save_catalog_order'
+    || $actionName === 'save_product'
+    || $actionName === 'delete_product'
+  ) {
     try {
       $pdo = aurora_db(false);
     } catch (Throwable $e) {
@@ -256,6 +262,56 @@ if ($method === 'POST') {
       json_out($result);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao gravar pedido', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  // Salva UM produto (leve — não regrava o banco inteiro)
+  if ($actionName === 'save_product') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    $product = $body['product'] ?? null;
+    if (!is_array($product)) {
+      json_out(['error' => 'Produto inválido'], 400);
+    }
+    try {
+      $saved = aurora_save_one_product($pdo, $product);
+      $catalog = aurora_patch_catalog_json_product($saved);
+      if (!$catalog) {
+        try { $catalog = aurora_write_public_catalog($pdo); } catch (Throwable $e) { $catalog = false; }
+      }
+      json_out([
+        'ok' => true,
+        'product' => $saved,
+        'catalog' => (bool) $catalog,
+        'ts' => time(),
+      ]);
+    } catch (InvalidArgumentException $e) {
+      json_out(['error' => $e->getMessage()], 400);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao salvar produto', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  if ($actionName === 'delete_product') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    $productId = trim((string) ($body['id'] ?? $body['productId'] ?? ''));
+    if ($productId === '') {
+      json_out(['error' => 'Produto inválido'], 400);
+    }
+    try {
+      aurora_delete_one_product($pdo, $productId);
+      $catalog = aurora_patch_catalog_json_product(null, $productId);
+      if (!$catalog) {
+        try { $catalog = aurora_write_public_catalog($pdo); } catch (Throwable $e) { $catalog = false; }
+      }
+      json_out(['ok' => true, 'id' => $productId, 'catalog' => (bool) $catalog, 'ts' => time()]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao excluir produto', 'detail' => $e->getMessage()], 500);
     }
   }
 

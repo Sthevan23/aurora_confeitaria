@@ -1993,30 +1993,35 @@ function openProductModal(product = null) {
         available: document.getElementById('prod-available').checked,
       };
 
-      if (isEdit) {
-        const idx = products.findIndex(p => p.id === product.id);
-        products[idx] = { ...products[idx], ...data };
-      } else {
-        products.push({
-          id: Storage.generateId('p'),
-          slug: `${slug}-${Date.now().toString(36).slice(-4)}`,
-          sortOrder: Storage.nextProductSortOrder?.(products) ?? products.length,
-          ...data,
-        });
-      }
+      const payload = isEdit
+        ? { ...product, ...data }
+        : {
+            id: Storage.generateId('p'),
+            slug: `${slug}-${Date.now().toString(36).slice(-4)}`,
+            sortOrder: Storage.nextProductSortOrder?.(products) ?? products.length,
+            ...data,
+          };
 
       showToast('Enviando produto… pode levar alguns segundos.', 'success');
-      const ok = await Storage.saveProductsAsync(products);
+      const result = await Storage.saveProductAsync(payload);
       renderProducts();
       renderDashboard();
 
-      if (!ok) {
-        showToast('Produto ficou só neste celular — não subiu pro site. Verifique a internet e tente Salvar de novo.', 'error');
+      if (!result?.ok) {
+        showToast(
+          result?.error || 'Produto não subiu para o servidor. Verifique a internet e tente Salvar de novo.',
+          'error',
+        );
         return;
       }
 
       closeModal();
-      showToast(isEdit ? 'Produto atualizado no site!' : 'Produto publicado no site!', 'success');
+      showToast(
+        result.catalog === false
+          ? (isEdit ? 'Produto salvo no banco. Se o site não mudar, toque no selo no topo para republicar.' : 'Produto salvo. Se o site não mudar, toque no selo no topo para republicar.')
+          : (isEdit ? 'Produto atualizado no site!' : 'Produto publicado no site!'),
+        'success',
+      );
     } catch (err) {
       showToast(err.message || 'Falha ao salvar produto.', 'error');
     } finally {
@@ -2033,12 +2038,16 @@ function editProduct(id) {
   if (product) openProductModal(product);
 }
 
-function deleteProduct(id) {
+async function deleteProduct(id) {
   if (!confirm('Deseja excluir este produto?')) return;
-  Storage.saveProducts(Storage.getProducts().filter(p => p.id !== id));
+  const result = await Storage.deleteProductAsync(id);
+  if (!result?.ok) {
+    showToast(result?.error || 'Não sincronizou com o servidor. Tente de novo.', 'error');
+    return;
+  }
   renderProducts();
   renderDashboard();
-  showToast('Produto excluído.', 'success');
+  showToast('Produto excluído do site.', 'success');
 }
 
 /* --- Categorias --- */

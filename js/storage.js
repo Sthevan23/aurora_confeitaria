@@ -787,6 +787,125 @@ const Storage = (() => {
     return saveAsync(data);
   }
 
+  function replaceProductInMemory(product, { remove = false } = {}) {
+    const data = getAll();
+    const id = String(product?.id || '');
+    const list = Array.isArray(data.products) ? data.products : [];
+    if (remove || !id) {
+      data.products = list.filter((p) => String(p.id) !== id);
+    } else {
+      const idx = list.findIndex((p) => String(p.id) === id);
+      if (idx >= 0) list[idx] = { ...list[idx], ...product };
+      else list.push(product);
+      data.products = list;
+    }
+    setMemory(data);
+    try {
+      const publicProducts = (data.products || []).filter((p) => p.active !== false);
+      savePublicCache({ ...data, products: publicProducts });
+    } catch { /* ignore */ }
+    lastRemoteJson = JSON.stringify(data);
+    notifyUpdated();
+  }
+
+  async function saveProductAsync(product) {
+    const password = getAdminPassword();
+    if (!password) {
+      return { ok: false, error: 'Faça login de novo no painel.' };
+    }
+    if (!product || !product.id) {
+      return { ok: false, error: 'Produto inválido.' };
+    }
+
+    const img = String(product.image || '');
+    const timeoutMs = img.startsWith('data:') && img.length > 200000 ? 90000 : 20000;
+
+    try {
+      clearApiBreaker();
+      const res = await apiFetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({ action: 'save_product', product }),
+      }, timeoutMs, { force: true });
+
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
+      if (res.ok && result.ok !== false && result.product) {
+        replaceProductInMemory(result.product);
+        cloudEnabled = true;
+        try { sessionStorage.removeItem('admin_offline'); } catch { /* ignore */ }
+        return { ok: true, product: result.product, catalog: result.catalog !== false };
+      }
+
+      const msg = result.error
+        || result.detail
+        || (res.status === 401 ? 'Senha inválida. Faça login de novo.' : '')
+        || (res.status === 503 ? 'Servidor ocupado. Aguarde 1 minuto e tente de novo.' : '')
+        || 'Não sincronizou com o servidor.';
+      console.warn('[Aurora] Falha ao salvar produto', res.status, result);
+      return { ok: false, error: msg };
+    } catch (err) {
+      console.warn('[Aurora] Erro ao salvar produto', err);
+      return { ok: false, error: 'Sem conexão com o servidor. Verifique a internet e tente de novo.' };
+    }
+  }
+
+  async function deleteProductAsync(productId) {
+    const password = getAdminPassword();
+    const id = String(productId || '').trim();
+    if (!password) {
+      return { ok: false, error: 'Faça login de novo no painel.' };
+    }
+    if (!id) {
+      return { ok: false, error: 'Produto inválido.' };
+    }
+
+    try {
+      clearApiBreaker();
+      const res = await apiFetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({ action: 'delete_product', id }),
+      }, 12000, { force: true });
+
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
+      if (res.ok && result.ok !== false) {
+        replaceProductInMemory({ id }, { remove: true });
+        cloudEnabled = true;
+        try { sessionStorage.removeItem('admin_offline'); } catch { /* ignore */ }
+        return { ok: true, catalog: result.catalog !== false };
+      }
+
+      const msg = result.error
+        || result.detail
+        || (res.status === 401 ? 'Senha inválida. Faça login de novo.' : '')
+        || (res.status === 503 ? 'Servidor ocupado. Aguarde 1 minuto e tente de novo.' : '')
+        || 'Não sincronizou com o servidor.';
+      console.warn('[Aurora] Falha ao excluir produto', res.status, result);
+      return { ok: false, error: msg };
+    } catch (err) {
+      console.warn('[Aurora] Erro ao excluir produto', err);
+      return { ok: false, error: 'Sem conexão com o servidor. Verifique a internet e tente de novo.' };
+    }
+  }
+
   async function publishCatalogAsync() {
     const password = getAdminPassword();
     if (!password) return false;
@@ -1330,7 +1449,7 @@ const Storage = (() => {
   return {
     init, getAll, save,
     getSettings, saveSettings,
-    getProducts, saveProducts, saveProductsAsync, setProductActiveAsync, publishCatalogAsync,
+    getProducts, saveProducts, saveProductsAsync, saveProductAsync, deleteProductAsync, setProductActiveAsync, publishCatalogAsync,
     getCategories, saveCategories,
     getClients, saveClients,
     getOrders, saveOrders, saveOrdersAsync,

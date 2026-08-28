@@ -666,6 +666,350 @@ function aurora_save_catalog_order(PDO $pdo, array $categoryIds, array $productI
   }
 }
 
+function aurora_catalog_json_paths(): array {
+  $root = dirname(__DIR__);
+  return [
+    $root . DIRECTORY_SEPARATOR . 'catalog.json',
+    $root . DIRECTORY_SEPARATOR . 'catalog.live.json',
+    $root . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'catalog.json',
+  ];
+}
+
+function aurora_load_catalog_json(): ?array {
+  foreach (aurora_catalog_json_paths() as $path) {
+    if (!is_file($path)) continue;
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || $raw === '') continue;
+    $data = json_decode($raw, true);
+    if (is_array($data) && isset($data['products'])) {
+      return $data;
+    }
+  }
+  return null;
+}
+
+function aurora_write_catalog_json_files(array $data): bool {
+  $data['generatedAt'] = gmdate('c');
+  $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  if ($json === false) return false;
+  $ok = false;
+  foreach (aurora_catalog_json_paths() as $path) {
+    $dir = dirname($path);
+    if (!is_dir($dir)) continue;
+    if (@file_put_contents($path, $json) !== false) {
+      $ok = true;
+    }
+  }
+  return $ok;
+}
+
+function aurora_products_has_available(PDO $pdo): bool {
+  static $has = null;
+  if ($has !== null) return $has;
+  try {
+    $has = (bool) $pdo->query("SHOW COLUMNS FROM products LIKE 'available'")->fetch();
+  } catch (Throwable $e) {
+    $has = false;
+  }
+  return $has;
+}
+
+function aurora_product_to_public_row(array $p): array {
+  $img = trim((string) ($p['image'] ?? ''));
+  if (str_starts_with($img, 'data:')) {
+    $img = '';
+  }
+  $row = [
+    'id' => (string) ($p['id'] ?? ''),
+    'name' => (string) ($p['name'] ?? ''),
+    'description' => (string) ($p['description'] ?? ''),
+    'price' => (float) ($p['price'] ?? 0),
+    'categoryId' => (string) ($p['categoryId'] ?? ''),
+    'image' => $img,
+    'featured' => !empty($p['featured']),
+    'slug' => (string) ($p['slug'] ?? ''),
+    'size' => (string) ($p['size'] ?? ''),
+    'flavors' => array_values($p['flavors'] ?? []),
+    'promoActive' => !empty($p['promoActive']),
+    'promoPrice' => isset($p['promoPrice']) && $p['promoPrice'] !== null && $p['promoPrice'] !== ''
+      ? (float) $p['promoPrice']
+      : null,
+    'promoLabel' => (string) ($p['promoLabel'] ?? ''),
+    'bestSeller' => !empty($p['bestSeller']),
+    'active' => !empty($p['active']),
+    'sortOrder' => (int) ($p['sortOrder'] ?? 0),
+    'available' => array_key_exists('available', $p) ? !empty($p['available']) : true,
+  ];
+  if (!empty($p['priceFrom'])) {
+    $row['priceFrom'] = true;
+  }
+  if (!empty($p['flavorPrices']) && is_array($p['flavorPrices'])) {
+    $row['flavorPrices'] = $p['flavorPrices'];
+  }
+  return $row;
+}
+
+/**
+ * Atualiza um produto no catalog.json (sem reler o MySQL inteiro).
+ * $removeId: tira do cardápio público. $product: inclui/atualiza se active.
+ */
+function aurora_patch_catalog_json_product(?array $product, ?string $removeId = null): bool {
+  $source = aurora_load_catalog_json();
+  if (!$source) return false;
+
+  $list = is_array($source['products'] ?? null) ? $source['products'] : [];
+  $drop = [];
+  if ($removeId) $drop[(string) $removeId] = true;
+  if ($product && isset($product['id'])) $drop[(string) $product['id']] = true;
+
+  $next = [];
+  foreach ($list as $row) {
+    if (!is_array($row)) continue;
+    $id = (string) ($row['id'] ?? '');
+    if ($id !== '' && isset($drop[$id])) continue;
+    $next[] = $row;
+  }
+
+  if (is_array($product) && !empty($product['id']) && !empty($product['active'])) {
+    $next[] = aurora_product_to_public_row($product);
+  }
+
+  usort($next, static function ($a, $b) {
+    $diff = ((int) ($a['sortOrder'] ?? 0)) - ((int) ($b['sortOrder'] ?? 0));
+    if ($diff !== 0) return $diff;
+    return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+  });
+
+  $source['products'] = array_values($next);
+  return aurora_write_catalog_json_files($source);
+}
+
+function aurora_normalize_product_input(array $p): array {
+  $pid = trim((string) ($p['id'] ?? ''));
+  $slug = trim((string) ($p['slug'] ?? ''));
+  if ($slug === '') {
+    $slug = $pid !== '' ? $pid : 'produto';
+  }
+
+  $flavors = [];
+  foreach (array_values($p['flavors'] ?? []) as $flavor) {
+    $flavor = trim((string) $flavor);
+    if ($flavor !== '') $flavors[] = $flavor;
+  }
+
+  $flavorPrices = [];
+  foreach (($p['flavorPrices'] ?? []) as $flavor => $price) {
+    $flavor = trim((string) $flavor);
+    if ($flavor === '') continue;
+    $flavorPrices[$flavor] = (float) $price;
+  }
+
+  $img = trim((string) ($p['image'] ?? ''));
+  if (str_starts_with($img, 'data:image')) {
+    $path = aurora_save_data_url_file($img);
+    if (!$path) {
+      throw new InvalidArgumentException('Não foi possível gravar a foto. Tente outra imagem, menor.');
+    }
+    $img = $path;
+  }
+
+  $promoPrice = null;
+  if (!empty($p['promoActive']) && isset($p['promoPrice']) && $p['promoPrice'] !== null && $p['promoPrice'] !== '') {
+    $promoPrice = (float) $p['promoPrice'];
+  }
+
+  $out = [
+    'id' => $pid,
+    'name' => trim((string) ($p['name'] ?? '')),
+    'description' => (string) ($p['description'] ?? ''),
+    'price' => (float) ($p['price'] ?? 0),
+    'priceFrom' => !empty($p['priceFrom']),
+    'categoryId' => trim((string) ($p['categoryId'] ?? '')),
+    'image' => $img,
+    'featured' => !empty($p['featured']),
+    'slug' => $slug,
+    'size' => trim((string) ($p['size'] ?? '')),
+    'flavors' => $flavors,
+    'flavorPrices' => $flavorPrices,
+    'promoActive' => !empty($p['promoActive']),
+    'promoPrice' => $promoPrice,
+    'promoLabel' => !empty($p['promoActive']) ? trim((string) ($p['promoLabel'] ?? '')) : '',
+    'bestSeller' => !empty($p['bestSeller']),
+    'active' => array_key_exists('active', $p) ? !empty($p['active']) : true,
+    'available' => array_key_exists('available', $p) ? !empty($p['available']) : true,
+    'sortOrder' => (int) ($p['sortOrder'] ?? 0),
+  ];
+
+  if ($out['id'] === 'p0') {
+    $out['price'] = 29;
+    $out['promoActive'] = false;
+    $out['promoPrice'] = null;
+    $out['promoLabel'] = '';
+  }
+
+  return $out;
+}
+
+/**
+ * UPSERT de um produto (sem regravar o catálogo inteiro).
+ */
+function aurora_save_one_product(PDO $pdo, array $payload): array {
+  if (!aurora_db_ready($pdo)) {
+    throw new RuntimeException('Tabelas MySQL não encontradas. Importe api/aurora_mysql.sql no phpMyAdmin.');
+  }
+
+  $p = aurora_normalize_product_input($payload);
+  if ($p['id'] === '') {
+    throw new InvalidArgumentException('Produto sem id.');
+  }
+  if ($p['name'] === '') {
+    throw new InvalidArgumentException('Informe o nome do produto.');
+  }
+  if ($p['categoryId'] === '') {
+    throw new InvalidArgumentException('Escolha uma categoria.');
+  }
+
+  $cat = $pdo->prepare('SELECT id FROM categories WHERE id = ? LIMIT 1');
+  $cat->execute([$p['categoryId']]);
+  if (!$cat->fetchColumn()) {
+    throw new InvalidArgumentException('Categoria não encontrada. Salve a categoria antes do produto.');
+  }
+
+  $existsStmt = $pdo->prepare('SELECT id, sort_order FROM products WHERE id = ? LIMIT 1');
+  $existsStmt->execute([$p['id']]);
+  $existing = $existsStmt->fetch(PDO::FETCH_ASSOC);
+  $isNew = !$existing;
+
+  if ($isNew && $p['sortOrder'] <= 0) {
+    $max = (int) $pdo->query('SELECT COALESCE(MAX(sort_order), -1) FROM products')->fetchColumn();
+    $p['sortOrder'] = $max + 1;
+  } elseif (!$isNew && !array_key_exists('sortOrder', $payload)) {
+    $p['sortOrder'] = (int) ($existing['sort_order'] ?? 0);
+  }
+
+  $slugCheck = $pdo->prepare('SELECT id FROM products WHERE slug = ? AND id <> ? LIMIT 1');
+  $slugCheck->execute([$p['slug'], $p['id']]);
+  if ($slugCheck->fetchColumn()) {
+    $p['slug'] = $p['slug'] . '-' . substr(bin2hex(random_bytes(2)), 0, 4);
+  }
+
+  $hasAvailable = aurora_products_has_available($pdo);
+
+  $pdo->beginTransaction();
+  try {
+    if ($isNew) {
+      if ($hasAvailable) {
+        $ins = $pdo->prepare(
+          'INSERT INTO products (
+            id, name, description, price, price_from, category_id, image, featured, slug, size,
+            promo_active, promo_price, promo_label, best_seller, active, available, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $ins->execute([
+          $p['id'], $p['name'], $p['description'], $p['price'], aurora_bool($p['priceFrom']),
+          $p['categoryId'], $p['image'], aurora_bool($p['featured']), $p['slug'], $p['size'],
+          aurora_bool($p['promoActive']), $p['promoPrice'], $p['promoLabel'],
+          aurora_bool($p['bestSeller']), aurora_bool($p['active']), aurora_bool($p['available']),
+          $p['sortOrder'],
+        ]);
+      } else {
+        $ins = $pdo->prepare(
+          'INSERT INTO products (
+            id, name, description, price, price_from, category_id, image, featured, slug, size,
+            promo_active, promo_price, promo_label, best_seller, active, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $ins->execute([
+          $p['id'], $p['name'], $p['description'], $p['price'], aurora_bool($p['priceFrom']),
+          $p['categoryId'], $p['image'], aurora_bool($p['featured']), $p['slug'], $p['size'],
+          aurora_bool($p['promoActive']), $p['promoPrice'], $p['promoLabel'],
+          aurora_bool($p['bestSeller']), aurora_bool($p['active']), $p['sortOrder'],
+        ]);
+      }
+    } else {
+      if ($hasAvailable) {
+        $upd = $pdo->prepare(
+          'UPDATE products SET
+            name = ?, description = ?, price = ?, price_from = ?, category_id = ?, image = ?,
+            featured = ?, slug = ?, size = ?, promo_active = ?, promo_price = ?, promo_label = ?,
+            best_seller = ?, active = ?, available = ?, sort_order = ?
+           WHERE id = ?'
+        );
+        $upd->execute([
+          $p['name'], $p['description'], $p['price'], aurora_bool($p['priceFrom']),
+          $p['categoryId'], $p['image'], aurora_bool($p['featured']), $p['slug'], $p['size'],
+          aurora_bool($p['promoActive']), $p['promoPrice'], $p['promoLabel'],
+          aurora_bool($p['bestSeller']), aurora_bool($p['active']), aurora_bool($p['available']),
+          $p['sortOrder'], $p['id'],
+        ]);
+      } else {
+        $upd = $pdo->prepare(
+          'UPDATE products SET
+            name = ?, description = ?, price = ?, price_from = ?, category_id = ?, image = ?,
+            featured = ?, slug = ?, size = ?, promo_active = ?, promo_price = ?, promo_label = ?,
+            best_seller = ?, active = ?, sort_order = ?
+           WHERE id = ?'
+        );
+        $upd->execute([
+          $p['name'], $p['description'], $p['price'], aurora_bool($p['priceFrom']),
+          $p['categoryId'], $p['image'], aurora_bool($p['featured']), $p['slug'], $p['size'],
+          aurora_bool($p['promoActive']), $p['promoPrice'], $p['promoLabel'],
+          aurora_bool($p['bestSeller']), aurora_bool($p['active']), $p['sortOrder'], $p['id'],
+        ]);
+      }
+    }
+
+    $pdo->prepare('DELETE FROM product_flavor_prices WHERE product_id = ?')->execute([$p['id']]);
+    $pdo->prepare('DELETE FROM product_flavors WHERE product_id = ?')->execute([$p['id']]);
+
+    $flavorStmt = $pdo->prepare(
+      'INSERT INTO product_flavors (product_id, flavor, sort_order) VALUES (?, ?, ?)'
+    );
+    foreach ($p['flavors'] as $fi => $flavor) {
+      $flavorStmt->execute([$p['id'], $flavor, (int) $fi]);
+    }
+    $fpStmt = $pdo->prepare(
+      'INSERT INTO product_flavor_prices (product_id, flavor, price) VALUES (?, ?, ?)'
+    );
+    foreach ($p['flavorPrices'] as $flavor => $price) {
+      $fpStmt->execute([$p['id'], $flavor, (float) $price]);
+    }
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+      $pdo->rollBack();
+    }
+    throw $e;
+  }
+
+  return $p;
+}
+
+function aurora_delete_one_product(PDO $pdo, string $id): void {
+  $id = trim($id);
+  if ($id === '') {
+    throw new InvalidArgumentException('Produto inválido.');
+  }
+  if (!aurora_db_ready($pdo)) {
+    throw new RuntimeException('Tabelas MySQL não encontradas.');
+  }
+
+  $pdo->beginTransaction();
+  try {
+    $pdo->prepare('DELETE FROM product_flavor_prices WHERE product_id = ?')->execute([$id]);
+    $pdo->prepare('DELETE FROM product_flavors WHERE product_id = ?')->execute([$id]);
+    $stmt = $pdo->prepare('DELETE FROM products WHERE id = ?');
+    $stmt->execute([$id]);
+    $pdo->commit();
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+      $pdo->rollBack();
+    }
+    throw $e;
+  }
+}
+
 function aurora_save_all(PDO $pdo, array $payload): void {
   if (!aurora_db_ready($pdo)) {
     throw new RuntimeException('Tabelas MySQL não encontradas. Importe api/aurora_mysql.sql no phpMyAdmin.');
