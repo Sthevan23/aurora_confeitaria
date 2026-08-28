@@ -1457,6 +1457,58 @@ function moveProductInOrder(productOrder, products, id, delta, categoryFilter = 
   return [...before, ...moved, ...after];
 }
 
+function moveOrderItemToPosition(list, id, position) {
+  const idx = list.indexOf(id);
+  if (idx < 0) return list;
+  const max = list.length;
+  let target = Math.floor(Number(position));
+  if (!Number.isFinite(target)) return list;
+  target = Math.max(1, Math.min(max, target)) - 1;
+  if (idx === target) return list;
+  const copy = list.slice();
+  copy.splice(idx, 1);
+  copy.splice(target, 0, id);
+  return copy;
+}
+
+function moveProductToPositionInOrder(productOrder, products, id, position, categoryFilter = 'all') {
+  if (categoryFilter === 'all') {
+    return moveOrderItemToPosition(productOrder, id, position);
+  }
+  const scoped = productOrder.filter((pid) => {
+    const p = products.find((item) => item.id === pid);
+    return p?.categoryId === categoryFilter;
+  });
+  const idx = scoped.indexOf(id);
+  if (idx < 0) return productOrder;
+  let target = Math.floor(Number(position));
+  if (!Number.isFinite(target)) return productOrder;
+  target = Math.max(1, Math.min(scoped.length, target)) - 1;
+  if (idx === target) return productOrder;
+  const copy = scoped.slice();
+  copy.splice(idx, 1);
+  copy.splice(target, 0, id);
+  const firstIdx = productOrder.findIndex((pid) => pid === scoped[0]);
+  const before = productOrder.slice(0, firstIdx);
+  const after = productOrder.slice(firstIdx + scoped.length);
+  return [...before, ...copy, ...after];
+}
+
+function bindCatalogOrderPositionInput(input, onApply) {
+  const apply = () => {
+    const raw = String(input.value || '').trim();
+    if (!raw) return;
+    onApply(raw);
+  };
+  input.addEventListener('change', apply);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      apply();
+    }
+  });
+}
+
 function openCatalogOrderModal(focus = 'products') {
   const categories = Storage.sortCategoriesList(Storage.getCategories());
   const products = Storage.sortProductsList(Storage.getProducts());
@@ -1477,7 +1529,10 @@ function openCatalogOrderModal(focus = 'products') {
       if (!cat) return '';
       return `
         <div class="catalog-order__item" data-cat-id="${cat.id}">
-          <span class="catalog-order__pos">${index + 1}</span>
+          <label class="catalog-order__pos-field">
+            <span class="catalog-order__pos-label">Pos.</span>
+            <input type="number" class="catalog-order__pos-input" data-cat-pos="${cat.id}" min="1" max="${categoryOrder.length}" value="${index + 1}" aria-label="Posição de ${escapeHtml(cat.name)}">
+          </label>
           <div class="catalog-order__main">
             <strong>${escapeHtml(cat.name)}</strong>
             <small>${escapeHtml(cat.slug)}</small>
@@ -1495,9 +1550,14 @@ function openCatalogOrderModal(focus = 'products') {
       if (!product) return '';
       const onMenu = product.active !== false;
       const globalIndex = productOrder.indexOf(id) + 1;
+      const displayPos = productFilter === 'all' ? globalIndex : index + 1;
+      const maxPos = productFilter === 'all' ? productOrder.length : filteredProductIds.length;
       return `
         <div class="catalog-order__item${onMenu ? '' : ' catalog-order__item--off'}" data-prod-id="${product.id}">
-          <span class="catalog-order__pos">${globalIndex}</span>
+          <label class="catalog-order__pos-field">
+            <span class="catalog-order__pos-label">Pos.</span>
+            <input type="number" class="catalog-order__pos-input" data-prod-pos="${product.id}" min="1" max="${maxPos}" value="${displayPos}" aria-label="Posição de ${escapeHtml(product.name)}">
+          </label>
           <div class="catalog-order__main">
             <strong>${escapeHtml(product.name)}</strong>
             <small>${escapeHtml(Storage.getCategoryName(product.categoryId))}${onMenu ? '' : ' · Fora do site'}</small>
@@ -1517,7 +1577,7 @@ function openCatalogOrderModal(focus = 'products') {
 
     openModal('Organizar ordem no site', `
       <div class="catalog-order">
-        <p class="catalog-order__intro">O item <strong>1</strong> aparece primeiro no site. Use as setas para reorganizar categorias (abas) e produtos do cardápio.</p>
+        <p class="catalog-order__intro">O item na posição <strong>1</strong> aparece primeiro no site. Digite o número da posição ou use as setas para reorganizar.</p>
         <div class="catalog-order__tabs">
           <button type="button" class="catalog-order__tab ${focus === 'products' ? 'is-active' : ''}" data-order-tab="products"><i class="fas fa-cookie-bite"></i> Produtos</button>
           <button type="button" class="catalog-order__tab ${focus === 'categories' ? 'is-active' : ''}" data-order-tab="categories"><i class="fas fa-tags"></i> Categorias</button>
@@ -1568,6 +1628,13 @@ function openCatalogOrderModal(focus = 'products') {
       });
     });
 
+    document.querySelectorAll('[data-cat-pos]').forEach((input) => {
+      bindCatalogOrderPositionInput(input, (value) => {
+        categoryOrder = moveOrderItemToPosition(categoryOrder, input.dataset.catPos, value);
+        renderModal();
+      });
+    });
+
     document.querySelectorAll('[data-prod-up]').forEach((btn) => {
       btn.addEventListener('click', () => {
         productOrder = moveProductInOrder(productOrder, products, btn.dataset.prodUp, -1, productFilter);
@@ -1577,6 +1644,19 @@ function openCatalogOrderModal(focus = 'products') {
     document.querySelectorAll('[data-prod-down]').forEach((btn) => {
       btn.addEventListener('click', () => {
         productOrder = moveProductInOrder(productOrder, products, btn.dataset.prodDown, 1, productFilter);
+        renderModal();
+      });
+    });
+
+    document.querySelectorAll('[data-prod-pos]').forEach((input) => {
+      bindCatalogOrderPositionInput(input, (value) => {
+        productOrder = moveProductToPositionInOrder(
+          productOrder,
+          products,
+          input.dataset.prodPos,
+          value,
+          productFilter,
+        );
         renderModal();
       });
     });

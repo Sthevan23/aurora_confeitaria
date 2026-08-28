@@ -779,6 +779,39 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   background: #faf8f7;
 }
 
+.catalog-order__pos-field {
+  display: grid;
+  gap: 0.12rem;
+  justify-items: center;
+  min-width: 3.1rem;
+}
+
+.catalog-order__pos-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-claro);
+}
+
+.catalog-order__pos-input {
+  width: 3rem;
+  height: 2.35rem;
+  border: 1px solid rgba(93, 64, 55, 0.16);
+  border-radius: 10px;
+  text-align: center;
+  font: inherit;
+  font-weight: 800;
+  color: var(--rosa-escuro);
+  background: rgba(252, 120, 144, 0.08);
+  padding: 0;
+}
+
+.catalog-order__pos-input:focus {
+  outline: 2px solid rgba(252, 120, 144, 0.35);
+  border-color: var(--rosa-escuro);
+}
+
 .catalog-order__pos {
   display: grid;
   place-items: center;
