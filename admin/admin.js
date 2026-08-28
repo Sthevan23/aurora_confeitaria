@@ -263,7 +263,7 @@ function renderDashboard() {
   document.getElementById('stat-clients').textContent = stats.totalClients;
   document.getElementById('stat-products').textContent = stats.totalProducts;
 
-  const allOrders = Storage.getOrders().slice().reverse();
+  const allOrders = sortOrdersNewestFirst(Storage.getOrders());
   const recent = allOrders.slice(0, 8);
   const products = Storage.getProducts();
   const tbody = document.querySelector('#recent-orders-table tbody');
@@ -361,6 +361,15 @@ function initOrderFilters() {
   });
 }
 
+function sortOrdersNewestFirst(orders) {
+  return (orders || []).slice().sort((a, b) => {
+    const tb = new Date(b.date || 0).getTime();
+    const ta = new Date(a.date || 0).getTime();
+    if (Number.isFinite(tb) && Number.isFinite(ta) && tb !== ta) return tb - ta;
+    return String(b.number || '').localeCompare(String(a.number || ''), 'pt-BR');
+  });
+}
+
 function renderOrders() {
   let orders = Storage.getOrders();
   if (orderFilter === 'today') {
@@ -368,7 +377,7 @@ function renderOrders() {
   } else if (orderFilter !== 'all') {
     orders = orders.filter((o) => o.status === orderFilter);
   }
-  orders = orders.slice().reverse();
+  orders = sortOrdersNewestFirst(orders);
 
   const tbody = document.querySelector('#orders-table tbody');
   if (!orders.length) {
