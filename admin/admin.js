@@ -2473,6 +2473,7 @@ function openCouponModal(coupon = null) {
 let revenueChart = null;
 let finPeriod = 'all';
 let finPeriodBound = false;
+let finProductSort = { key: 'revenue', dir: 'desc' };
 
 function initFinanceiro() {
   const stats = Storage.getDashboardStats();
@@ -2491,6 +2492,20 @@ function initFinanceiro() {
         document.querySelectorAll('#fin-period-tabs .filter-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         finPeriod = tab.dataset.period;
+        renderProductSales();
+      });
+    });
+
+    document.querySelectorAll('#fin-products-table .th-sort').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.sort;
+        if (!key) return;
+        if (finProductSort.key === key) {
+          finProductSort.dir = finProductSort.dir === 'desc' ? 'asc' : 'desc';
+        } else {
+          finProductSort.key = key;
+          finProductSort.dir = key === 'name' ? 'asc' : 'desc';
+        }
         renderProductSales();
       });
     });
@@ -2543,6 +2558,35 @@ function renderFinanceEntries() {
   });
 }
 
+function sortFinProducts(products, key, dir) {
+  const mul = dir === 'asc' ? 1 : -1;
+  const field = key === 'rank' ? 'revenue' : key;
+  return (products || []).slice().sort((a, b) => {
+    if (field === 'name') {
+      const byName = String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' });
+      return mul * byName;
+    }
+    const diff = (Number(a[field]) || 0) - (Number(b[field]) || 0);
+    if (diff !== 0) return mul * diff;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' });
+  });
+}
+
+function updateFinSortHeaders() {
+  document.querySelectorAll('#fin-products-table .th-sort').forEach((btn) => {
+    const icon = btn.querySelector('i');
+    const active = btn.dataset.sort === finProductSort.key;
+    btn.classList.toggle('is-active', active);
+    if (active) {
+      btn.setAttribute('aria-sort', finProductSort.dir === 'asc' ? 'ascending' : 'descending');
+      if (icon) icon.className = finProductSort.dir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+    } else {
+      btn.removeAttribute('aria-sort');
+      if (icon) icon.className = 'fas fa-sort';
+    }
+  });
+}
+
 function renderProductSales() {
   const periodStats = Storage.getSalesPeriodStats(finPeriod);
   const tbody = document.querySelector('#fin-products-table tbody');
@@ -2552,20 +2596,23 @@ function renderProductSales() {
   const periodLabels = { all: 'todo o período', today: 'hoje', month: 'este mês' };
   summaryEl.textContent = `${periodStats.orderCount} pedido(s) · ${periodStats.cakesSold} item(ns) · ${Storage.formatCurrency(periodStats.totalRevenue)} (${periodLabels[finPeriod]})`;
 
+  updateFinSortHeaders();
+
   if (!periodStats.products.length) {
     tbody.innerHTML = '';
     emptyEl.hidden = false;
     return;
   }
 
+  const rows = sortFinProducts(periodStats.products, finProductSort.key, finProductSort.dir);
   emptyEl.hidden = true;
-  tbody.innerHTML = periodStats.products.map((row, i) => `
+  tbody.innerHTML = rows.map((row, i) => `
     <tr>
-      <td>${i + 1}</td>
-      <td><strong>${escapeHtml(row.name)}</strong></td>
-      <td>${row.qty}</td>
-      <td>${Storage.formatCurrency(row.avgPrice)}</td>
-      <td><strong>${Storage.formatCurrency(row.revenue)}</strong></td>
+      <td data-label="#">${i + 1}</td>
+      <td data-label="Produto"><strong>${escapeHtml(row.name)}</strong></td>
+      <td data-label="Qtd. vendida">${row.qty}</td>
+      <td data-label="Preço médio">${Storage.formatCurrency(row.avgPrice)}</td>
+      <td data-label="Faturamento"><strong>${Storage.formatCurrency(row.revenue)}</strong></td>
     </tr>
   `).join('');
 }
