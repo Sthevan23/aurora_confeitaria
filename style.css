@@ -397,6 +397,23 @@ p {
     transform: translateY(0);
   }
 
+  .header__nav-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    background: rgba(40, 24, 14, 0.35);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header__nav-backdrop.is-visible {
+    display: block;
+  }
+
   .header__nav a {
     padding: 0.9rem 1rem;
     border-radius: var(--radius-md);
