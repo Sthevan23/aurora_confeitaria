@@ -431,10 +431,12 @@
     const banner = document.getElementById('store-status-banner');
     const text = document.getElementById('store-status-banner-text');
     document.body?.classList.toggle('store-is-closed', !open);
+    document.body?.classList.toggle('store-banner-visible', !open);
     if (banner && text) {
       if (!open) {
         banner.hidden = false;
-        text.textContent = Storage.storeClosedMessage?.() || 'Loja fechada no momento.';
+        const hours = Storage.buildStoreHoursLabel?.(Storage.getSettings()) || 'Domingo a domingo · 10h às 22h';
+        text.innerHTML = `<strong>Estamos fechados agora.</strong> <span class="store-status-banner__hours">Horário: ${hours}</span>`;
       } else {
         banner.hidden = true;
       }
