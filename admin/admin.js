@@ -2671,6 +2671,63 @@ function escapeHtml(str) {
 }
 
 /* --- Configurações --- */
+function readOpenDaysFromForm() {
+  return [...document.querySelectorAll('#set-open-days input[type="checkbox"]')]
+    .filter((el) => el.checked)
+    .map((el) => Number(el.value))
+    .filter((n) => Number.isFinite(n));
+}
+
+function fillOpenDaysForm(days) {
+  const set = new Set(Storage.normalizeOpenDays?.(days) || [0, 1, 2, 3, 4, 5, 6]);
+  document.querySelectorAll('#set-open-days input[type="checkbox"]').forEach((el) => {
+    el.checked = set.has(Number(el.value));
+  });
+}
+
+function syncHoursLabelFromForm() {
+  const hoursInput = document.getElementById('set-hours');
+  if (!hoursInput || hoursInput.dataset.manual === '1') return;
+  hoursInput.value = Storage.buildStoreHoursLabel({
+    openTime: document.getElementById('set-open-time')?.value || '10:00',
+    closeTime: document.getElementById('set-close-time')?.value || '22:00',
+    openDays: readOpenDaysFromForm(),
+  });
+}
+
+function updateStoreStatusPreview() {
+  const el = document.getElementById('store-status-preview');
+  if (!el) return;
+  const open = Storage.isStoreOpen?.();
+  const label = Storage.getStoreStatusLabel?.() || '';
+  el.innerHTML = open
+    ? `<span class="store-control__pill store-control__pill--open"><i class="fas fa-circle"></i> ${label}</span>`
+    : `<span class="store-control__pill store-control__pill--closed"><i class="fas fa-circle"></i> ${label}</span>`;
+
+  const status = Storage.getSettings()?.storeStatus || 'auto';
+  document.getElementById('store-status-auto')?.classList.toggle('is-active', status === 'auto');
+  document.getElementById('store-status-open')?.classList.toggle('is-active', status === 'open');
+  document.getElementById('store-status-closed')?.classList.toggle('is-active', status === 'closed');
+}
+
+async function setStoreStatusQuick(status) {
+  const allowed = ['auto', 'open', 'closed'];
+  if (!allowed.includes(status)) return;
+  Storage.saveSettings({ ...Storage.getSettings(), storeStatus: status });
+  updateStoreStatusPreview();
+  const ok = typeof Storage.saveAsync === 'function'
+    ? await Storage.saveAsync(Storage.getAll())
+    : true;
+  if (!ok) {
+    showToast('Não sincronizou na nuvem. Tente de novo.', 'error');
+    return;
+  }
+  showToast(
+    status === 'open' ? 'Loja aberta no site!' : status === 'closed' ? 'Loja fechada no site.' : 'Horário automático ativado.',
+    'success',
+  );
+}
+
 function initSettings() {
   const s = Storage.getSettings();
 
@@ -2683,13 +2740,34 @@ function initSettings() {
   document.getElementById('set-instagram').value = s.instagram || '';
   document.getElementById('set-instagram-user').value = s.instagramUser || '';
   document.getElementById('set-address').value = s.address || '';
-  document.getElementById('set-hours').value = s.hours || '';
+  document.getElementById('set-open-time').value = s.openTime || '10:00';
+  document.getElementById('set-close-time').value = s.closeTime || '22:00';
+  fillOpenDaysForm(s.openDays);
+  const hoursInput = document.getElementById('set-hours');
+  if (hoursInput) {
+    hoursInput.value = s.hours || Storage.buildStoreHoursLabel?.(s) || 'Domingo a domingo · 10h às 22h';
+    hoursInput.dataset.manual = s.hours ? '1' : '0';
+    hoursInput.addEventListener('input', () => { hoursInput.dataset.manual = '1'; });
+  }
   document.getElementById('set-delivery-fee').value =
     s.deliveryFee != null && s.deliveryFee !== '' ? Number(s.deliveryFee) : 7;
   document.getElementById('set-delivery-note').value =
     s.deliveryNote || 'Bairros mais afastados: consultar';
   document.getElementById('set-sobre1').value = s.sobreText1 || '';
   document.getElementById('set-sobre2').value = s.sobreText2 || '';
+
+  ['set-open-time', 'set-close-time'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', syncHoursLabelFromForm);
+  });
+  document.querySelectorAll('#set-open-days input[type="checkbox"]').forEach((el) => {
+    el.addEventListener('change', syncHoursLabelFromForm);
+  });
+
+  document.getElementById('store-status-auto')?.addEventListener('click', () => setStoreStatusQuick('auto'));
+  document.getElementById('store-status-open')?.addEventListener('click', () => setStoreStatusQuick('open'));
+  document.getElementById('store-status-closed')?.addEventListener('click', () => setStoreStatusQuick('closed'));
+  updateStoreStatusPreview();
+  setInterval(updateStoreStatusPreview, 60000);
 
   bindImageUpload('set-banner-file', 'set-banner');
   bindImageUpload('set-sobre-file', 'set-sobre-image');
@@ -2710,7 +2788,15 @@ function initSettings() {
       instagram: document.getElementById('set-instagram').value.trim(),
       instagramUser: document.getElementById('set-instagram-user').value.trim(),
       address: document.getElementById('set-address').value.trim(),
-      hours: document.getElementById('set-hours').value.trim(),
+      hours: document.getElementById('set-hours').value.trim() || Storage.buildStoreHoursLabel({
+        openTime: document.getElementById('set-open-time').value,
+        closeTime: document.getElementById('set-close-time').value,
+        openDays: readOpenDaysFromForm(),
+      }),
+      openTime: document.getElementById('set-open-time').value || '10:00',
+      closeTime: document.getElementById('set-close-time').value || '22:00',
+      openDays: readOpenDaysFromForm(),
+      storeStatus: Storage.getSettings()?.storeStatus || 'auto',
       deliveryFee,
       deliveryNote: document.getElementById('set-delivery-note').value.trim() || 'Bairros mais afastados: consultar',
       sobreText1: document.getElementById('set-sobre1').value.trim(),
@@ -2727,6 +2813,7 @@ function initSettings() {
       }
     }
     showToast('Site atualizado!', 'success');
+    updateStoreStatusPreview();
   });
 
   document.getElementById('password-form').addEventListener('submit', (e) => {

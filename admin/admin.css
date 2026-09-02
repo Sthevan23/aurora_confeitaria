@@ -1034,6 +1034,61 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 /* --- Settings Form --- */
 .settings-form { padding: 24px; }
 
+.store-control-card { margin-bottom: 20px; }
+.store-control { padding: 0 24px 24px; }
+.store-control__status { margin: 0 0 1rem; font-size: 1rem; }
+.store-control__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.store-control__actions .btn.is-active {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rosa-escuro) 35%, #fff);
+}
+.store-control__hint {
+  margin: 0.85rem 0 0;
+  color: var(--texto-claro);
+  font-size: 0.88rem;
+}
+.store-control__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.store-control__pill--open {
+  background: #E8F5E9;
+  color: var(--success);
+}
+.store-control__pill--closed {
+  background: #FFEBEE;
+  color: var(--danger);
+}
+.settings-block {
+  margin: 0 0 1.25rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--borda);
+}
+.settings-block__title {
+  margin: 0 0 0.85rem;
+  font-size: 1rem;
+  color: var(--marrom-escuro);
+}
+.open-days-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+}
+.btn--danger {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+}
+.btn--danger:hover { filter: brightness(0.95); }
+
 /* --- Modal --- */
 .modal {
   position: fixed;

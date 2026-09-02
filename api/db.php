@@ -138,6 +138,10 @@ function aurora_ensure_schema(PDO $pdo): void {
         'delivery_note',
         "VARCHAR(255) NULL DEFAULT 'Bairros mais afastados: consultar' COMMENT 'Texto extra do frete'"
       );
+      aurora_ensure_column($pdo, 'settings', 'store_status', "VARCHAR(20) NOT NULL DEFAULT 'auto' COMMENT 'auto, open, closed'");
+      aurora_ensure_column($pdo, 'settings', 'open_time', "VARCHAR(5) NOT NULL DEFAULT '10:00'");
+      aurora_ensure_column($pdo, 'settings', 'close_time', "VARCHAR(5) NOT NULL DEFAULT '22:00'");
+      aurora_ensure_column($pdo, 'settings', 'open_days', "VARCHAR(30) NOT NULL DEFAULT '0,1,2,3,4,5,6'");
     }
 
     // Cupons: cria a tabela se ainda não existir (bancos antigos sem migrate)

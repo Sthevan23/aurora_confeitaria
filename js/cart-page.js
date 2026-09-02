@@ -425,9 +425,36 @@
     renderAll();
   }
 
+  function applyStoreStatus() {
+    if (typeof Storage === 'undefined' || !Storage.isStoreOpen) return;
+    const open = Storage.isStoreOpen();
+    const banner = document.getElementById('store-status-banner');
+    const text = document.getElementById('store-status-banner-text');
+    document.body?.classList.toggle('store-is-closed', !open);
+    if (banner && text) {
+      if (!open) {
+        banner.hidden = false;
+        text.textContent = Storage.storeClosedMessage?.() || 'Loja fechada no momento.';
+      } else {
+        banner.hidden = true;
+      }
+    }
+    document.querySelectorAll('[data-requires-store-open]').forEach((el) => {
+      el.disabled = !open;
+      el.setAttribute('aria-disabled', open ? 'false' : 'true');
+    });
+  }
+
   async function checkout() {
     const error = document.getElementById('cart-page-error');
     const btn = document.getElementById('cart-page-checkout');
+    if (typeof Storage !== 'undefined' && Storage.isStoreOpen && !Storage.isStoreOpen()) {
+      if (error) {
+        error.textContent = Storage.storeClosedMessage?.() || 'Loja fechada no momento.';
+        error.hidden = false;
+      }
+      return;
+    }
     const nome = document.getElementById('cart-page-nome')?.value.trim() || '';
     const sobrenome = document.getElementById('cart-page-sobrenome')?.value.trim() || '';
     const address = document.getElementById('cart-page-address')?.value.trim() || '';
@@ -545,6 +572,7 @@
     await Storage.initCloud({ full: false }).catch(() => false);
     Cart.repairCartItems?.();
     fillCustomer();
+    applyStoreStatus();
     renderAll();
 
     Cart.onChange(() => renderAll());
@@ -585,6 +613,7 @@
       saveFormCustomer();
     });
     refreshLoyalty();
+    setInterval(applyStoreStatus, 60000);
   }
 
   document.addEventListener('DOMContentLoaded', boot);

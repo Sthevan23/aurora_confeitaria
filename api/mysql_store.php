@@ -308,6 +308,10 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     'sobreText2' => $settingsRow['sobre_text2'] ?? '',
     'deliveryFee' => isset($settingsRow['delivery_fee']) ? (float) $settingsRow['delivery_fee'] : 7,
     'deliveryNote' => $settingsRow['delivery_note'] ?? 'Bairros mais afastados: consultar',
+    'storeStatus' => (string) ($settingsRow['store_status'] ?? 'auto'),
+    'openTime' => (string) ($settingsRow['open_time'] ?? '10:00'),
+    'closeTime' => (string) ($settingsRow['close_time'] ?? '22:00'),
+    'openDays' => aurora_parse_open_days($settingsRow['open_days'] ?? '0,1,2,3,4,5,6'),
   ];
 
   if ($mode === 'public') {
@@ -632,6 +636,21 @@ function aurora_patch_catalog_json_order(array $categoryIds, array $productIds):
     }
   }
   return $ok;
+}
+
+function aurora_parse_open_days($value): array {
+  if (is_array($value)) {
+    $days = array_map('intval', $value);
+  } else {
+    $days = array_map('intval', explode(',', (string) $value));
+  }
+  $days = array_values(array_unique(array_filter($days, static fn($d) => $d >= 0 && $d <= 6)));
+  sort($days);
+  return $days ?: [0, 1, 2, 3, 4, 5, 6];
+}
+
+function aurora_format_open_days($value): string {
+  return implode(',', aurora_parse_open_days($value));
 }
 
 function aurora_save_catalog_order(PDO $pdo, array $categoryIds, array $productIds): void {
@@ -1028,9 +1047,9 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       'INSERT INTO settings (
         id, name, tagline, logo, banner, sobre_image, whatsapp, instagram, instagram_user,
         facebook, email, address, hours, followers, posts, map_embed, hero_badge, hero_story,
-        sobre_text1, sobre_text2, delivery_fee, delivery_note, data_version
+        sobre_text1, sobre_text2, delivery_fee, delivery_note, store_status, open_time, close_time, open_days, data_version
       ) VALUES (
-        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON DUPLICATE KEY UPDATE
         name=VALUES(name), tagline=VALUES(tagline), logo=VALUES(logo), banner=VALUES(banner),
@@ -1040,7 +1059,8 @@ function aurora_save_all(PDO $pdo, array $payload): void {
         map_embed=VALUES(map_embed), hero_badge=VALUES(hero_badge), hero_story=VALUES(hero_story),
         sobre_text1=VALUES(sobre_text1), sobre_text2=VALUES(sobre_text2),
         delivery_fee=VALUES(delivery_fee), delivery_note=VALUES(delivery_note),
-        data_version=VALUES(data_version)'
+        store_status=VALUES(store_status), open_time=VALUES(open_time), close_time=VALUES(close_time),
+        open_days=VALUES(open_days), data_version=VALUES(data_version)'
     );
     $deliveryFee = isset($s['deliveryFee']) ? (float) $s['deliveryFee'] : 7;
     if ($deliveryFee < 0) {
@@ -1072,6 +1092,10 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       $s['sobreText2'] ?? '',
       $deliveryFee,
       $deliveryNote,
+      in_array(($s['storeStatus'] ?? 'auto'), ['auto', 'open', 'closed'], true) ? ($s['storeStatus'] ?? 'auto') : 'auto',
+      preg_match('/^\d{1,2}:\d{2}$/', (string) ($s['openTime'] ?? '')) ? $s['openTime'] : '10:00',
+      preg_match('/^\d{1,2}:\d{2}$/', (string) ($s['closeTime'] ?? '')) ? $s['closeTime'] : '22:00',
+      aurora_format_open_days($s['openDays'] ?? [0, 1, 2, 3, 4, 5, 6]),
       $version,
     ]);
 

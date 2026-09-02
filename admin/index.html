@@ -374,6 +374,22 @@
 
     <!-- Configurações -->
     <section class="admin-page" id="page-configuracoes">
+      <div class="card store-control-card">
+        <div class="card__header">
+          <h3>Status da loja</h3>
+          <span class="card__subtitle">Controle se o site aceita pedidos agora</span>
+        </div>
+        <div class="store-control">
+          <p class="store-control__status" id="store-status-preview">—</p>
+          <div class="store-control__actions">
+            <button type="button" class="btn btn--secondary" id="store-status-auto"><i class="fas fa-clock"></i> Automático</button>
+            <button type="button" class="btn btn--primary" id="store-status-open"><i class="fas fa-door-open"></i> Loja aberta</button>
+            <button type="button" class="btn btn--danger" id="store-status-closed"><i class="fas fa-door-closed"></i> Loja fechada</button>
+          </div>
+          <p class="store-control__hint">No automático, o site abre e fecha pelo horário configurado abaixo.</p>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card__header"><h3>Configurações da Confeitaria</h3></div>
         <form id="settings-form" class="settings-form">
@@ -421,10 +437,37 @@
             <label for="set-address">Endereço completo</label>
             <input type="text" id="set-address" placeholder="Rua, número, cidade, CEP">
           </div>
-          <div class="form-group">
-            <label for="set-hours">Horário / atendimento</label>
-            <input type="text" id="set-hours">
+
+          <div class="settings-block">
+            <h4 class="settings-block__title">Horário de funcionamento</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="set-open-time">Abre às</label>
+                <input type="time" id="set-open-time" value="10:00">
+              </div>
+              <div class="form-group">
+                <label for="set-close-time">Fecha às</label>
+                <input type="time" id="set-close-time" value="22:00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Dias da semana</label>
+              <div class="open-days-grid" id="set-open-days">
+                <label class="checkbox-label"><input type="checkbox" value="0" checked> Dom</label>
+                <label class="checkbox-label"><input type="checkbox" value="1" checked> Seg</label>
+                <label class="checkbox-label"><input type="checkbox" value="2" checked> Ter</label>
+                <label class="checkbox-label"><input type="checkbox" value="3" checked> Qua</label>
+                <label class="checkbox-label"><input type="checkbox" value="4" checked> Qui</label>
+                <label class="checkbox-label"><input type="checkbox" value="5" checked> Sex</label>
+                <label class="checkbox-label"><input type="checkbox" value="6" checked> Sáb</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="set-hours">Texto exibido no site</label>
+              <input type="text" id="set-hours" placeholder="Domingo a domingo · 10h às 22h">
+            </div>
           </div>
+
           <div class="form-row">
             <div class="form-group">
               <label for="set-delivery-fee">Frete — região central (R$)</label>
@@ -490,7 +533,7 @@
   <script src="../js/default-data.js?v=20"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=65"></script>
-  <script src="admin.js?v=54"></script>
+  <script src="admin.js?v=55"></script>
 </body>
 </html>
 

@@ -391,11 +391,19 @@ function resolveLiveCoupon(coupon) {
 }
 
 function addToCart(item) {
+  if (typeof Storage !== 'undefined' && Storage.isStoreOpen && !Storage.isStoreOpen()) {
+    showCartFeedback(Storage.storeClosedMessage?.() || 'Loja fechada no momento.');
+    return false;
+  }
   if (Cart) {
-    Cart.addItem(item);
+    const ok = Cart.addItem(item);
+    if (!ok) {
+      showCartFeedback('Quantidade máxima em estoque atingida');
+      return false;
+    }
     cartItems = Cart.getItems();
     renderCartUI();
-    return;
+    return true;
   }
   const key = cartLineKey(item.productId, item.flavor, item.size, item.notes);
   const existing = cartItems.find((row) => row.key === key);
@@ -405,6 +413,7 @@ function addToCart(item) {
     cartItems.push({ ...item, key, qty: Number(item.qty) || 1, notes: item.notes || '' });
   }
   saveCart();
+  return true;
 }
 
 function updateCartQty(key, qty) {
@@ -672,6 +681,26 @@ function getProducts() {
   return Storage.getProducts().filter((p) => p.active !== false);
 }
 
+function applyStoreStatus() {
+  if (typeof Storage === 'undefined' || !Storage.isStoreOpen) return;
+  const open = Storage.isStoreOpen();
+  const banner = document.getElementById('store-status-banner');
+  const text = document.getElementById('store-status-banner-text');
+  document.body?.classList.toggle('store-is-closed', !open);
+  if (banner && text) {
+    if (!open) {
+      banner.hidden = false;
+      text.textContent = Storage.storeClosedMessage?.() || 'Loja fechada no momento.';
+    } else {
+      banner.hidden = true;
+    }
+  }
+  document.querySelectorAll('[data-requires-store-open]').forEach((el) => {
+    el.disabled = !open;
+    el.setAttribute('aria-disabled', open ? 'false' : 'true');
+  });
+}
+
 function applySettings() {
   const s = Storage.getSettings();
   const address =
@@ -732,6 +761,11 @@ function applySettings() {
       `Pedidos pelo WhatsApp · Entrega ${formatDeliveryFeeText()} (centro) · ${getDeliveryNote()}`;
   }
 
+  const footerHours = document.getElementById('footer-hours');
+  if (footerHours) {
+    footerHours.textContent = s.hours || Storage.buildStoreHoursLabel?.(s) || 'Domingo a domingo · 10h às 22h';
+  }
+
   const feeLabel = formatDeliveryFeeText();
   document.querySelectorAll('[data-delivery-fee-label]').forEach((el) => {
     el.textContent = `${feeLabel} no centro`;
@@ -790,6 +824,8 @@ function applySettings() {
     if (label) label.textContent = igUser;
     else footerIg.textContent = igUser;
   }
+
+  applyStoreStatus();
 }
 
 function renderMarquee() {
@@ -1619,6 +1655,13 @@ function closeCart() {
 async function checkoutCart() {
   const error = document.getElementById('cart-error');
   const btn = document.getElementById('cart-checkout-btn');
+  if (typeof Storage !== 'undefined' && Storage.isStoreOpen && !Storage.isStoreOpen()) {
+    if (error) {
+      error.textContent = Storage.storeClosedMessage?.() || 'Loja fechada no momento.';
+      error.hidden = false;
+    }
+    return;
+  }
   const nome = document.getElementById('cart-nome')?.value.trim() || '';
   const sobrenome = document.getElementById('cart-sobrenome')?.value.trim() || '';
   const address = document.getElementById('cart-address')?.value.trim() || '';
@@ -2143,6 +2186,7 @@ async function boot() {
 
   applySettings();
   renderMarquee();
+  setInterval(applyStoreStatus, 60000);
   renderBestsellers();
   renderFilters();
   renderProducts();
@@ -2159,6 +2203,7 @@ async function boot() {
     renderBestsellers();
     renderProducts();
     renderGallery();
+    applyStoreStatus();
   });
 }
 

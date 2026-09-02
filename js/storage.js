@@ -58,7 +58,11 @@ const Storage = (() => {
         facebook: '',
         email: '',
         address: '',
-        hours: '',
+        hours: 'Domingo a domingo · 10h às 22h',
+        storeStatus: 'auto',
+        openTime: '10:00',
+        closeTime: '22:00',
+        openDays: [0, 1, 2, 3, 4, 5, 6],
         followers: '',
         posts: '',
         mapEmbed: '',
@@ -668,6 +672,72 @@ const Storage = (() => {
   }
 
   function getSettings() { return getAll().settings; }
+
+  function normalizeOpenDays(days) {
+    if (Array.isArray(days)) {
+      return [...new Set(days.map((d) => Number(d)).filter((d) => Number.isFinite(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
+    }
+    return normalizeOpenDays(String(days ?? '0,1,2,3,4,5,6').split(',').map((d) => parseInt(d.trim(), 10)));
+  }
+
+  function parseTimeToMinutes(value) {
+    const m = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+
+  function formatTimeLabel(value) {
+    const m = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return value || '';
+    return `${Number(m[1])}h`;
+  }
+
+  function buildStoreHoursLabel(settings) {
+    const s = settings || getSettings();
+    const open = s.openTime || '10:00';
+    const close = s.closeTime || '22:00';
+    const days = normalizeOpenDays(s.openDays);
+    const allDays = [0, 1, 2, 3, 4, 5, 6].every((d) => days.includes(d));
+    if (allDays) return `Domingo a domingo · ${formatTimeLabel(open)} às ${formatTimeLabel(close)}`;
+    const names = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return `${days.map((d) => names[d]).join(', ')} · ${formatTimeLabel(open)} às ${formatTimeLabel(close)}`;
+  }
+
+  function isStoreOpenBySchedule(settings, date = new Date()) {
+    const s = settings || getSettings();
+    const days = normalizeOpenDays(s.openDays);
+    if (days.length && !days.includes(date.getDay())) return false;
+    const open = parseTimeToMinutes(s.openTime || '10:00');
+    const close = parseTimeToMinutes(s.closeTime || '22:00');
+    if (open === null || close === null) return true;
+    const now = date.getHours() * 60 + date.getMinutes();
+    if (close > open) return now >= open && now < close;
+    return now >= open || now < close;
+  }
+
+  function isStoreOpen(settings) {
+    const s = settings || getSettings();
+    const status = String(s.storeStatus || 'auto');
+    if (status === 'open') return true;
+    if (status === 'closed') return false;
+    return isStoreOpenBySchedule(s);
+  }
+
+  function storeClosedMessage(settings) {
+    const s = settings || getSettings();
+    const hours = s.hours || buildStoreHoursLabel(s);
+    if (String(s.storeStatus || 'auto') === 'closed') {
+      return 'A loja está fechada no momento. Volte em breve!';
+    }
+    return `Fora do horário de atendimento (${hours}).`;
+  }
+
+  function getStoreStatusLabel(settings) {
+    const s = settings || getSettings();
+    if (String(s.storeStatus) === 'open') return 'Loja aberta (manual)';
+    if (String(s.storeStatus) === 'closed') return 'Loja fechada (manual)';
+    return isStoreOpenBySchedule(s) ? 'Aberta agora (horário)' : 'Fechada agora (horário)';
+  }
   function saveSettings(settings) {
     const data = getAll();
     data.settings = { ...data.settings, ...settings };
@@ -1449,6 +1519,8 @@ const Storage = (() => {
   return {
     init, getAll, save,
     getSettings, saveSettings,
+    normalizeOpenDays, buildStoreHoursLabel, isStoreOpen, isStoreOpenBySchedule,
+    storeClosedMessage, getStoreStatusLabel,
     getProducts, saveProducts, saveProductsAsync, saveProductAsync, deleteProductAsync, setProductActiveAsync, publishCatalogAsync,
     getCategories, saveCategories,
     getClients, saveClients,
