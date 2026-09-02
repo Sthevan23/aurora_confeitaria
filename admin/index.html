@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=69">
+  <link rel="stylesheet" href="admin.css?v=70">
   <script>
     if (sessionStorage.getItem('admin_logged') !== 'true') {
       location.replace('login.html');
@@ -28,7 +28,7 @@
       <a href="#" class="sidebar__link active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
       <a href="#" class="sidebar__link" data-page="pedidos"><i class="fas fa-shopping-bag"></i> Pedidos</a>
       <a href="#" class="sidebar__link" data-page="produtos"><i class="fas fa-cookie-bite"></i> Produtos</a>
-      <a href="#" class="sidebar__link" data-page="estoque"><i class="fas fa-boxes-stacked"></i> Estoque</a>
+      <a href="#" class="sidebar__link" data-page="estoque"><i class="fas fa-boxes-stacked"></i> Estoque <span class="sidebar__badge" id="sidebar-stock-badge" hidden>0</span></a>
       <a href="#" class="sidebar__link" data-page="categorias"><i class="fas fa-tags"></i> Categorias</a>
       <a href="#" class="sidebar__link" data-page="clientes"><i class="fas fa-users"></i> Clientes</a>
       <a href="#" class="sidebar__link" data-page="financeiro"><i class="fas fa-chart-line"></i> Financeiro</a>
@@ -87,6 +87,15 @@
             <strong class="stat-card__value" id="stat-products">0</strong>
           </div>
         </div>
+      </div>
+
+      <div class="card dashboard-stock-alert" id="dashboard-stock-alert" hidden>
+        <div class="card__header">
+          <h3><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Estoque acabando</h3>
+          <button type="button" class="btn btn--secondary btn--sm" onclick="navigateTo('estoque')">Abrir estoque</button>
+        </div>
+        <p class="dashboard-stock-alert__lead">Itens que precisam de reposição — confira antes de produzir ou comprar.</p>
+        <ul class="dashboard-stock-alert__list" id="dashboard-stock-alert-list"></ul>
       </div>
 
       <div class="dashboard-grid">
@@ -596,7 +605,7 @@
   <script src="../js/default-data.js?v=20"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=69"></script>
-  <script src="admin.js?v=58"></script>
+  <script src="admin.js?v=59"></script>
 </body>
 </html>
 

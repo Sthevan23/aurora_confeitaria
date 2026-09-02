@@ -263,6 +263,112 @@ function initLogout() {
 }
 
 /* --- Dashboard --- */
+function collectStockAlerts() {
+  const alerts = [];
+
+  (Storage.getInventoryItems?.() || []).forEach((item) => {
+    const stock = Number(item.stock) || 0;
+    const min = item.minStock != null && item.minStock !== '' ? Number(item.minStock) : null;
+    const unit = Storage.inventoryUnitLabel?.(item.unit) || item.unit || 'un';
+    if (stock <= 0) {
+      alerts.push({
+        kind: 'inventory',
+        level: 'danger',
+        id: item.id,
+        name: item.name,
+        stock,
+        unit,
+        min,
+        message: 'Zerado — precisa comprar',
+      });
+    } else if (min != null && Number.isFinite(min) && stock <= min) {
+      alerts.push({
+        kind: 'inventory',
+        level: 'warn',
+        id: item.id,
+        name: item.name,
+        stock,
+        unit,
+        min,
+        message: `Restam ${stock} ${unit} (alerta: ${min})`,
+      });
+    }
+  });
+
+  Storage.getProducts().forEach((p) => {
+    const stock = Storage.productStockQty?.(p);
+    if (stock === null) return;
+    if (stock <= 0) {
+      alerts.push({
+        kind: 'product',
+        level: 'danger',
+        id: p.id,
+        name: p.name,
+        stock,
+        message: 'Esgotado no site',
+      });
+    } else if (stock <= 5) {
+      alerts.push({
+        kind: 'product',
+        level: 'warn',
+        id: p.id,
+        name: p.name,
+        stock,
+        message: `Restam ${stock} un. no cardápio`,
+      });
+    }
+  });
+
+  return alerts.sort((a, b) => {
+    if (a.level === b.level) return String(a.name).localeCompare(String(b.name), 'pt-BR');
+    return a.level === 'danger' ? -1 : 1;
+  });
+}
+
+function updateStockAlertBadge() {
+  const alerts = collectStockAlerts();
+  const badge = document.getElementById('sidebar-stock-badge');
+  if (!badge) return;
+  if (!alerts.length) {
+    badge.hidden = true;
+    return;
+  }
+  badge.hidden = false;
+  badge.textContent = String(alerts.length);
+  badge.title = `${alerts.length} item(ns) com estoque baixo ou zerado`;
+}
+
+function renderDashboardStockAlerts() {
+  const card = document.getElementById('dashboard-stock-alert');
+  const list = document.getElementById('dashboard-stock-alert-list');
+  if (!card || !list) return;
+
+  const alerts = collectStockAlerts();
+  updateStockAlertBadge();
+
+  if (!alerts.length) {
+    card.hidden = true;
+    list.innerHTML = '';
+    return;
+  }
+
+  card.hidden = false;
+  list.innerHTML = alerts.map((alert) => {
+    const icon = alert.level === 'danger' ? 'fa-circle-xmark' : 'fa-triangle-exclamation';
+    const typeLabel = alert.kind === 'inventory' ? 'Insumo' : 'Produto';
+    return `
+      <li class="dashboard-stock-alert__item dashboard-stock-alert__item--${alert.level}">
+        <span class="dashboard-stock-alert__icon" aria-hidden="true"><i class="fas ${icon}"></i></span>
+        <div class="dashboard-stock-alert__body">
+          <strong>${escapeHtml(alert.name)}</strong>
+          <span class="dashboard-stock-alert__meta">${typeLabel} · ${escapeHtml(alert.message)}</span>
+        </div>
+        <button type="button" class="btn btn--secondary btn--sm" onclick="navigateTo('estoque')">Ver</button>
+      </li>
+    `;
+  }).join('');
+}
+
 function renderDashboard() {
   const stats = Storage.getDashboardStats();
 
@@ -270,6 +376,8 @@ function renderDashboard() {
   document.getElementById('stat-sales').textContent = Storage.formatCurrency(stats.totalSales);
   document.getElementById('stat-clients').textContent = stats.totalClients;
   document.getElementById('stat-products').textContent = stats.totalProducts;
+
+  renderDashboardStockAlerts();
 
   const allOrders = sortOrdersNewestFirst(Storage.getOrders());
   const recent = allOrders.slice(0, 8);
@@ -1811,6 +1919,7 @@ function renderInventoryItems() {
     </tr>
   `;
   }).join('');
+  updateStockAlertBadge();
 }
 
 function openInventoryItemModal(item = null) {
@@ -2072,6 +2181,7 @@ function renderStock() {
     </tr>
   `;
   }).join('');
+  updateStockAlertBadge();
 }
 
 async function saveProductStock(productId) {
