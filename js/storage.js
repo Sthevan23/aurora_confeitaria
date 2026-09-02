@@ -471,7 +471,7 @@ const Storage = (() => {
     const merged = {
       ...emptyStore(),
       version: remote.version || DATA_VERSION,
-      settings: { ...emptyStore().settings, ...(remote.settings || {}) },
+      settings: normalizeStoreSettings({ ...emptyStore().settings, ...(remote.settings || {}) }),
       categories: remote.categories || [],
       products: hydrateProductImages(remote.products || []).filter((p) => p && p.active !== false),
       reviews: remote.reviews || [],
@@ -671,7 +671,29 @@ const Storage = (() => {
     return API;
   }
 
-  function getSettings() { return getAll().settings; }
+  function getSettings() {
+    return normalizeStoreSettings(getAll().settings || {});
+  }
+
+  function looksLikeStoreHoursText(text) {
+    const t = String(text || '').trim();
+    if (!t) return false;
+    if (/whatsapp/i.test(t) && !/\d{1,2}(:\d{2}|h)/i.test(t)) return false;
+    return /\d{1,2}(:\d{2}|h)/i.test(t)
+      || /(domingo|segunda|terça|quarta|quinta|sexta|sábado|dom|seg|ter|qua|qui|sex|sáb)/i.test(t);
+  }
+
+  function normalizeStoreSettings(settings) {
+    const base = { ...emptyStore().settings, ...(settings || {}) };
+    base.storeStatus = base.storeStatus || 'auto';
+    base.openTime = base.openTime || '10:00';
+    base.closeTime = base.closeTime || '22:00';
+    base.openDays = normalizeOpenDays(base.openDays);
+    if (!looksLikeStoreHoursText(base.hours)) {
+      base.hours = buildStoreHoursLabel(base);
+    }
+    return base;
+  }
 
   function normalizeOpenDays(days) {
     if (Array.isArray(days)) {
@@ -724,12 +746,12 @@ const Storage = (() => {
   }
 
   function storeClosedMessage(settings) {
-    const s = settings || getSettings();
-    const hours = s.hours || buildStoreHoursLabel(s);
+    const s = normalizeStoreSettings(settings || getSettings());
+    const hours = buildStoreHoursLabel(s);
     if (String(s.storeStatus || 'auto') === 'closed') {
-      return 'A loja está fechada no momento. Volte em breve!';
+      return `A loja está fechada no momento. Horário: ${hours}.`;
     }
-    return `Fora do horário de atendimento (${hours}).`;
+    return `Estamos fechados agora. Horário de atendimento: ${hours}.`;
   }
 
   function getStoreStatusLabel(settings) {
@@ -816,6 +838,7 @@ const Storage = (() => {
       if (res.ok && result.ok !== false) {
         lastRemoteJson = JSON.stringify(data);
         cloudEnabled = true;
+        try { await publishCatalogAsync(); } catch { /* ignore */ }
         return { ok: true };
       }
 

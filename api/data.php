@@ -372,7 +372,13 @@ if ($method === 'POST') {
     }
     try {
       aurora_save_settings_only($pdo, $settings);
-      json_out(['ok' => true, 'ts' => time()]);
+      $catalog = false;
+      try {
+        $catalog = aurora_write_public_catalog($pdo);
+      } catch (Throwable $e) {
+        $catalog = false;
+      }
+      json_out(['ok' => true, 'catalog' => (bool) $catalog, 'ts' => time()]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao salvar configurações', 'detail' => $e->getMessage()], 500);
     }
