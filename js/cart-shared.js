@@ -187,11 +187,38 @@ window.AuroraCart = (() => {
     return Math.max(0, subtotal() - discount() + fee);
   }
 
+  function totalQtyForProduct(productId, excludeKey = '') {
+    return items.reduce((sum, item) => {
+      if (String(item.productId) !== String(productId)) return sum;
+      if (excludeKey && item.key === excludeKey) return sum;
+      return sum + (Number(item.qty) || 0);
+    }, 0);
+  }
+
+  function maxLineQty(productId, excludeKey = '') {
+    if (typeof Storage === 'undefined' || !Storage.getProductById) return Infinity;
+    const product = Storage.getProductById(productId);
+    const stock = Storage.productStockQty?.(product);
+    if (stock === null) return Infinity;
+    const others = totalQtyForProduct(productId, excludeKey);
+    return Math.max(0, stock - others);
+  }
+
+  function maxQtyForProduct(productId) {
+    return maxLineQty(productId, '');
+  }
+
   function addItem(item) {
     const notes = String(item.notes || '').trim();
     const key = lineKey(item.productId, item.flavor, item.size, notes);
     const existing = items.find((row) => row.key === key);
-    const qty = Math.max(1, Number(item.qty) || 1);
+    let qty = Math.max(1, Number(item.qty) || 1);
+    const cap = maxLineQty(item.productId, existing?.key || '');
+    if (cap <= 0) {
+      notify('stock-error');
+      return false;
+    }
+    qty = Math.min(qty, cap);
     const price = Number(item.price) > 0 ? Number(item.price) : resolveItemPrice(item);
     if (!(price > 0)) {
       notify('price-error');
@@ -221,7 +248,15 @@ window.AuroraCart = (() => {
   function updateQty(key, qty) {
     const item = items.find((row) => row.key === key);
     if (!item) return;
-    const next = Math.max(0, Number(qty) || 0);
+    let next = Math.max(0, Number(qty) || 0);
+    if (next > 0) {
+      const cap = maxLineQty(item.productId, key);
+      if (cap <= 0) {
+        notify('stock-error');
+        return;
+      }
+      next = Math.min(next, cap);
+    }
     if (next <= 0) items = items.filter((row) => row.key !== key);
     else item.qty = next;
     persist();
@@ -421,6 +456,7 @@ window.AuroraCart = (() => {
     CART_KEY, CUSTOMER_KEY, COUPON_KEY, FULFILLMENT_KEY, PAYMENT_KEY,
     onChange, getItems, count, subtotal, discount, payable,
     addItem, updateQty, removeItem, clear, zeroPriceItems, repairItemPrices, repairItemImages, repairCartItems,
+    maxQtyForProduct,
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,
     getPayment, setPayment, paymentLabel, paymentWhatsAppLine,

@@ -878,12 +878,18 @@ function renderFilters() {
 }
 
 function productCardHTML(p, { bestSeller = false } = {}) {
-  const unavailable = p.available === false;
+  const stock = Storage.productStockQty?.(p);
+  const outOfStock = stock !== null && stock <= 0;
+  const unavailable = p.available === false || outOfStock;
+  const stockLabel = Storage.productStockLabel?.(p) || '';
   const flavorsHint = !unavailable && Array.isArray(p.flavors) && p.flavors.length
     ? `<p class="product-card__flavor-hint">${p.flavors.length} sabores — toque para escolher e adicionar</p>`
     : '';
+  const stockHint = !unavailable && stockLabel && stockLabel !== 'Esgotado'
+    ? `<p class="product-card__stock-hint">${stockLabel}</p>`
+    : '';
   const badge = unavailable
-    ? '<span class="product-card__badge product-card__badge--off">Indisponível</span>'
+    ? `<span class="product-card__badge product-card__badge--off">${outOfStock ? 'Esgotado' : 'Indisponível'}</span>`
     : bestSeller
       ? '<span class="product-card__badge product-card__badge--best">Mais vendido</span>'
       : p.promoActive
@@ -908,6 +914,7 @@ function productCardHTML(p, { bestSeller = false } = {}) {
         <h3 class="product-card__name">${p.name}</h3>
         <p class="product-card__desc">${p.description || ''}</p>
         ${flavorsHint}
+        ${stockHint}
         <div class="product-card__footer">
           <span class="product-card__price">${displayPrice(p)}</span>
           ${addBtn}

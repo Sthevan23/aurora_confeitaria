@@ -1188,6 +1188,13 @@ body.store-is-closed .btn[data-order] {
   opacity: 0.55;
 }
 
+.product-card__stock-hint {
+  margin: -0.35rem 0 0.85rem;
+  font-size: 0.8rem;
+  color: #b86a00;
+  font-weight: 600;
+}
+
 .product-card__flavor-hint {
   margin: 0 0 0.85rem;
   font-size: 0.82rem;

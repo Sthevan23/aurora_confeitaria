@@ -743,6 +743,96 @@ const Storage = (() => {
     data.settings = { ...data.settings, ...settings };
     save(data);
   }
+
+  function normalizeStock(stock) {
+    if (stock === null || stock === undefined || stock === '') return null;
+    const n = Number(stock);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0, Math.floor(n));
+  }
+
+  function productTracksStock(product) {
+    return normalizeStock(product?.stock) !== null;
+  }
+
+  function productStockQty(product) {
+    return normalizeStock(product?.stock);
+  }
+
+  function getProductById(productId) {
+    const id = String(productId || '').trim();
+    if (!id) return null;
+    return (getAll().products || []).find((p) => String(p.id) === id) || null;
+  }
+
+  function isProductOrderable(product) {
+    if (!product || product.active === false) return false;
+    if (product.available === false) return false;
+    const stock = productStockQty(product);
+    if (stock !== null && stock <= 0) return false;
+    return true;
+  }
+
+  function productStockLabel(product) {
+    const stock = productStockQty(product);
+    if (stock === null) return '';
+    if (stock <= 0) return 'Esgotado';
+    if (stock <= 5) return `Restam ${stock}`;
+    return '';
+  }
+
+  async function saveSettingsAsync(settingsPatch) {
+    const data = getAll();
+    data.settings = { ...data.settings, ...settingsPatch };
+    setMemory(data);
+    notifyUpdated();
+
+    const password = getAdminPassword();
+    if (!password) {
+      return { ok: false, error: 'Faça login de novo no painel.' };
+    }
+
+    try {
+      clearApiBreaker();
+      const res = await apiFetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({
+          action: 'save_settings',
+          settings: data.settings,
+        }),
+      }, 15000, { force: true });
+
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
+      if (res.ok && result.ok !== false) {
+        lastRemoteJson = JSON.stringify(data);
+        cloudEnabled = true;
+        return { ok: true };
+      }
+
+      const msg = result.error
+        || result.detail
+        || (res.status === 401 ? 'Senha inválida. Faça login de novo.' : '')
+        || (res.status === 503 ? 'Servidor ocupado. Aguarde 1 minuto e tente de novo.' : '')
+        || 'Não sincronizou com o servidor.';
+
+      console.warn('[Aurora] Falha ao salvar configurações', res.status, result);
+      return { ok: false, error: msg };
+    } catch (err) {
+      console.warn('[Aurora] Erro ao salvar configurações', err);
+      return { ok: false, error: 'Sem conexão com o servidor. Verifique a internet e tente de novo.' };
+    }
+  }
+
   function getProducts() { return sortProductsList(getAll().products); }
   function sortOrderValue(item, fallback = 9999) {
     const n = Number(item?.sortOrder);
@@ -1518,7 +1608,8 @@ const Storage = (() => {
 
   return {
     init, getAll, save,
-    getSettings, saveSettings,
+    getSettings, saveSettings, saveSettingsAsync,
+    normalizeStock, productTracksStock, productStockQty, getProductById, isProductOrderable, productStockLabel,
     normalizeOpenDays, buildStoreHoursLabel, isStoreOpen, isStoreOpenBySchedule,
     storeClosedMessage, getStoreStatusLabel,
     getProducts, saveProducts, saveProductsAsync, saveProductAsync, deleteProductAsync, setProductActiveAsync, publishCatalogAsync,

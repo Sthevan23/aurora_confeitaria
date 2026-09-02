@@ -219,6 +219,9 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
         ? (((int) ($row['available'] ?? 1)) === 1)
         : true,
     ];
+    if (array_key_exists('stock', $row) && $row['stock'] !== null && $row['stock'] !== '') {
+      $product['stock'] = max(0, (int) $row['stock']);
+    }
     if (((int) ($row['price_from'] ?? 0)) === 1) {
       $product['priceFrom'] = true;
     }
@@ -733,6 +736,152 @@ function aurora_products_has_available(PDO $pdo): bool {
   return $has;
 }
 
+function aurora_product_has_stock_column(PDO $pdo): bool {
+  static $cache = [];
+  $key = spl_object_hash($pdo);
+  if (array_key_exists($key, $cache)) return $cache[$key];
+  try {
+    $cache[$key] = (bool) $pdo->query("SHOW COLUMNS FROM products LIKE 'stock'")->fetch();
+  } catch (Throwable $e) {
+    $cache[$key] = false;
+  }
+  return $cache[$key];
+}
+
+function aurora_normalize_stock_value($value): ?int {
+  if ($value === null || $value === '') return null;
+  if (!is_numeric($value)) return null;
+  return max(0, (int) $value);
+}
+
+function aurora_ensure_store_settings_columns(PDO $pdo): void {
+  aurora_ensure_column($pdo, 'settings', 'delivery_fee', "DECIMAL(10,2) NOT NULL DEFAULT 7.00");
+  aurora_ensure_column($pdo, 'settings', 'delivery_note', "VARCHAR(255) NULL DEFAULT 'Bairros mais afastados: consultar'");
+  aurora_ensure_column($pdo, 'settings', 'store_status', "VARCHAR(20) NOT NULL DEFAULT 'auto'");
+  aurora_ensure_column($pdo, 'settings', 'open_time', "VARCHAR(5) NOT NULL DEFAULT '10:00'");
+  aurora_ensure_column($pdo, 'settings', 'close_time', "VARCHAR(5) NOT NULL DEFAULT '22:00'");
+  aurora_ensure_column($pdo, 'settings', 'open_days', "VARCHAR(30) NOT NULL DEFAULT '0,1,2,3,4,5,6'");
+}
+
+function aurora_save_settings_only(PDO $pdo, array $settings): void {
+  if (!aurora_db_ready($pdo)) {
+    throw new RuntimeException('Tabelas MySQL não encontradas. Importe api/aurora_mysql.sql no phpMyAdmin.');
+  }
+
+  aurora_ensure_store_settings_columns($pdo);
+
+  $row = $pdo->query('SELECT * FROM settings WHERE id = 1 LIMIT 1')->fetch(PDO::FETCH_ASSOC) ?: [];
+  $current = [
+    'name' => $row['name'] ?? '',
+    'tagline' => $row['tagline'] ?? '',
+    'logo' => $row['logo'] ?? '',
+    'banner' => $row['banner'] ?? '',
+    'sobreImage' => $row['sobre_image'] ?? '',
+    'whatsapp' => $row['whatsapp'] ?? '',
+    'instagram' => $row['instagram'] ?? '',
+    'instagramUser' => $row['instagram_user'] ?? '',
+    'facebook' => $row['facebook'] ?? '',
+    'email' => $row['email'] ?? '',
+    'address' => $row['address'] ?? '',
+    'hours' => $row['hours'] ?? '',
+    'followers' => $row['followers'] ?? '',
+    'posts' => $row['posts'] ?? '',
+    'mapEmbed' => $row['map_embed'] ?? '',
+    'heroBadge' => $row['hero_badge'] ?? '',
+    'heroStory' => aurora_json_decode_field($row['hero_story'] ?? null, []),
+    'sobreText1' => $row['sobre_text1'] ?? '',
+    'sobreText2' => $row['sobre_text2'] ?? '',
+    'deliveryFee' => isset($row['delivery_fee']) ? (float) $row['delivery_fee'] : 7,
+    'deliveryNote' => $row['delivery_note'] ?? 'Bairros mais afastados: consultar',
+    'storeStatus' => (string) ($row['store_status'] ?? 'auto'),
+    'openTime' => (string) ($row['open_time'] ?? '10:00'),
+    'closeTime' => (string) ($row['close_time'] ?? '22:00'),
+    'openDays' => aurora_parse_open_days($row['open_days'] ?? '0,1,2,3,4,5,6'),
+  ];
+
+  $s = array_merge($current, $settings);
+  $heroStory = json_encode($s['heroStory'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  $deliveryFee = isset($s['deliveryFee']) ? (float) $s['deliveryFee'] : 7;
+  if ($deliveryFee < 0) $deliveryFee = 0;
+  $deliveryNote = trim((string) ($s['deliveryNote'] ?? 'Bairros mais afastados: consultar'));
+  if ($deliveryNote === '') $deliveryNote = 'Bairros mais afastados: consultar';
+
+  $stmt = $pdo->prepare(
+    'INSERT INTO settings (
+      id, name, tagline, logo, banner, sobre_image, whatsapp, instagram, instagram_user,
+      facebook, email, address, hours, followers, posts, map_embed, hero_badge, hero_story,
+      sobre_text1, sobre_text2, delivery_fee, delivery_note, store_status, open_time, close_time, open_days, data_version
+    ) VALUES (
+      1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )
+    ON DUPLICATE KEY UPDATE
+      name=VALUES(name), tagline=VALUES(tagline), logo=VALUES(logo), banner=VALUES(banner),
+      sobre_image=VALUES(sobre_image), whatsapp=VALUES(whatsapp), instagram=VALUES(instagram),
+      instagram_user=VALUES(instagram_user), facebook=VALUES(facebook), email=VALUES(email),
+      address=VALUES(address), hours=VALUES(hours), followers=VALUES(followers), posts=VALUES(posts),
+      map_embed=VALUES(map_embed), hero_badge=VALUES(hero_badge), hero_story=VALUES(hero_story),
+      sobre_text1=VALUES(sobre_text1), sobre_text2=VALUES(sobre_text2),
+      delivery_fee=VALUES(delivery_fee), delivery_note=VALUES(delivery_note),
+      store_status=VALUES(store_status), open_time=VALUES(open_time), close_time=VALUES(close_time),
+      open_days=VALUES(open_days), data_version=VALUES(data_version)'
+  );
+  $stmt->execute([
+    $s['name'] ?? '',
+    $s['tagline'] ?? '',
+    $s['logo'] ?? '',
+    $s['banner'] ?? '',
+    $s['sobreImage'] ?? '',
+    $s['whatsapp'] ?? '',
+    $s['instagram'] ?? '',
+    $s['instagramUser'] ?? '',
+    $s['facebook'] ?? '',
+    $s['email'] ?? '',
+    $s['address'] ?? '',
+    $s['hours'] ?? '',
+    $s['followers'] ?? '',
+    $s['posts'] ?? '',
+    $s['mapEmbed'] ?? '',
+    $s['heroBadge'] ?? '',
+    $heroStory,
+    $s['sobreText1'] ?? '',
+    $s['sobreText2'] ?? '',
+    $deliveryFee,
+    $deliveryNote,
+    in_array(($s['storeStatus'] ?? 'auto'), ['auto', 'open', 'closed'], true) ? ($s['storeStatus'] ?? 'auto') : 'auto',
+    preg_match('/^\d{1,2}:\d{2}$/', (string) ($s['openTime'] ?? '')) ? $s['openTime'] : '10:00',
+    preg_match('/^\d{1,2}:\d{2}:\d{2}$/', (string) ($s['closeTime'] ?? '')) ? substr($s['closeTime'], 0, 5) : (
+      preg_match('/^\d{1,2}:\d{2}$/', (string) ($s['closeTime'] ?? '')) ? $s['closeTime'] : '22:00'
+    ),
+    aurora_format_open_days($s['openDays'] ?? [0, 1, 2, 3, 4, 5, 6]),
+    (int) ($s['dataVersion'] ?? $row['data_version'] ?? 16),
+  ]);
+}
+
+function aurora_reserve_stock_for_order(PDO $pdo, array $items): void {
+  if (!aurora_product_has_stock_column($pdo)) return;
+
+  foreach ($items as $item) {
+    if (!is_array($item)) continue;
+    $pid = trim((string) ($item['productId'] ?? $item['id'] ?? ''));
+    if ($pid === '') continue;
+    $qty = max(1, (int) ($item['qty'] ?? 1));
+
+    $stmt = $pdo->prepare('SELECT name, stock FROM products WHERE id = ? LIMIT 1 FOR UPDATE');
+    $stmt->execute([$pid]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row || $row['stock'] === null || $row['stock'] === '') continue;
+
+    $stock = (int) $row['stock'];
+    if ($stock < $qty) {
+      $name = trim((string) ($row['name'] ?? 'Produto'));
+      throw new InvalidArgumentException("Estoque insuficiente para {$name}. Restam {$stock} un.");
+    }
+
+    $upd = $pdo->prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
+    $upd->execute([$qty, $pid]);
+  }
+}
+
 function aurora_product_to_public_row(array $p): array {
   $img = trim((string) ($p['image'] ?? ''));
   if (str_starts_with($img, 'data:')) {
@@ -858,6 +1007,9 @@ function aurora_normalize_product_input(array $p): array {
     'available' => array_key_exists('available', $p) ? !empty($p['available']) : true,
     'sortOrder' => (int) ($p['sortOrder'] ?? 0),
   ];
+  if (array_key_exists('stock', $p)) {
+    $out['stock'] = aurora_normalize_stock_value($p['stock']);
+  }
 
   if ($out['id'] === 'p0') {
     $out['price'] = 29;
@@ -913,11 +1065,27 @@ function aurora_save_one_product(PDO $pdo, array $payload): array {
   }
 
   $hasAvailable = aurora_products_has_available($pdo);
+  $hasStock = aurora_product_has_stock_column($pdo);
 
   $pdo->beginTransaction();
   try {
     if ($isNew) {
-      if ($hasAvailable) {
+      if ($hasAvailable && $hasStock) {
+        $ins = $pdo->prepare(
+          'INSERT INTO products (
+            id, name, description, price, price_from, category_id, image, featured, slug, size,
+            promo_active, promo_price, promo_label, best_seller, active, available, stock, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $ins->execute([
+          $p['id'], $p['name'], $p['description'], $p['price'], aurora_bool($p['priceFrom']),
+          $p['categoryId'], $p['image'], aurora_bool($p['featured']), $p['slug'], $p['size'],
+          aurora_bool($p['promoActive']), $p['promoPrice'], $p['promoLabel'],
+          aurora_bool($p['bestSeller']), aurora_bool($p['active']), aurora_bool($p['available']),
+          array_key_exists('stock', $p) ? $p['stock'] : null,
+          $p['sortOrder'],
+        ]);
+      } elseif ($hasAvailable) {
         $ins = $pdo->prepare(
           'INSERT INTO products (
             id, name, description, price, price_from, category_id, image, featured, slug, size,
@@ -946,7 +1114,23 @@ function aurora_save_one_product(PDO $pdo, array $payload): array {
         ]);
       }
     } else {
-      if ($hasAvailable) {
+      if ($hasAvailable && $hasStock) {
+        $upd = $pdo->prepare(
+          'UPDATE products SET
+            name = ?, description = ?, price = ?, price_from = ?, category_id = ?, image = ?,
+            featured = ?, slug = ?, size = ?, promo_active = ?, promo_price = ?, promo_label = ?,
+            best_seller = ?, active = ?, available = ?, stock = ?, sort_order = ?
+           WHERE id = ?'
+        );
+        $upd->execute([
+          $p['name'], $p['description'], $p['price'], aurora_bool($p['priceFrom']),
+          $p['categoryId'], $p['image'], aurora_bool($p['featured']), $p['slug'], $p['size'],
+          aurora_bool($p['promoActive']), $p['promoPrice'], $p['promoLabel'],
+          aurora_bool($p['bestSeller']), aurora_bool($p['active']), aurora_bool($p['available']),
+          array_key_exists('stock', $p) ? $p['stock'] : null,
+          $p['sortOrder'], $p['id'],
+        ]);
+      } elseif ($hasAvailable) {
         $upd = $pdo->prepare(
           'UPDATE products SET
             name = ?, description = ?, price = ?, price_from = ?, category_id = ?, image = ?,
@@ -1135,6 +1319,7 @@ function aurora_save_all(PDO $pdo, array $payload): void {
     } catch (Throwable $e) {
       $hasAvailable = false;
     }
+    $hasStock = aurora_product_has_stock_column($pdo);
 
     $prodStmt = $pdo->prepare(
       $hasAvailable
@@ -1187,6 +1372,13 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       }
       $row[] = (int) ($p['sortOrder'] ?? $i);
       $prodStmt->execute($row);
+      if ($hasStock) {
+        $stockUpd = $pdo->prepare('UPDATE products SET stock = ? WHERE id = ?');
+        $stockUpd->execute([
+          array_key_exists('stock', $p) ? aurora_normalize_stock_value($p['stock']) : null,
+          $pid,
+        ]);
+      }
 
       foreach (array_values($p['flavors'] ?? []) as $fi => $flavor) {
         $flavorStmt->execute([$pid, $flavor, $fi]);
@@ -1579,6 +1771,8 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
       $total,
       'novo',
     ]);
+
+    aurora_reserve_stock_for_order($pdo, $order['items'] ?? []);
 
     $itemStmt = $pdo->prepare(
       'INSERT INTO order_items (order_id, product_id, product_name, flavor, qty, price)

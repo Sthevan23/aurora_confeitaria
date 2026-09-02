@@ -925,6 +925,10 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 .badge--entrega { background: #F3E5F5; color: #9C27B0; }
 .badge--finalizado { background: #E8F5E9; color: var(--success); }
 .badge--cancelado { background: #FFEBEE; color: var(--danger); }
+.badge--muted { background: #f3f3f3; color: #888; }
+.badge--danger { background: #FFEBEE; color: var(--danger); }
+.badge--warn { background: #FFF3E0; color: var(--warning); }
+.badge--ok { background: #E8F5E9; color: var(--success); }
 
 /* --- Filter Tabs --- */
 .filter-tabs {

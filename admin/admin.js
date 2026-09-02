@@ -1712,6 +1712,14 @@ function openCatalogOrderModal(focus = 'products') {
   renderModal();
 }
 
+function formatAdminStock(p) {
+  const stock = Storage.productStockQty?.(p);
+  if (stock === null) return '<span class="badge badge--muted">Sem limite</span>';
+  if (stock <= 0) return '<span class="badge badge--danger">Esgotado</span>';
+  if (stock <= 5) return `<span class="badge badge--warn">${stock} un.</span>`;
+  return `<span class="badge badge--ok">${stock} un.</span>`;
+}
+
 function renderProducts() {
   const products = Storage.getProducts();
   const tbody = document.querySelector('#products-table tbody');
@@ -1731,6 +1739,7 @@ function renderProducts() {
       <td data-label="Categoria">${Storage.getCategoryName(p.categoryId)}</td>
       <td data-label="Volume">${size ? `<span class="badge badge--info">${escapeHtml(size)}</span>` : '—'}</td>
       <td data-label="Preço">${Number(p.price) > 0 ? Storage.formatCurrency(p.price) : 'Consultar'}${p.promoActive && p.promoPrice != null ? `<br><small style="color:#fc7890">Promo ${Storage.formatCurrency(p.promoPrice)}</small>` : ''}</td>
+      <td data-label="Estoque">${formatAdminStock(p)}</td>
       <td data-label="Status">${p.featured ? '<i class="fas fa-star" style="color:#FFD700"></i>' : '—'}${p.bestSeller ? ' <span class="badge badge--novo">Mais vendido</span>' : ''}${p.promoActive ? ' <span class="badge badge--novo">Promo</span>' : ''}</td>
       <td data-label="Ações">
         <div class="table__actions">
@@ -1873,6 +1882,13 @@ function openProductModal(product = null) {
           </div>
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="prod-stock">Estoque (unidades)</label>
+          <input type="number" id="prod-stock" min="0" step="1" placeholder="Vazio = sem limite" value="${product?.stock != null && product?.stock !== '' ? product.stock : ''}">
+          <small style="display:block;margin-top:6px;color:var(--texto-claro)">Deixe em branco para vender sem limite. Ao zerar, o produto aparece como esgotado no site.</small>
+        </div>
+      </div>
       <div class="form-group">
         <label class="checkbox-label">
           <input type="checkbox" id="prod-price-from" ${product?.priceFrom ? 'checked' : ''}> Mostrar como "a partir de"
@@ -2000,6 +2016,12 @@ function openProductModal(product = null) {
         flavorPrices: parsedFlavors.flavorPrices,
         active: document.getElementById('prod-active').checked,
         available: document.getElementById('prod-available').checked,
+        stock: (() => {
+          const raw = document.getElementById('prod-stock')?.value.trim() || '';
+          if (raw === '') return null;
+          const n = parseInt(raw, 10);
+          return Number.isFinite(n) ? Math.max(0, n) : null;
+        })(),
       };
 
       const payload = isEdit
@@ -2715,11 +2737,11 @@ async function setStoreStatusQuick(status) {
   if (!allowed.includes(status)) return;
   Storage.saveSettings({ ...Storage.getSettings(), storeStatus: status });
   updateStoreStatusPreview();
-  const ok = typeof Storage.saveAsync === 'function'
-    ? await Storage.saveAsync(Storage.getAll())
-    : true;
-  if (!ok) {
-    showToast('Não sincronizou na nuvem. Tente de novo.', 'error');
+  const result = typeof Storage.saveSettingsAsync === 'function'
+    ? await Storage.saveSettingsAsync(Storage.getSettings())
+    : { ok: true };
+  if (!result?.ok) {
+    showToast(result?.error || 'Não sincronizou na nuvem. Tente de novo.', 'error');
     return;
   }
   showToast(
@@ -2804,13 +2826,12 @@ function initSettings() {
     };
 
     Storage.saveSettings(payload);
-    if (typeof Storage.saveAsync === 'function') {
-      const data = Storage.getAll();
-      const ok = await Storage.saveAsync(data);
-      if (!ok) {
-        showToast('Salvo no celular, mas não sincronizou na nuvem. Tente de novo.', 'error');
-        return;
-      }
+    const result = typeof Storage.saveSettingsAsync === 'function'
+      ? await Storage.saveSettingsAsync(payload)
+      : { ok: true };
+    if (!result?.ok) {
+      showToast(result?.error || 'Salvo no celular, mas não sincronizou na nuvem. Tente de novo.', 'error');
+      return;
     }
     showToast('Site atualizado!', 'success');
     updateStoreStatusPreview();

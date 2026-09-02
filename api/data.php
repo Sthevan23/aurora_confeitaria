@@ -218,6 +218,7 @@ if ($method === 'POST') {
     || $actionName === 'save_catalog_order'
     || $actionName === 'save_product'
     || $actionName === 'delete_product'
+    || $actionName === 'save_settings'
   ) {
     try {
       $pdo = aurora_db(false);
@@ -260,6 +261,8 @@ if ($method === 'POST') {
     try {
       $result = aurora_create_order($pdo, $order, is_array($client) ? $client : null);
       json_out($result);
+    } catch (InvalidArgumentException $e) {
+      json_out(['error' => $e->getMessage()], 400);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao gravar pedido', 'detail' => $e->getMessage()], 500);
     }
@@ -354,6 +357,24 @@ if ($method === 'POST') {
       json_out(['ok' => true, 'id' => $productId, 'active' => $active === 1, 'catalog' => true]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao atualizar produto', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  // Atualiza só configurações (leve — não regrava o banco inteiro)
+  if ($actionName === 'save_settings') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    $settings = $body['settings'] ?? null;
+    if (!is_array($settings)) {
+      json_out(['error' => 'Configurações inválidas'], 400);
+    }
+    try {
+      aurora_save_settings_only($pdo, $settings);
+      json_out(['ok' => true, 'ts' => time()]);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao salvar configurações', 'detail' => $e->getMessage()], 500);
     }
   }
 
