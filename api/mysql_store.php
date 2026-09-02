@@ -424,6 +424,8 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     }
   }
 
+  $inventoryItems = aurora_load_inventory_items($pdo);
+
   return [
     'version' => (int) ($settingsRow['data_version'] ?? 16),
     'settings' => $settings,
@@ -440,6 +442,7 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     'gallery' => $gallery,
     'finance' => $finance,
     'coupons' => $coupons,
+    'inventoryItems' => $inventoryItems,
   ];
 }
 
@@ -1497,6 +1500,32 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       ]);
     }
 
+    // Insumos / itens de estoque
+    aurora_ensure_inventory_items_table($pdo);
+    if (aurora_table_exists($pdo, 'inventory_items')) {
+      $pdo->exec('DELETE FROM inventory_items');
+      $invStmt = $pdo->prepare(
+        'INSERT INTO inventory_items (id, name, unit, stock, min_stock, notes, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
+      );
+      foreach (array_values($payload['inventoryItems'] ?? []) as $i => $item) {
+        if (!is_array($item)) continue;
+        $name = trim((string) ($item['name'] ?? ''));
+        if ($name === '') continue;
+        $invStmt->execute([
+          $item['id'] ?? uniqid('inv', true),
+          $name,
+          aurora_normalize_inventory_unit($item['unit'] ?? 'un'),
+          aurora_normalize_inventory_qty($item['stock'] ?? 0),
+          isset($item['minStock']) && $item['minStock'] !== '' && $item['minStock'] !== null
+            ? aurora_normalize_inventory_qty($item['minStock'])
+            : null,
+          trim((string) ($item['notes'] ?? '')) ?: null,
+          (int) ($item['sortOrder'] ?? $i),
+        ]);
+      }
+    }
+
     // Cupons
     aurora_ensure_coupons_table($pdo);
     if (aurora_table_exists($pdo, 'coupons')) {
@@ -1952,4 +1981,121 @@ function aurora_loyalty_stats(PDO $pdo, string $phone): array {
     'eligible' => $eligible,
     'gift' => $gift,
   ];
+}
+
+function aurora_normalize_inventory_unit($unit): string {
+  $u = strtolower(trim((string) $unit));
+  $allowed = ['un', 'cx', 'kg', 'g', 'l', 'ml', 'pct', 'lt'];
+  if ($u === 'lt') $u = 'l';
+  if ($u === 'pacote') $u = 'pct';
+  if ($u === 'caixa') $u = 'cx';
+  return in_array($u, $allowed, true) ? $u : 'un';
+}
+
+function aurora_normalize_inventory_qty($value): float {
+  if ($value === null || $value === '') return 0.0;
+  if (!is_numeric($value)) return 0.0;
+  return max(0, round((float) $value, 2));
+}
+
+function aurora_load_inventory_items(PDO $pdo): array {
+  if (!aurora_table_exists($pdo, 'inventory_items')) {
+    return [];
+  }
+  $rows = $pdo->query(
+    'SELECT * FROM inventory_items ORDER BY sort_order ASC, name ASC'
+  )->fetchAll(PDO::FETCH_ASSOC);
+  $items = [];
+  foreach ($rows as $row) {
+    $item = [
+      'id' => (string) ($row['id'] ?? ''),
+      'name' => (string) ($row['name'] ?? ''),
+      'unit' => aurora_normalize_inventory_unit($row['unit'] ?? 'un'),
+      'stock' => aurora_normalize_inventory_qty($row['stock'] ?? 0),
+      'sortOrder' => (int) ($row['sort_order'] ?? 0),
+    ];
+    if ($row['min_stock'] !== null && $row['min_stock'] !== '') {
+      $item['minStock'] = aurora_normalize_inventory_qty($row['min_stock']);
+    }
+    $notes = trim((string) ($row['notes'] ?? ''));
+    if ($notes !== '') $item['notes'] = $notes;
+    $items[] = $item;
+  }
+  return $items;
+}
+
+function aurora_normalize_inventory_input(array $item): array {
+  $name = trim((string) ($item['name'] ?? ''));
+  $id = trim((string) ($item['id'] ?? ''));
+  if ($id === '') $id = 'inv_' . bin2hex(random_bytes(6));
+  $out = [
+    'id' => $id,
+    'name' => $name,
+    'unit' => aurora_normalize_inventory_unit($item['unit'] ?? 'un'),
+    'stock' => aurora_normalize_inventory_qty($item['stock'] ?? 0),
+    'sortOrder' => (int) ($item['sortOrder'] ?? 0),
+  ];
+  if (array_key_exists('minStock', $item) && $item['minStock'] !== '' && $item['minStock'] !== null) {
+    $out['minStock'] = aurora_normalize_inventory_qty($item['minStock']);
+  }
+  $notes = trim((string) ($item['notes'] ?? ''));
+  if ($notes !== '') $out['notes'] = $notes;
+  return $out;
+}
+
+function aurora_save_one_inventory_item(PDO $pdo, array $payload): array {
+  if (!aurora_db_ready($pdo)) {
+    throw new RuntimeException('Tabelas MySQL não encontradas.');
+  }
+  aurora_ensure_inventory_items_table($pdo);
+  $item = aurora_normalize_inventory_input($payload);
+  if ($item['name'] === '') {
+    throw new InvalidArgumentException('Informe o nome do item.');
+  }
+
+  $exists = $pdo->prepare('SELECT id, sort_order FROM inventory_items WHERE id = ? LIMIT 1');
+  $exists->execute([$item['id']]);
+  $existing = $exists->fetch(PDO::FETCH_ASSOC);
+  $isNew = !$existing;
+  if ($isNew && $item['sortOrder'] <= 0) {
+    $max = (int) $pdo->query('SELECT COALESCE(MAX(sort_order), -1) FROM inventory_items')->fetchColumn();
+    $item['sortOrder'] = $max + 1;
+  } elseif (!$isNew && !array_key_exists('sortOrder', $payload)) {
+    $item['sortOrder'] = (int) ($existing['sort_order'] ?? 0);
+  }
+
+  $minStock = $item['minStock'] ?? null;
+  $notes = $item['notes'] ?? null;
+
+  if ($isNew) {
+    $stmt = $pdo->prepare(
+      'INSERT INTO inventory_items (id, name, unit, stock, min_stock, notes, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+      $item['id'], $item['name'], $item['unit'], $item['stock'],
+      $minStock, $notes, $item['sortOrder'],
+    ]);
+  } else {
+    $stmt = $pdo->prepare(
+      'UPDATE inventory_items SET name = ?, unit = ?, stock = ?, min_stock = ?, notes = ?, sort_order = ?
+       WHERE id = ?'
+    );
+    $stmt->execute([
+      $item['name'], $item['unit'], $item['stock'], $minStock, $notes,
+      $item['sortOrder'], $item['id'],
+    ]);
+  }
+
+  return $item;
+}
+
+function aurora_delete_one_inventory_item(PDO $pdo, string $itemId): void {
+  aurora_ensure_inventory_items_table($pdo);
+  $id = trim($itemId);
+  if ($id === '') {
+    throw new InvalidArgumentException('Item inválido.');
+  }
+  $stmt = $pdo->prepare('DELETE FROM inventory_items WHERE id = ?');
+  $stmt->execute([$id]);
 }

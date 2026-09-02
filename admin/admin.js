@@ -54,6 +54,7 @@ function renderAllAdminPages() {
   renderOrders();
   renderProducts();
   renderStock();
+  renderInventoryItems();
   renderCategories();
   renderClients();
   renderCoupons();
@@ -214,7 +215,10 @@ function navigateTo(page) {
   if (page === 'financeiro') initFinanceiro();
   if (page === 'cupons') renderCoupons();
   if (page === 'dashboard') renderDashboard();
-  if (page === 'estoque') renderStock();
+  if (page === 'estoque') {
+    renderInventoryItems();
+    renderStock();
+  }
   if (page === 'pedidos') {
     renderOrders();
     refreshOrdersFromCloud();
@@ -1716,6 +1720,234 @@ function openCatalogOrderModal(focus = 'products') {
   renderModal();
 }
 
+function formatInventoryStatus(item) {
+  const stock = Number(item?.stock) || 0;
+  const min = item?.minStock != null && item?.minStock !== '' ? Number(item.minStock) : null;
+  if (stock <= 0) return '<span class="badge badge--danger">Zerado</span>';
+  if (min != null && Number.isFinite(min) && stock <= min) {
+    return `<span class="badge badge--warn">Baixo (${stock})</span>`;
+  }
+  return `<span class="badge badge--ok">${stock}</span>`;
+}
+
+function inventoryFilterValue() {
+  return document.getElementById('inventory-filter')?.value || 'all';
+}
+
+function inventoryMatchesFilter(item, filter) {
+  const stock = Number(item?.stock) || 0;
+  const min = item?.minStock != null && item?.minStock !== '' ? Number(item.minStock) : null;
+  if (filter === 'out') return stock <= 0;
+  if (filter === 'low') return stock <= 0 || (min != null && stock <= min);
+  return true;
+}
+
+function renderInventorySummary(items) {
+  const el = document.getElementById('inventory-summary');
+  if (!el) return;
+  let low = 0;
+  let out = 0;
+  items.forEach((item) => {
+    const stock = Number(item.stock) || 0;
+    const min = item.minStock != null && item.minStock !== '' ? Number(item.minStock) : null;
+    if (stock <= 0) out += 1;
+    else if (min != null && stock <= min) low += 1;
+  });
+  el.innerHTML = `
+    <div class="stock-summary__card">
+      <span class="stock-summary__label">Itens cadastrados</span>
+      <strong class="stock-summary__value">${items.length}</strong>
+    </div>
+    <div class="stock-summary__card stock-summary__card--warn">
+      <span class="stock-summary__label">Estoque baixo</span>
+      <strong class="stock-summary__value">${low}</strong>
+    </div>
+    <div class="stock-summary__card stock-summary__card--danger">
+      <span class="stock-summary__label">Zerados</span>
+      <strong class="stock-summary__value">${out}</strong>
+    </div>
+  `;
+}
+
+function renderInventoryItems() {
+  const tbody = document.querySelector('#inventory-table tbody');
+  const empty = document.getElementById('inventory-empty');
+  if (!tbody) return;
+
+  const items = Storage.getInventoryItems?.() || [];
+  const filter = inventoryFilterValue();
+  const filtered = items.filter((item) => inventoryMatchesFilter(item, filter));
+
+  renderInventorySummary(items);
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.hidden = items.length > 0;
+    return;
+  }
+  if (empty) empty.hidden = true;
+
+  tbody.innerHTML = filtered.map((item) => {
+    const unit = Storage.inventoryUnitLabel?.(item.unit) || item.unit || 'un';
+    const minVal = item.minStock != null && item.minStock !== '' ? String(item.minStock) : '';
+    return `
+    <tr class="mobile-card" data-inventory-id="${item.id}">
+      <td data-label="Item"><strong>${escapeHtml(item.name)}</strong>${item.notes ? `<br><small style="color:#888">${escapeHtml(item.notes)}</small>` : ''}</td>
+      <td data-label="Unidade">${escapeHtml(unit)}</td>
+      <td data-label="Quantidade">
+        <input type="number" class="stock-input" id="inv-stock-${item.id}" min="0" step="0.01" value="${Number(item.stock) || 0}" inputmode="decimal">
+      </td>
+      <td data-label="Alerta mín.">
+        <input type="number" class="stock-input stock-input--min" id="inv-min-${item.id}" min="0" step="0.01" placeholder="—" value="${minVal}" inputmode="decimal">
+      </td>
+      <td data-label="Situação">${formatInventoryStatus(item)}</td>
+      <td data-label="Ações">
+        <div class="table__actions">
+          <button type="button" class="btn btn--secondary btn--sm" onclick="saveInventoryItemQuick('${item.id}')" title="Salvar"><i class="fas fa-save"></i></button>
+          <button type="button" class="btn--icon edit" onclick="editInventoryItem('${item.id}')" title="Editar"><i class="fas fa-edit"></i></button>
+          <button type="button" class="btn--icon delete" onclick="deleteInventoryItem('${item.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
+function openInventoryItemModal(item = null) {
+  const isEdit = !!item;
+  const units = [
+    ['un', 'Unidade (un)'],
+    ['cx', 'Caixa (cx)'],
+    ['kg', 'Quilograma (kg)'],
+    ['g', 'Grama (g)'],
+    ['l', 'Litro (L)'],
+    ['ml', 'Mililitro (ml)'],
+    ['pct', 'Pacote (pct)'],
+  ];
+  openModal(isEdit ? 'Editar insumo' : 'Novo insumo', `
+    <form id="inventory-form">
+      <div class="form-group">
+        <label>Nome do item *</label>
+        <input type="text" id="inv-name" value="${escapeHtml(item?.name || '')}" placeholder="Ex: Caixa de morango" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Unidade</label>
+          <select id="inv-unit">
+            ${units.map(([val, label]) => `<option value="${val}" ${item?.unit === val ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantidade atual</label>
+          <input type="number" id="inv-stock" min="0" step="0.01" value="${item?.stock ?? 0}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Alerta quando chegar em</label>
+          <input type="number" id="inv-min" min="0" step="0.01" placeholder="Opcional" value="${item?.minStock ?? ''}">
+        </div>
+        <div class="form-group">
+          <label>Observação</label>
+          <input type="text" id="inv-notes" value="${escapeHtml(item?.notes || '')}" placeholder="Ex: Comprar no Atacadão">
+        </div>
+      </div>
+      <button type="submit" class="btn btn--primary">${isEdit ? 'Salvar' : 'Cadastrar'}</button>
+    </form>
+  `);
+
+  document.getElementById('inventory-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('inv-name').value.trim();
+    if (!name) {
+      showToast('Informe o nome do item.', 'error');
+      return;
+    }
+    const minRaw = document.getElementById('inv-min').value.trim();
+    const payload = {
+      name,
+      unit: document.getElementById('inv-unit').value,
+      stock: Number(document.getElementById('inv-stock').value) || 0,
+      notes: document.getElementById('inv-notes').value.trim(),
+      minStock: minRaw === '' ? null : Number(minRaw),
+    };
+    if (isEdit) payload.id = item.id;
+    else {
+      payload.id = Storage.generateId('inv');
+      payload.sortOrder = (Storage.getInventoryItems?.() || []).length;
+    }
+
+    const result = await Storage.saveInventoryItemAsync(payload);
+    if (!result?.ok) {
+      showToast(result?.error || 'Não sincronizou. Tente de novo.', 'error');
+      return;
+    }
+    closeModal();
+    showToast(isEdit ? 'Insumo atualizado!' : 'Insumo cadastrado!', 'success');
+    renderInventoryItems();
+  });
+}
+
+function editInventoryItem(id) {
+  const item = (Storage.getInventoryItems?.() || []).find((row) => row.id === id);
+  if (item) openInventoryItemModal(item);
+}
+
+async function saveInventoryItemQuick(id) {
+  const item = (Storage.getInventoryItems?.() || []).find((row) => row.id === id);
+  const stockInput = document.getElementById(`inv-stock-${id}`);
+  const minInput = document.getElementById(`inv-min-${id}`);
+  if (!item || !stockInput) return;
+
+  const stock = Number(stockInput.value);
+  if (!Number.isFinite(stock) || stock < 0) {
+    showToast('Quantidade inválida.', 'error');
+    return;
+  }
+  const minRaw = String(minInput?.value || '').trim();
+  const payload = {
+    ...item,
+    stock,
+    minStock: minRaw === '' ? null : Number(minRaw),
+  };
+
+  const result = await Storage.saveInventoryItemAsync(payload);
+  if (result?.ok) {
+    showToast('Insumo atualizado!', 'success');
+    renderInventoryItems();
+  } else {
+    showToast(result?.error || 'Não sincronizou.', 'error');
+  }
+}
+
+async function deleteInventoryItem(id) {
+  const item = (Storage.getInventoryItems?.() || []).find((row) => row.id === id);
+  if (!item) return;
+  if (!confirm(`Excluir "${item.name}" do estoque?`)) return;
+  const result = await Storage.deleteInventoryItemAsync(id);
+  if (result?.ok) {
+    showToast('Insumo excluído.', 'success');
+    renderInventoryItems();
+  } else {
+    showToast(result?.error || 'Não sincronizou.', 'error');
+  }
+}
+
+function switchStockTab(tab) {
+  document.querySelectorAll('.stock-tab').forEach((btn) => {
+    const active = btn.dataset.stockTab === tab;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.stock-panel').forEach((panel) => {
+    const show = panel.id === `stock-panel-${tab}`;
+    panel.classList.toggle('is-active', show);
+    panel.hidden = !show;
+  });
+  if (tab === 'items') renderInventoryItems();
+  if (tab === 'products') renderStock();
+}
+
 function formatAdminStock(p) {
   const stock = Storage.productStockQty?.(p);
   if (stock === null) return '<span class="badge badge--muted">Sem limite</span>';
@@ -1884,6 +2116,11 @@ async function saveProductStock(productId) {
 }
 
 function initStockPage() {
+  document.querySelectorAll('.stock-tab').forEach((btn) => {
+    btn.addEventListener('click', () => switchStockTab(btn.dataset.stockTab || 'items'));
+  });
+  document.getElementById('btn-new-inventory-item')?.addEventListener('click', () => openInventoryItemModal());
+  document.getElementById('inventory-filter')?.addEventListener('change', renderInventoryItems);
   document.getElementById('stock-filter')?.addEventListener('change', renderStock);
   document.getElementById('stock-table')?.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || !e.target.matches('.stock-input')) return;
@@ -1891,6 +2128,13 @@ function initStockPage() {
     const row = e.target.closest('[data-stock-id]');
     const id = row?.dataset.stockId;
     if (id) saveProductStock(id);
+  });
+  document.getElementById('inventory-table')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.matches('.stock-input')) return;
+    e.preventDefault();
+    const row = e.target.closest('[data-inventory-id]');
+    const id = row?.dataset.inventoryId;
+    if (id) saveInventoryItemQuick(id);
   });
 }
 
@@ -3092,4 +3336,7 @@ window.viewOrder = viewOrder;
 window.deleteOrder = deleteOrder;
 window.closeModal = closeModal;
 window.saveProductStock = saveProductStock;
+window.editInventoryItem = editInventoryItem;
+window.saveInventoryItemQuick = saveInventoryItemQuick;
+window.deleteInventoryItem = deleteInventoryItem;
 window.navigateTo = navigateTo;

@@ -121,6 +121,20 @@ CREATE TABLE `product_flavor_prices` (
   CONSTRAINT `fk_pfp_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `inventory_items` (
+  `id` VARCHAR(64) NOT NULL,
+  `name` VARCHAR(190) NOT NULL,
+  `unit` VARCHAR(30) NOT NULL DEFAULT 'un',
+  `stock` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `min_stock` DECIMAL(10,2) DEFAULT NULL COMMENT 'Alerta quando atingir',
+  `notes` VARCHAR(255) DEFAULT NULL,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_inventory_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `gallery` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `image` VARCHAR(500) NOT NULL,

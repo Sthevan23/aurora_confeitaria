@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=68">
+  <link rel="stylesheet" href="admin.css?v=69">
   <script>
     if (sessionStorage.getItem('admin_logged') !== 'true') {
       location.replace('login.html');
@@ -183,29 +183,63 @@
 
     <!-- Estoque -->
     <section class="admin-page" id="page-estoque">
-      <p class="fin-note"><i class="fas fa-boxes-stacked"></i> Ajuste a quantidade disponível de cada produto. Deixe em branco para vender <strong>sem limite</strong>. Ao zerar, o produto aparece como <strong>Esgotado</strong> no site.</p>
-      <div class="stock-summary" id="stock-summary"></div>
-      <div class="page-actions stock-toolbar">
-        <label class="stock-filter">
-          <span>Filtrar</span>
-          <select id="stock-filter" class="form-control">
-            <option value="all">Todos os produtos</option>
-            <option value="tracked">Com controle de estoque</option>
-            <option value="low">Estoque baixo (≤ 5)</option>
-            <option value="out">Esgotados</option>
-          </select>
-        </label>
+      <div class="stock-tabs" role="tablist" aria-label="Tipo de estoque">
+        <button type="button" class="stock-tab is-active" data-stock-tab="items" role="tab" aria-selected="true">Insumos</button>
+        <button type="button" class="stock-tab" data-stock-tab="products" role="tab" aria-selected="false">Produtos no site</button>
       </div>
-      <div class="card">
-        <div class="table-responsive">
-          <table class="table" id="stock-table">
-            <thead>
-              <tr><th>Produto</th><th>Categoria</th><th>No site</th><th>Situação</th><th>Quantidade</th><th>Ações</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+
+      <div class="stock-panel is-active" id="stock-panel-items" role="tabpanel">
+        <p class="fin-note"><i class="fas fa-carrot"></i> Controle de <strong>insumos</strong> da cozinha — ex.: caixa de morango, leite condensado, chocolate em pó. Use para saber o que precisa comprar.</p>
+        <div class="stock-summary" id="inventory-summary"></div>
+        <div class="page-actions stock-toolbar">
+          <label class="stock-filter">
+            <span>Filtrar</span>
+            <select id="inventory-filter" class="form-control">
+              <option value="all">Todos os itens</option>
+              <option value="low">Estoque baixo</option>
+              <option value="out">Zerados</option>
+            </select>
+          </label>
+          <button type="button" class="btn btn--primary" id="btn-new-inventory-item"><i class="fas fa-plus"></i> Novo insumo</button>
         </div>
-        <p class="fin-empty" id="stock-empty" hidden>Nenhum produto neste filtro.</p>
+        <div class="card">
+          <div class="table-responsive">
+            <table class="table" id="inventory-table">
+              <thead>
+                <tr><th>Item</th><th>Unidade</th><th>Quantidade</th><th>Alerta mín.</th><th>Situação</th><th>Ações</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="fin-empty" id="inventory-empty" hidden>Nenhum insumo cadastrado. Clique em Novo insumo.</p>
+        </div>
+      </div>
+
+      <div class="stock-panel" id="stock-panel-products" role="tabpanel" hidden>
+        <p class="fin-note"><i class="fas fa-cookie-bite"></i> Estoque de <strong>produtos prontos</strong> no site. Deixe em branco para vender sem limite. Ao zerar, aparece como <strong>Esgotado</strong> no cardápio.</p>
+        <div class="stock-summary" id="stock-summary"></div>
+        <div class="page-actions stock-toolbar">
+          <label class="stock-filter">
+            <span>Filtrar</span>
+            <select id="stock-filter" class="form-control">
+              <option value="all">Todos os produtos</option>
+              <option value="tracked">Com controle de estoque</option>
+              <option value="low">Estoque baixo (≤ 5)</option>
+              <option value="out">Esgotados</option>
+            </select>
+          </label>
+        </div>
+        <div class="card">
+          <div class="table-responsive">
+            <table class="table" id="stock-table">
+              <thead>
+                <tr><th>Produto</th><th>Categoria</th><th>No site</th><th>Situação</th><th>Quantidade</th><th>Ações</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="fin-empty" id="stock-empty" hidden>Nenhum produto neste filtro.</p>
+        </div>
       </div>
     </section>
 
@@ -561,8 +595,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="../js/default-data.js?v=20"></script>
   <script src="../js/product-photos.js?v=2"></script>
-  <script src="../js/storage.js?v=68"></script>
-  <script src="admin.js?v=57"></script>
+  <script src="../js/storage.js?v=69"></script>
+  <script src="admin.js?v=58"></script>
 </body>
 </html>
 

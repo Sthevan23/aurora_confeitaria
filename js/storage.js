@@ -78,6 +78,7 @@ const Storage = (() => {
       orders: [],
       finance: [],
       coupons: [],
+      inventoryItems: [],
       reviews: [],
       faq: [],
       gallery: [],
@@ -1089,6 +1090,121 @@ const Storage = (() => {
     }
   }
 
+  function getInventoryItems() {
+    return (getAll().inventoryItems || []).slice().sort((a, b) => {
+      const diff = sortOrderValue(a) - sortOrderValue(b);
+      if (diff !== 0) return diff;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+    });
+  }
+
+  function inventoryUnitLabel(unit) {
+    const map = { un: 'un', cx: 'cx', kg: 'kg', g: 'g', l: 'L', ml: 'ml', pct: 'pct' };
+    return map[String(unit || 'un').toLowerCase()] || 'un';
+  }
+
+  function replaceInventoryItemInMemory(item, { remove = false } = {}) {
+    const data = getAll();
+    const id = String(item?.id || '');
+    const list = Array.isArray(data.inventoryItems) ? data.inventoryItems : [];
+    if (remove || !id) {
+      data.inventoryItems = list.filter((row) => String(row.id) !== id);
+    } else {
+      const idx = list.findIndex((row) => String(row.id) === id);
+      if (idx >= 0) list[idx] = { ...list[idx], ...item };
+      else list.push(item);
+      data.inventoryItems = list;
+    }
+    setMemory(data);
+    lastRemoteJson = JSON.stringify(data);
+    notifyUpdated();
+  }
+
+  async function saveInventoryItemAsync(item) {
+    const password = getAdminPassword();
+    if (!password) {
+      return { ok: false, error: 'Faça login de novo no painel.' };
+    }
+    if (!item || !String(item.name || '').trim()) {
+      return { ok: false, error: 'Informe o nome do item.' };
+    }
+
+    try {
+      clearApiBreaker();
+      const res = await apiFetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({ action: 'save_inventory_item', item }),
+      }, 15000, { force: true });
+
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
+      if (res.ok && result.ok !== false && result.item) {
+        replaceInventoryItemInMemory(result.item);
+        cloudEnabled = true;
+        return { ok: true, item: result.item };
+      }
+
+      const msg = result.error
+        || result.detail
+        || (res.status === 401 ? 'Senha inválida. Faça login de novo.' : '')
+        || 'Não sincronizou com o servidor.';
+      return { ok: false, error: msg };
+    } catch (err) {
+      console.warn('[Aurora] Erro ao salvar insumo', err);
+      return { ok: false, error: 'Sem conexão com o servidor.' };
+    }
+  }
+
+  async function deleteInventoryItemAsync(itemId) {
+    const password = getAdminPassword();
+    const id = String(itemId || '').trim();
+    if (!password) {
+      return { ok: false, error: 'Faça login de novo no painel.' };
+    }
+    if (!id) {
+      return { ok: false, error: 'Item inválido.' };
+    }
+
+    try {
+      clearApiBreaker();
+      const res = await apiFetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': password,
+        },
+        body: JSON.stringify({ action: 'delete_inventory_item', id }),
+      }, 12000, { force: true });
+
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
+      if (res.ok && result.ok !== false) {
+        replaceInventoryItemInMemory({ id }, { remove: true });
+        cloudEnabled = true;
+        return { ok: true };
+      }
+
+      const msg = result.error || result.detail || 'Não sincronizou com o servidor.';
+      return { ok: false, error: msg };
+    } catch (err) {
+      return { ok: false, error: 'Sem conexão com o servidor.' };
+    }
+  }
+
   async function publishCatalogAsync() {
     const password = getAdminPassword();
     if (!password) return false;
@@ -1641,6 +1757,7 @@ const Storage = (() => {
     getOrders, saveOrders, saveOrdersAsync,
     getFinance, saveFinance, addFinanceEntry, deleteFinanceEntry, getFinanceSummary,
     getCoupons, saveCoupons, saveCouponsAsync, findCouponByCode, calcCouponDiscount,
+    getInventoryItems, saveInventoryItemAsync, deleteInventoryItemAsync, inventoryUnitLabel,
     getReviews, getFaq, getGallery,
     login, loginAsync, updatePassword,
     generateId, generateOrderNumber,

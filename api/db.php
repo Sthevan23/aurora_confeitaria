@@ -147,6 +147,7 @@ function aurora_ensure_schema(PDO $pdo): void {
 
     // Cupons: cria a tabela se ainda não existir (bancos antigos sem migrate)
     aurora_ensure_coupons_table($pdo);
+    aurora_ensure_inventory_items_table($pdo);
     aurora_ensure_product_images_table($pdo);
 
     // Fidelidade: pedidos fora do site (ajuste manual)
@@ -216,6 +217,31 @@ function aurora_ensure_coupons_table(PDO $pdo): void {
       `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (`id`),
       UNIQUE KEY `uk_coupons_code` (`code`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  );
+}
+
+function aurora_ensure_inventory_items_table(PDO $pdo): void {
+  $exists = $pdo->query(
+    "SELECT 1 FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'inventory_items' LIMIT 1"
+  )->fetchColumn();
+  if ($exists) {
+    return;
+  }
+  $pdo->exec(
+    "CREATE TABLE IF NOT EXISTS `inventory_items` (
+      `id` VARCHAR(64) NOT NULL,
+      `name` VARCHAR(190) NOT NULL,
+      `unit` VARCHAR(30) NOT NULL DEFAULT 'un',
+      `stock` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      `min_stock` DECIMAL(10,2) DEFAULT NULL COMMENT 'Alerta quando atingir',
+      `notes` VARCHAR(255) DEFAULT NULL,
+      `sort_order` INT NOT NULL DEFAULT 0,
+      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (`id`),
+      KEY `idx_inventory_name` (`name`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
   );
 }
