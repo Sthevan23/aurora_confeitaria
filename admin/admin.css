@@ -495,6 +495,23 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 
 .stats-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .stats-grid--4 { grid-template-columns: repeat(4, 1fr); }
+.stats-grid--3 { grid-template-columns: repeat(3, 1fr); }
+
+.analytics-funnel {
+  margin-top: -0.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.stat-card--compact {
+  padding: 1rem 1.15rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.stat-card--compact .stat-card__value {
+  font-size: 1.35rem;
+}
 
 .stat-card {
   background: var(--branco);

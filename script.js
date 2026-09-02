@@ -403,6 +403,7 @@ function addToCart(item) {
     }
     cartItems = Cart.getItems();
     renderCartUI();
+    window.AuroraAnalytics?.addToCart(item);
     return true;
   }
   const key = cartLineKey(item.productId, item.flavor, item.size, item.notes);
@@ -413,6 +414,7 @@ function addToCart(item) {
     cartItems.push({ ...item, key, qty: Number(item.qty) || 1, notes: item.notes || '' });
   }
   saveCart();
+  window.AuroraAnalytics?.addToCart(item);
   return true;
 }
 
@@ -1250,6 +1252,7 @@ function openLightbox(productId) {
   // Tira o foco do card do produto (evita o browser “puxar” a página até ele)
   blurWithoutScroll();
   focusLightboxOptions();
+  window.AuroraAnalytics?.productView(product);
 }
 
 function closeLightbox() {
@@ -2206,6 +2209,8 @@ async function boot() {
   initContactForm();
   initHeroWords();
   initParallax();
+
+  window.AuroraAnalytics?.pageView('index.html');
 
   window.addEventListener('storage-updated', () => {
     applySettings();

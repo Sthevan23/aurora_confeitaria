@@ -184,6 +184,7 @@ const pageTitles = {
   categorias: 'Categorias',
   clientes: 'Clientes',
   financeiro: 'Financeiro',
+  analises: 'Análises',
   cupons: 'Cupons',
   configuracoes: 'Configurações'
 };
@@ -213,6 +214,7 @@ function navigateTo(page) {
   document.body.classList.remove('sidebar-open');
 
   if (page === 'financeiro') initFinanceiro();
+  if (page === 'analises') initAnalises();
   if (page === 'cupons') renderCoupons();
   if (page === 'dashboard') renderDashboard();
   if (page === 'estoque') {
@@ -3178,6 +3180,191 @@ function renderRevenueChart() {
       }
     }
   });
+}
+
+/* --- Análises (tráfego do site) --- */
+let analyticsPeriod = '7d';
+let analyticsPeriodBound = false;
+let analyticsHourChart = null;
+let analyticsDailyChart = null;
+let analyticsLoading = false;
+
+async function fetchAnalyticsData(period) {
+  const res = await fetch(Storage.getApiUrl(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Password': Storage.getAdminPassword(),
+    },
+    body: JSON.stringify({ action: 'get_analytics', period }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) {
+    throw new Error(data.error || 'Falha ao carregar análises');
+  }
+  return data;
+}
+
+function formatAnalyticsLocation(row) {
+  const parts = [row.city, row.region, row.country].filter(Boolean);
+  return parts.join(' · ') || 'Desconhecido';
+}
+
+function renderAnalyticsSummary(summary) {
+  const s = summary || {};
+  document.getElementById('an-visitors').textContent = String(s.uniqueVisitors ?? 0);
+  document.getElementById('an-pageviews').textContent = String(s.pageViews ?? 0);
+  document.getElementById('an-productviews').textContent = String(s.productViews ?? 0);
+  document.getElementById('an-cart').textContent = String(s.addToCart ?? 0);
+  document.getElementById('an-checkout').textContent = String(s.beginCheckout ?? 0);
+  document.getElementById('an-orders').textContent = String(s.ordersCreated ?? 0);
+  document.getElementById('an-conversion').textContent = `${s.conversionRate ?? 0}%`;
+}
+
+function renderAnalyticsHourChart(byHour) {
+  const ctx = document.getElementById('analytics-hour-chart');
+  if (!ctx || typeof Chart === 'undefined') return;
+  if (analyticsHourChart) analyticsHourChart.destroy();
+  const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}h`);
+  analyticsHourChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Page views',
+        data: Array.isArray(byHour) ? byHour : [],
+        backgroundColor: 'rgba(33, 150, 243, 0.65)',
+        borderColor: '#2196F3',
+        borderWidth: 1,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderAnalyticsDailyChart(dailyVisits) {
+  const ctx = document.getElementById('analytics-daily-chart');
+  if (!ctx || typeof Chart === 'undefined') return;
+  if (analyticsDailyChart) analyticsDailyChart.destroy();
+  const rows = Array.isArray(dailyVisits) ? dailyVisits : [];
+  analyticsDailyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: rows.map((r) => {
+        const d = r.date ? new Date(`${r.date}T12:00:00`) : null;
+        return d && !Number.isNaN(d.getTime())
+          ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          : r.date || '';
+      }),
+      datasets: [{
+        label: 'Visitas',
+        data: rows.map((r) => r.total),
+        borderColor: '#9C27B0',
+        backgroundColor: 'rgba(156, 39, 176, 0.15)',
+        fill: true,
+        tension: 0.3,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderAnalyticsTables(data) {
+  const productsBody = document.querySelector('#analytics-products-table tbody');
+  const productsEmpty = document.getElementById('analytics-products-empty');
+  const products = data.topProducts || [];
+  if (productsBody) {
+    productsBody.innerHTML = products.map((row) => `
+      <tr>
+        <td data-label="Produto"><strong>${escapeHtml(row.productName || row.productId || '—')}</strong></td>
+        <td data-label="Visualizações">${row.views ?? 0}</td>
+        <td data-label="Carrinho">${row.adds ?? 0}</td>
+      </tr>
+    `).join('');
+  }
+  if (productsEmpty) productsEmpty.hidden = products.length > 0;
+
+  const pagesBody = document.querySelector('#analytics-pages-table tbody');
+  const pagesEmpty = document.getElementById('analytics-pages-empty');
+  const pages = data.topPages || [];
+  if (pagesBody) {
+    pagesBody.innerHTML = pages.map((row) => `
+      <tr>
+        <td data-label="Página">${escapeHtml(row.page || '—')}</td>
+        <td data-label="Views">${row.total ?? 0}</td>
+      </tr>
+    `).join('');
+  }
+  if (pagesEmpty) pagesEmpty.hidden = pages.length > 0;
+
+  const locBody = document.querySelector('#analytics-locations-table tbody');
+  const locEmpty = document.getElementById('analytics-locations-empty');
+  const locations = data.locations || [];
+  if (locBody) {
+    locBody.innerHTML = locations.map((row) => `
+      <tr>
+        <td data-label="Local">${escapeHtml(formatAnalyticsLocation(row))}</td>
+        <td data-label="Sessões">${row.sessions ?? 0}</td>
+      </tr>
+    `).join('');
+  }
+  if (locEmpty) locEmpty.hidden = locations.length > 0;
+}
+
+async function loadAnalytics() {
+  if (analyticsLoading) return;
+  analyticsLoading = true;
+  const refreshBtn = document.getElementById('analytics-refresh');
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando…';
+  }
+  try {
+    const data = await fetchAnalyticsData(analyticsPeriod);
+    renderAnalyticsSummary(data.summary);
+    renderAnalyticsHourChart(data.byHour);
+    renderAnalyticsDailyChart(data.dailyVisits);
+    renderAnalyticsTables(data);
+  } catch (err) {
+    showToast(err.message || 'Erro ao carregar análises', 'error');
+  } finally {
+    analyticsLoading = false;
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '<i class="fas fa-sync"></i> Atualizar';
+    }
+  }
+}
+
+function initAnalises() {
+  if (!analyticsPeriodBound) {
+    analyticsPeriodBound = true;
+    document.querySelectorAll('#analytics-period-tabs .filter-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#analytics-period-tabs .filter-tab').forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        analyticsPeriod = tab.dataset.period || '7d';
+        loadAnalytics();
+      });
+    });
+    document.getElementById('analytics-refresh')?.addEventListener('click', () => loadAnalytics());
+  }
+  loadAnalytics();
 }
 
 function escapeHtml(str) {

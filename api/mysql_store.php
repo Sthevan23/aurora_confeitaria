@@ -2099,3 +2099,329 @@ function aurora_delete_one_inventory_item(PDO $pdo, string $itemId): void {
   $stmt = $pdo->prepare('DELETE FROM inventory_items WHERE id = ?');
   $stmt->execute([$id]);
 }
+
+/* --- Analytics (visitas e eventos do site) --- */
+
+function aurora_analytics_client_ip(): string {
+  foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
+    if (empty($_SERVER[$key])) {
+      continue;
+    }
+    $raw = trim(explode(',', (string) $_SERVER[$key])[0]);
+    if (filter_var($raw, FILTER_VALIDATE_IP)) {
+      return $raw;
+    }
+  }
+  return '';
+}
+
+function aurora_analytics_ip_hash(string $ip): string {
+  if ($ip === '') {
+    return '';
+  }
+  return hash('sha256', $ip . '|aurora_analytics_v1');
+}
+
+function aurora_analytics_geo_lookup(string $ip): array {
+  if (
+    $ip === ''
+    || $ip === '127.0.0.1'
+    || str_starts_with($ip, '192.168.')
+    || str_starts_with($ip, '10.')
+  ) {
+    return ['country' => '', 'region' => '', 'city' => ''];
+  }
+
+  if (!empty($_SERVER['HTTP_CF_IPCOUNTRY']) && $_SERVER['HTTP_CF_IPCOUNTRY'] !== 'XX') {
+    return [
+      'country' => substr((string) $_SERVER['HTTP_CF_IPCOUNTRY'], 0, 80),
+      'region' => '',
+      'city' => '',
+    ];
+  }
+
+  $ctx = stream_context_create([
+    'http' => [
+      'timeout' => 2,
+      'header' => "Accept: application/json\r\n",
+    ],
+  ]);
+  $url = 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=status,country,regionName,city&lang=pt-BR';
+  $raw = @file_get_contents($url, false, $ctx);
+  if (!is_string($raw)) {
+    return ['country' => '', 'region' => '', 'city' => ''];
+  }
+  $json = json_decode($raw, true);
+  if (!is_array($json) || ($json['status'] ?? '') !== 'success') {
+    return ['country' => '', 'region' => '', 'city' => ''];
+  }
+  return [
+    'country' => substr((string) ($json['country'] ?? ''), 0, 80),
+    'region' => substr((string) ($json['regionName'] ?? ''), 0, 120),
+    'city' => substr((string) ($json['city'] ?? ''), 0, 120),
+  ];
+}
+
+function aurora_analytics_period_start(string $period): string {
+  $tz = new DateTimeZone('America/Sao_Paulo');
+  $now = new DateTime('now', $tz);
+  if ($period === 'today') {
+    return $now->format('Y-m-d') . ' 00:00:00';
+  }
+  if ($period === '7d') {
+    $now->modify('-7 days');
+    return $now->format('Y-m-d H:i:s');
+  }
+  $now->modify('-30 days');
+  return $now->format('Y-m-d H:i:s');
+}
+
+function aurora_track_event(PDO $pdo, array $body): array {
+  aurora_ensure_analytics_tables($pdo);
+
+  $sessionId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) ($body['sessionId'] ?? ''));
+  if (strlen($sessionId) < 8 || strlen($sessionId) > 64) {
+    throw new InvalidArgumentException('Sessão inválida');
+  }
+
+  $allowed = ['page_view', 'product_view', 'product_click', 'add_to_cart', 'begin_checkout', 'order_created'];
+  $eventType = (string) ($body['eventType'] ?? '');
+  if (!in_array($eventType, $allowed, true)) {
+    throw new InvalidArgumentException('Evento inválido');
+  }
+
+  $rateStmt = $pdo->prepare(
+    'SELECT COUNT(*) FROM analytics_events
+     WHERE session_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)'
+  );
+  $rateStmt->execute([$sessionId]);
+  if ((int) $rateStmt->fetchColumn() > 120) {
+    return ['ok' => true, 'throttled' => true];
+  }
+
+  $page = substr(trim((string) ($body['page'] ?? '')), 0, 255) ?: null;
+  $productId = substr(trim((string) ($body['productId'] ?? '')), 0, 64) ?: null;
+  $productName = substr(trim((string) ($body['productName'] ?? '')), 0, 190) ?: null;
+  $categoryId = substr(trim((string) ($body['categoryId'] ?? '')), 0, 64) ?: null;
+  $referrer = substr(trim((string) ($body['referrer'] ?? '')), 0, 500) ?: null;
+  $landing = substr(trim((string) ($body['landing'] ?? '')), 0, 255) ?: null;
+  $userAgent = substr(trim((string) ($body['userAgent'] ?? ($_SERVER['HTTP_USER_AGENT'] ?? ''))), 0, 500) ?: null;
+
+  $meta = $body['meta'] ?? null;
+  $metaJson = null;
+  if (is_array($meta) && $meta !== []) {
+    $metaJson = json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  }
+
+  $ip = aurora_analytics_client_ip();
+  $ipHash = aurora_analytics_ip_hash($ip);
+
+  $existing = $pdo->prepare('SELECT country, region, city FROM analytics_sessions WHERE session_id = ? LIMIT 1');
+  $existing->execute([$sessionId]);
+  $sessionRow = $existing->fetch(PDO::FETCH_ASSOC);
+
+  if (!$sessionRow) {
+    $geo = aurora_analytics_geo_lookup($ip);
+    $ins = $pdo->prepare(
+      'INSERT INTO analytics_sessions
+       (session_id, ip_hash, country, region, city, referrer, landing_page, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $ins->execute([
+      $sessionId,
+      $ipHash ?: null,
+      $geo['country'] ?: null,
+      $geo['region'] ?: null,
+      $geo['city'] ?: null,
+      $referrer,
+      $landing ?: $page,
+      $userAgent,
+    ]);
+  } else {
+    $upd = $pdo->prepare('UPDATE analytics_sessions SET last_seen = NOW() WHERE session_id = ?');
+    $upd->execute([$sessionId]);
+    if (
+      ($sessionRow['country'] ?? '') === ''
+      && ($sessionRow['city'] ?? '') === ''
+      && $ip !== ''
+    ) {
+      $geo = aurora_analytics_geo_lookup($ip);
+      if (($geo['country'] ?? '') !== '' || ($geo['city'] ?? '') !== '') {
+        $geoUpd = $pdo->prepare(
+          'UPDATE analytics_sessions SET country = ?, region = ?, city = ?, ip_hash = COALESCE(ip_hash, ?)
+           WHERE session_id = ?'
+        );
+        $geoUpd->execute([
+          $geo['country'] ?: null,
+          $geo['region'] ?: null,
+          $geo['city'] ?: null,
+          $ipHash ?: null,
+          $sessionId,
+        ]);
+      }
+    }
+  }
+
+  $evt = $pdo->prepare(
+    'INSERT INTO analytics_events
+     (session_id, event_type, page, product_id, product_name, category_id, meta)
+     VALUES (?, ?, ?, ?, ?, ?, ?)'
+  );
+  $evt->execute([
+    $sessionId,
+    $eventType,
+    $page,
+    $productId,
+    $productName,
+    $categoryId,
+    $metaJson,
+  ]);
+
+  return ['ok' => true];
+}
+
+function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
+  aurora_ensure_analytics_tables($pdo);
+
+  try {
+    $pdo->exec("SET time_zone = '-03:00'");
+  } catch (Throwable $e) {
+    // segue com fuso do servidor
+  }
+
+  $period = in_array($period, ['today', '7d', '30d'], true) ? $period : '7d';
+  $since = aurora_analytics_period_start($period);
+
+  $visitorsStmt = $pdo->prepare(
+    'SELECT COUNT(*) FROM analytics_sessions WHERE last_seen >= ?'
+  );
+  $visitorsStmt->execute([$since]);
+  $uniqueVisitors = (int) $visitorsStmt->fetchColumn();
+
+  $countEvent = function (string $type) use ($pdo, $since): int {
+    $stmt = $pdo->prepare(
+      'SELECT COUNT(*) FROM analytics_events WHERE event_type = ? AND created_at >= ?'
+    );
+    $stmt->execute([$type, $since]);
+    return (int) $stmt->fetchColumn();
+  };
+
+  $pageViews = $countEvent('page_view');
+  $productViews = $countEvent('product_view') + $countEvent('product_click');
+  $addToCart = $countEvent('add_to_cart');
+  $beginCheckout = $countEvent('begin_checkout');
+  $ordersCreated = $countEvent('order_created');
+
+  $hourStmt = $pdo->prepare(
+    "SELECT HOUR(created_at) AS hr, COUNT(*) AS total
+     FROM analytics_events
+     WHERE event_type = 'page_view' AND created_at >= ?
+     GROUP BY hr
+     ORDER BY hr"
+  );
+  $hourStmt->execute([$since]);
+  $byHourRaw = $hourStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  $byHour = array_fill(0, 24, 0);
+  foreach ($byHourRaw as $row) {
+    $h = (int) ($row['hr'] ?? -1);
+    if ($h >= 0 && $h <= 23) {
+      $byHour[$h] = (int) ($row['total'] ?? 0);
+    }
+  }
+
+  $dailyStmt = $pdo->prepare(
+    "SELECT DATE(created_at) AS day, COUNT(*) AS total
+     FROM analytics_events
+     WHERE event_type = 'page_view' AND created_at >= ?
+     GROUP BY day
+     ORDER BY day"
+  );
+  $dailyStmt->execute([$since]);
+  $dailyVisits = [];
+  foreach ($dailyStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+    $dailyVisits[] = [
+      'date' => (string) ($row['day'] ?? ''),
+      'total' => (int) ($row['total'] ?? 0),
+    ];
+  }
+
+  $topProductsStmt = $pdo->prepare(
+    "SELECT product_id, product_name,
+            SUM(CASE WHEN event_type IN ('product_view','product_click') THEN 1 ELSE 0 END) AS views,
+            SUM(CASE WHEN event_type = 'add_to_cart' THEN 1 ELSE 0 END) AS adds
+     FROM analytics_events
+     WHERE created_at >= ? AND product_id IS NOT NULL AND product_id <> ''
+     GROUP BY product_id, product_name
+     ORDER BY views DESC, adds DESC
+     LIMIT 15"
+  );
+  $topProductsStmt->execute([$since]);
+  $topProducts = [];
+  foreach ($topProductsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+    $topProducts[] = [
+      'productId' => (string) ($row['product_id'] ?? ''),
+      'productName' => (string) ($row['product_name'] ?? ''),
+      'views' => (int) ($row['views'] ?? 0),
+      'adds' => (int) ($row['adds'] ?? 0),
+    ];
+  }
+
+  $topPagesStmt = $pdo->prepare(
+    "SELECT page, COUNT(*) AS total
+     FROM analytics_events
+     WHERE event_type = 'page_view' AND created_at >= ? AND page IS NOT NULL AND page <> ''
+     GROUP BY page
+     ORDER BY total DESC
+     LIMIT 10"
+  );
+  $topPagesStmt->execute([$since]);
+  $topPages = [];
+  foreach ($topPagesStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+    $topPages[] = [
+      'page' => (string) ($row['page'] ?? ''),
+      'total' => (int) ($row['total'] ?? 0),
+    ];
+  }
+
+  $locationsStmt = $pdo->prepare(
+    "SELECT country, region, city, COUNT(*) AS sessions
+     FROM analytics_sessions
+     WHERE last_seen >= ?
+       AND (country IS NOT NULL AND country <> '' OR city IS NOT NULL AND city <> '')
+     GROUP BY country, region, city
+     ORDER BY sessions DESC
+     LIMIT 20"
+  );
+  $locationsStmt->execute([$since]);
+  $locations = [];
+  foreach ($locationsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+    $locations[] = [
+      'country' => (string) ($row['country'] ?? ''),
+      'region' => (string) ($row['region'] ?? ''),
+      'city' => (string) ($row['city'] ?? ''),
+      'sessions' => (int) ($row['sessions'] ?? 0),
+    ];
+  }
+
+  return [
+    'ok' => true,
+    'period' => $period,
+    'since' => $since,
+    'summary' => [
+      'uniqueVisitors' => $uniqueVisitors,
+      'pageViews' => $pageViews,
+      'productViews' => $productViews,
+      'addToCart' => $addToCart,
+      'beginCheckout' => $beginCheckout,
+      'ordersCreated' => $ordersCreated,
+      'conversionRate' => $uniqueVisitors > 0
+        ? round(($ordersCreated / $uniqueVisitors) * 100, 1)
+        : 0,
+    ],
+    'byHour' => $byHour,
+    'dailyVisits' => $dailyVisits,
+    'topProducts' => $topProducts,
+    'topPages' => $topPages,
+    'locations' => $locations,
+  ];
+}

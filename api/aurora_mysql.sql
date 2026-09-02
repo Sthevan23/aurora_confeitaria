@@ -143,6 +143,39 @@ CREATE TABLE `gallery` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `analytics_sessions` (
+  `session_id` VARCHAR(64) NOT NULL,
+  `first_seen` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_seen` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `ip_hash` VARCHAR(64) DEFAULT NULL,
+  `country` VARCHAR(80) DEFAULT NULL,
+  `region` VARCHAR(120) DEFAULT NULL,
+  `city` VARCHAR(120) DEFAULT NULL,
+  `referrer` VARCHAR(500) DEFAULT NULL,
+  `landing_page` VARCHAR(255) DEFAULT NULL,
+  `user_agent` VARCHAR(500) DEFAULT NULL,
+  PRIMARY KEY (`session_id`),
+  KEY `idx_analytics_sessions_last` (`last_seen`),
+  KEY `idx_analytics_sessions_geo` (`country`, `city`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `analytics_events` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `session_id` VARCHAR(64) NOT NULL,
+  `event_type` VARCHAR(50) NOT NULL,
+  `page` VARCHAR(255) DEFAULT NULL,
+  `product_id` VARCHAR(64) DEFAULT NULL,
+  `product_name` VARCHAR(190) DEFAULT NULL,
+  `category_id` VARCHAR(64) DEFAULT NULL,
+  `meta` JSON DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_analytics_events_session` (`session_id`),
+  KEY `idx_analytics_events_type_time` (`event_type`, `created_at`),
+  KEY `idx_analytics_events_product` (`product_id`),
+  KEY `idx_analytics_events_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `clients` (
   `id` VARCHAR(64) NOT NULL,
   `name` VARCHAR(190) NOT NULL,

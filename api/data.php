@@ -221,6 +221,7 @@ if ($method === 'POST') {
     || $actionName === 'save_settings'
     || $actionName === 'save_inventory_item'
     || $actionName === 'delete_inventory_item'
+    || $actionName === 'track_event'
   ) {
     try {
       $pdo = aurora_db(false);
@@ -267,6 +268,29 @@ if ($method === 'POST') {
       json_out(['error' => $e->getMessage()], 400);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao gravar pedido', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  if ($actionName === 'track_event') {
+    try {
+      json_out(aurora_track_event($pdo, $body));
+    } catch (InvalidArgumentException $e) {
+      json_out(['error' => $e->getMessage()], 400);
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao registrar evento', 'detail' => $e->getMessage()], 500);
+    }
+  }
+
+  if ($actionName === 'get_analytics') {
+    $auth = aurora_get_auth($pdo);
+    if ($password === '' || $auth['password'] === '' || !hash_equals($auth['password'], $password)) {
+      json_out(['error' => 'Senha inválida'], 401);
+    }
+    $period = (string) ($body['period'] ?? '7d');
+    try {
+      json_out(aurora_get_analytics($pdo, $period));
+    } catch (Throwable $e) {
+      json_out(['error' => 'Falha ao carregar análises', 'detail' => $e->getMessage()], 500);
     }
   }
 

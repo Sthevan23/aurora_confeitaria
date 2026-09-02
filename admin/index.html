@@ -32,6 +32,7 @@
       <a href="#" class="sidebar__link" data-page="categorias"><i class="fas fa-tags"></i> Categorias</a>
       <a href="#" class="sidebar__link" data-page="clientes"><i class="fas fa-users"></i> Clientes</a>
       <a href="#" class="sidebar__link" data-page="financeiro"><i class="fas fa-chart-line"></i> Financeiro</a>
+      <a href="#" class="sidebar__link" data-page="analises"><i class="fas fa-chart-column"></i> Análises</a>
       <a href="#" class="sidebar__link" data-page="cupons"><i class="fas fa-ticket"></i> Cupons</a>
       <a href="#" class="sidebar__link" data-page="configuracoes"><i class="fas fa-cog"></i> Configurações</a>
     </nav>
@@ -413,6 +414,129 @@
       </div>
     </section>
 
+    <!-- Análises (tráfego e comportamento no site) -->
+    <section class="admin-page" id="page-analises">
+      <p class="fin-note"><i class="fas fa-chart-column"></i> Visitas e cliques registrados automaticamente no site. Localidade aproximada por IP (sem dados pessoais identificáveis).</p>
+
+      <div class="page-actions page-actions--between">
+        <div class="filter-tabs" id="analytics-period-tabs" role="tablist">
+          <button type="button" class="filter-tab" data-period="today">Hoje</button>
+          <button type="button" class="filter-tab active" data-period="7d">7 dias</button>
+          <button type="button" class="filter-tab" data-period="30d">30 dias</button>
+        </div>
+        <button type="button" class="btn btn--secondary btn--sm" id="analytics-refresh"><i class="fas fa-sync"></i> Atualizar</button>
+      </div>
+
+      <div class="stats-grid stats-grid--4" id="analytics-stats">
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:#E3F2FD;color:#2196F3"><i class="fas fa-users"></i></div>
+          <div class="stat-card__info">
+            <span class="stat-card__label">Visitantes</span>
+            <strong class="stat-card__value" id="an-visitors">—</strong>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:#F3E5F5;color:#9C27B0"><i class="fas fa-eye"></i></div>
+          <div class="stat-card__info">
+            <span class="stat-card__label">Páginas vistas</span>
+            <strong class="stat-card__value" id="an-pageviews">—</strong>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:#FFF3E0;color:#FF9800"><i class="fas fa-cookie-bite"></i></div>
+          <div class="stat-card__info">
+            <span class="stat-card__label">Produtos abertos</span>
+            <strong class="stat-card__value" id="an-productviews">—</strong>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:#E8F5E9;color:#4CAF50"><i class="fas fa-cart-plus"></i></div>
+          <div class="stat-card__info">
+            <span class="stat-card__label">Add ao carrinho</span>
+            <strong class="stat-card__value" id="an-cart">—</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-grid stats-grid--3 analytics-funnel">
+        <div class="stat-card stat-card--compact">
+          <span class="stat-card__label">Checkout iniciado</span>
+          <strong class="stat-card__value" id="an-checkout">—</strong>
+        </div>
+        <div class="stat-card stat-card--compact">
+          <span class="stat-card__label">Pedidos registrados</span>
+          <strong class="stat-card__value" id="an-orders">—</strong>
+        </div>
+        <div class="stat-card stat-card--compact">
+          <span class="stat-card__label">Conversão (pedidos / visitantes)</span>
+          <strong class="stat-card__value" id="an-conversion">—</strong>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card__header">
+            <h3>Horários de acesso</h3>
+            <span class="card__subtitle">Páginas vistas por hora (horário de Brasília)</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="analytics-hour-chart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card__header">
+            <h3>Visitas por dia</h3>
+            <span class="card__subtitle">Volume diário de page views</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="analytics-daily-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__header">
+          <h3>Produtos mais clicados</h3>
+          <span class="card__subtitle">Aberturas do cardápio e adições ao carrinho</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table" id="analytics-products-table">
+            <thead>
+              <tr><th>Produto</th><th>Visualizações</th><th>Carrinho</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="fin-empty" id="analytics-products-empty" hidden>Sem cliques em produtos neste período.</p>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card__header"><h3>Páginas mais visitadas</h3></div>
+          <div class="table-responsive">
+            <table class="table" id="analytics-pages-table">
+              <thead><tr><th>Página</th><th>Views</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="fin-empty" id="analytics-pages-empty" hidden>Sem page views ainda.</p>
+        </div>
+        <div class="card">
+          <div class="card__header">
+            <h3>Localidade (aproximada)</h3>
+            <span class="card__subtitle">Cidade / região detectada pelo IP</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table" id="analytics-locations-table">
+              <thead><tr><th>Local</th><th>Sessões</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="fin-empty" id="analytics-locations-empty" hidden>Localidade indisponível neste período.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Cupons -->
     <section class="admin-page" id="page-cupons">
       <div class="card">
@@ -605,7 +729,7 @@
   <script src="../js/default-data.js?v=20"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=69"></script>
-  <script src="admin.js?v=59"></script>
+  <script src="admin.js?v=60"></script>
 </body>
 </html>
 

@@ -500,6 +500,7 @@
 
     if (error) error.hidden = true;
     Cart.saveCustomer({ nome, sobrenome, phone, address });
+    window.AuroraAnalytics?.beginCheckout({ items: Cart.getItems().length });
     const fullName = `${nome} ${sobrenome}`;
     const payable = Cart.payable();
     const disc = Cart.discount();
@@ -553,6 +554,8 @@
       }
       return;
     }
+
+    window.AuroraAnalytics?.orderCreated({ total: payable, items: snapshot.length });
 
     const message = Cart.buildWhatsAppMessage({
       fullName,
@@ -616,6 +619,7 @@
     });
     refreshLoyalty();
     setInterval(applyStoreStatus, 60000);
+    window.AuroraAnalytics?.pageView('cart.html');
   }
 
   document.addEventListener('DOMContentLoaded', boot);
