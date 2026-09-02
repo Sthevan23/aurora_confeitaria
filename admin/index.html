@@ -9,7 +9,37 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=71">
+  <link rel="stylesheet" href="admin.css?v=80">
+  <style id="analytics-critical-css">
+    /* Fallback layout — garante grid mesmo com cache antigo do CSS */
+    #page-analises .analytics-stack { display: flex; flex-direction: column; gap: 20px; }
+    #page-analises .stats-grid.analytics-kpis-primary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 0; }
+    #page-analises .stats-grid.analytics-kpis-secondary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 0; }
+    #page-analises .stats-grid.analytics-funnel-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 16px 20px 8px; margin-bottom: 0; }
+    #page-analises .analytics-funnel-grid .stat-card { flex-direction: column; align-items: center; text-align: center; padding: 18px 12px; gap: 8px; }
+    #page-analises .analytics-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    #page-analises .analytics-charts-grid .card:last-child { grid-column: 1 / -1; }
+    #page-analises .analytics-bottom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    #page-analises .analytics-funnel-metrics { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 20px 20px; }
+    #page-analises .analytics-funnel-metric { flex: 1; min-width: 140px; padding: 10px 14px; background: #fafafa; border-radius: 8px; font-size: 0.82rem; }
+    #page-analises .analytics-funnel-step__bar-wrap { width: 100%; height: 8px; background: #f0f0f0; border-radius: 999px; overflow: hidden; }
+    #page-analises .analytics-funnel-step__bar { height: 100%; background: linear-gradient(90deg, #E91E63, #F48FB1); border-radius: 999px; }
+    #page-analises .analytics-funnel-step__rate { font-size: 0.82rem; color: #E91E63; font-weight: 600; }
+    #page-analises .stat-card__delta { font-size: 0.78rem; font-weight: 600; margin-top: 2px; display: block; }
+    #page-analises .stat-card__delta.is-up { color: #2E7D32; }
+    #page-analises .stat-card__delta.is-down { color: #C62828; }
+    #page-analises .stat-card__delta.is-neutral { color: #888; }
+    #page-analises .stat-card__meta { font-size: 0.75rem; color: #999; display: block; margin-top: 2px; }
+    @media (min-width: 1100px) {
+      #page-analises .stats-grid.analytics-kpis-primary { grid-template-columns: repeat(6, 1fr); }
+      #page-analises .analytics-charts-grid { grid-template-columns: 1.2fr 1.2fr 0.8fr; }
+      #page-analises .analytics-charts-grid .card:last-child { grid-column: auto; }
+    }
+    @media (max-width: 900px) {
+      #page-analises .stats-grid.analytics-funnel-grid { grid-template-columns: repeat(2, 1fr); }
+      #page-analises .analytics-bottom-grid { grid-template-columns: 1fr; }
+    }
+  </style>
   <script>
     if (sessionStorage.getItem('admin_logged') !== 'true') {
       location.replace('login.html');
@@ -422,14 +452,15 @@
           <p class="analytics-hero__subtitle" id="analytics-period-label">Carregando período…</p>
           <span class="analytics-hero__updated" id="analytics-updated"></span>
         </div>
-        <div class="page-actions page-actions--between analytics-toolbar">
-          <div class="filter-tabs" id="analytics-period-tabs" role="tablist">
-            <button type="button" class="filter-tab" data-period="today">Hoje</button>
-            <button type="button" class="filter-tab active" data-period="7d">7 dias</button>
-            <button type="button" class="filter-tab" data-period="30d">30 dias</button>
-          </div>
-          <button type="button" class="btn btn--secondary btn--sm" id="analytics-refresh"><i class="fas fa-sync"></i> Atualizar</button>
+      </div>
+
+      <div class="page-actions page-actions--between analytics-toolbar">
+        <div class="filter-tabs" id="analytics-period-tabs" role="tablist">
+          <button type="button" class="filter-tab" data-period="today">Hoje</button>
+          <button type="button" class="filter-tab active" data-period="7d">7 dias</button>
+          <button type="button" class="filter-tab" data-period="30d">30 dias</button>
         </div>
+        <button type="button" class="btn btn--secondary btn--sm" id="analytics-refresh"><i class="fas fa-sync"></i> Atualizar</button>
       </div>
 
       <div class="analytics-stack" id="analytics-content" hidden>
@@ -443,37 +474,55 @@
           <ul class="analytics-insights-list" id="analytics-insights-list"></ul>
         </div>
 
-        <div class="analytics-kpi-grid" id="analytics-kpi-grid">
-          <article class="analytics-kpi" data-kpi="visitors">
-            <span class="analytics-kpi__label">Visitantes únicos</span>
-            <strong class="analytics-kpi__value" id="an-visitors">—</strong>
-            <span class="analytics-kpi__delta" id="an-visitors-delta"></span>
-          </article>
-          <article class="analytics-kpi" data-kpi="pageviews">
-            <span class="analytics-kpi__label">Páginas vistas</span>
-            <strong class="analytics-kpi__value" id="an-pageviews">—</strong>
-            <span class="analytics-kpi__meta" id="an-avg-pages"></span>
-          </article>
-          <article class="analytics-kpi" data-kpi="orders">
-            <span class="analytics-kpi__label">Pedidos registrados</span>
-            <strong class="analytics-kpi__value" id="an-orders">—</strong>
-            <span class="analytics-kpi__delta" id="an-orders-delta"></span>
-          </article>
-          <article class="analytics-kpi analytics-kpi--highlight" data-kpi="conversion">
-            <span class="analytics-kpi__label">Taxa de conversão</span>
-            <strong class="analytics-kpi__value" id="an-conversion">—</strong>
-            <span class="analytics-kpi__meta">visitantes → pedido</span>
-          </article>
-          <article class="analytics-kpi" data-kpi="cart">
-            <span class="analytics-kpi__label">Add. ao carrinho</span>
-            <strong class="analytics-kpi__value" id="an-cart">—</strong>
-            <span class="analytics-kpi__delta" id="an-cart-delta"></span>
-          </article>
-          <article class="analytics-kpi" data-kpi="checkout">
-            <span class="analytics-kpi__label">Abandono checkout</span>
-            <strong class="analytics-kpi__value" id="an-abandon">—</strong>
-            <span class="analytics-kpi__meta" id="an-checkout-meta"></span>
-          </article>
+        <div class="stats-grid analytics-kpis-primary">
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:#E3F2FD;color:#2196F3"><i class="fas fa-users"></i></div>
+            <div class="stat-card__info">
+              <span class="stat-card__label">Visitantes únicos</span>
+              <strong class="stat-card__value" id="an-visitors">—</strong>
+              <span class="stat-card__delta" id="an-visitors-delta"></span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:#F3E5F5;color:#9C27B0"><i class="fas fa-eye"></i></div>
+            <div class="stat-card__info">
+              <span class="stat-card__label">Páginas vistas</span>
+              <strong class="stat-card__value" id="an-pageviews">—</strong>
+              <span class="stat-card__meta" id="an-avg-pages"></span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:#E8F5E9;color:#4CAF50"><i class="fas fa-shopping-bag"></i></div>
+            <div class="stat-card__info">
+              <span class="stat-card__label">Pedidos registrados</span>
+              <strong class="stat-card__value" id="an-orders">—</strong>
+              <span class="stat-card__delta" id="an-orders-delta"></span>
+            </div>
+          </div>
+          <div class="stat-card" style="background:linear-gradient(145deg,#fff 0%,#f3e5f5 100%)">
+            <div class="stat-card__icon" style="background:#FCE4EC;color:#AD1457"><i class="fas fa-percent"></i></div>
+            <div class="stat-card__info">
+              <span class="stat-card__label">Taxa de conversão</span>
+              <strong class="stat-card__value" id="an-conversion">—</strong>
+              <span class="stat-card__meta">visitantes → pedido</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:#FFF3E0;color:#FF9800"><i class="fas fa-cart-plus"></i></div>
+            <div class="stat-card__info">
+              <span class="stat-card__label">Add. ao carrinho</span>
+              <strong class="stat-card__value" id="an-cart">—</strong>
+              <span class="stat-card__delta" id="an-cart-delta"></span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:#FFEBEE;color:#C62828"><i class="fas fa-door-open"></i></div>
+            <div class="stat-card__info">
+              <span class="stat-card__label">Abandono checkout</span>
+              <strong class="stat-card__value" id="an-abandon">—</strong>
+              <span class="stat-card__meta" id="an-checkout-meta"></span>
+            </div>
+          </div>
         </div>
 
         <div class="card analytics-funnel-card">
@@ -484,7 +533,7 @@
             </div>
             <span class="analytics-peak-badge" id="analytics-peak-badge" hidden></span>
           </div>
-          <div class="analytics-funnel-pipeline" id="analytics-funnel-pipeline"></div>
+          <div class="stats-grid analytics-funnel-grid" id="analytics-funnel-pipeline"></div>
           <div class="analytics-funnel-metrics" id="analytics-funnel-metrics"></div>
         </div>
 
@@ -771,7 +820,7 @@
   <script src="../js/default-data.js?v=20"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=69"></script>
-  <script src="admin.js?v=62"></script>
+  <script src="admin.js?v=63"></script>
 </body>
 </html>
 

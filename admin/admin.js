@@ -3283,7 +3283,7 @@ function renderAnalyticsKpis(summary, delta) {
     if (!el) return;
     const fmt = formatAnalyticsDelta(val);
     el.textContent = fmt.text;
-    el.className = `analytics-kpi__delta ${fmt.cls}`;
+    el.className = `stat-card__delta ${fmt.cls}`;
   });
 }
 
@@ -3296,15 +3296,15 @@ function renderAnalyticsFunnel(funnel, summary, peak) {
 
   if (pipeline) {
     pipeline.innerHTML = steps.map((step) => {
-      const pct = Math.max(4, Math.round(((step.value || 0) / maxVal) * 100));
+      const pct = Math.max(8, Math.round(((step.value || 0) / maxVal) * 100));
       return `
-        <div class="analytics-funnel-step">
-          <span class="analytics-funnel-step__label">${escapeHtml(step.label)}</span>
-          <div class="analytics-funnel-step__value">${step.value ?? 0}</div>
+        <div class="stat-card analytics-funnel-step-card">
+          <span class="stat-card__label">${escapeHtml(step.label)}</span>
+          <strong class="stat-card__value">${step.value ?? 0}</strong>
           <div class="analytics-funnel-step__bar-wrap">
             <div class="analytics-funnel-step__bar" style="width:${pct}%"></div>
           </div>
-          <span class="analytics-funnel-step__rate">${step.rate ?? 0}%</span>
+          <span class="analytics-funnel-step__rate">${step.rate ?? 0}% do total</span>
         </div>
       `;
     }).join('');

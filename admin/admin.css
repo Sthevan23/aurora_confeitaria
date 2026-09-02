@@ -542,7 +542,7 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 }
 
 .analytics-page .analytics-toolbar {
-  margin-bottom: 0;
+  margin-bottom: 20px;
   flex-shrink: 0;
 }
 
@@ -2905,3 +2905,39 @@ body.sidebar-open {
   line-height: 1.35;
 }
 
+/* Análises — reforço de layout (alta especificidade) */
+#page-analises .stat-card__delta {
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 2px;
+  display: block;
+}
+
+#page-analises .stat-card__delta.is-up { color: #2E7D32; }
+#page-analises .stat-card__delta.is-down { color: #C62828; }
+#page-analises .stat-card__delta.is-neutral { color: #888; }
+
+#page-analises .stat-card__meta {
+  font-size: 0.75rem;
+  color: #999;
+  display: block;
+  margin-top: 2px;
+}
+
+#page-analises .stats-grid.analytics-kpis-primary,
+#page-analises .stats-grid.analytics-funnel-grid {
+  margin-bottom: 0;
+}
+
+#page-analises .analytics-hero {
+  margin-bottom: 0;
+}
+
+#page-analises .analytics-toolbar.page-actions {
+  position: static;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 20px;
+}
