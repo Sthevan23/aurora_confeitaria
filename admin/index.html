@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=67">
+  <link rel="stylesheet" href="admin.css?v=68">
   <script>
     if (sessionStorage.getItem('admin_logged') !== 'true') {
       location.replace('login.html');
@@ -28,6 +28,7 @@
       <a href="#" class="sidebar__link active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
       <a href="#" class="sidebar__link" data-page="pedidos"><i class="fas fa-shopping-bag"></i> Pedidos</a>
       <a href="#" class="sidebar__link" data-page="produtos"><i class="fas fa-cookie-bite"></i> Produtos</a>
+      <a href="#" class="sidebar__link" data-page="estoque"><i class="fas fa-boxes-stacked"></i> Estoque</a>
       <a href="#" class="sidebar__link" data-page="categorias"><i class="fas fa-tags"></i> Categorias</a>
       <a href="#" class="sidebar__link" data-page="clientes"><i class="fas fa-users"></i> Clientes</a>
       <a href="#" class="sidebar__link" data-page="financeiro"><i class="fas fa-chart-line"></i> Financeiro</a>
@@ -172,11 +173,39 @@
         <div class="table-responsive">
           <table class="table" id="products-table">
             <thead>
-              <tr><th>No cardápio</th><th>Imagem</th><th>Nome</th><th>Categoria</th><th>Volume</th><th>Preço / Promo</th><th>Estoque</th><th>Status</th><th>Ações</th></tr>
+              <tr><th>No cardápio</th><th>Imagem</th><th>Nome</th><th>Categoria</th><th>Volume</th><th>Preço / Promo</th><th>Status</th><th>Ações</th></tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <!-- Estoque -->
+    <section class="admin-page" id="page-estoque">
+      <p class="fin-note"><i class="fas fa-boxes-stacked"></i> Ajuste a quantidade disponível de cada produto. Deixe em branco para vender <strong>sem limite</strong>. Ao zerar, o produto aparece como <strong>Esgotado</strong> no site.</p>
+      <div class="stock-summary" id="stock-summary"></div>
+      <div class="page-actions stock-toolbar">
+        <label class="stock-filter">
+          <span>Filtrar</span>
+          <select id="stock-filter" class="form-control">
+            <option value="all">Todos os produtos</option>
+            <option value="tracked">Com controle de estoque</option>
+            <option value="low">Estoque baixo (≤ 5)</option>
+            <option value="out">Esgotados</option>
+          </select>
+        </label>
+      </div>
+      <div class="card">
+        <div class="table-responsive">
+          <table class="table" id="stock-table">
+            <thead>
+              <tr><th>Produto</th><th>Categoria</th><th>No site</th><th>Situação</th><th>Quantidade</th><th>Ações</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="fin-empty" id="stock-empty" hidden>Nenhum produto neste filtro.</p>
       </div>
     </section>
 
@@ -533,7 +562,7 @@
   <script src="../js/default-data.js?v=20"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=67"></script>
-  <script src="admin.js?v=56"></script>
+  <script src="admin.js?v=57"></script>
 </body>
 </html>
 

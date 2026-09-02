@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAllAdminPages();
   initFinanceiro();
   initSettings();
+  initStockPage();
   initCoupons();
   initModals();
   initOrderFilters();
@@ -52,6 +53,7 @@ function renderAllAdminPages() {
   renderDashboard();
   renderOrders();
   renderProducts();
+  renderStock();
   renderCategories();
   renderClients();
   renderCoupons();
@@ -177,6 +179,7 @@ const pageTitles = {
   dashboard: 'Dashboard',
   pedidos: 'Pedidos',
   produtos: 'Produtos',
+  estoque: 'Estoque',
   categorias: 'Categorias',
   clientes: 'Clientes',
   financeiro: 'Financeiro',
@@ -211,6 +214,7 @@ function navigateTo(page) {
   if (page === 'financeiro') initFinanceiro();
   if (page === 'cupons') renderCoupons();
   if (page === 'dashboard') renderDashboard();
+  if (page === 'estoque') renderStock();
   if (page === 'pedidos') {
     renderOrders();
     refreshOrdersFromCloud();
@@ -1739,7 +1743,6 @@ function renderProducts() {
       <td data-label="Categoria">${Storage.getCategoryName(p.categoryId)}</td>
       <td data-label="Volume">${size ? `<span class="badge badge--info">${escapeHtml(size)}</span>` : '—'}</td>
       <td data-label="Preço">${Number(p.price) > 0 ? Storage.formatCurrency(p.price) : 'Consultar'}${p.promoActive && p.promoPrice != null ? `<br><small style="color:#fc7890">Promo ${Storage.formatCurrency(p.promoPrice)}</small>` : ''}</td>
-      <td data-label="Estoque">${formatAdminStock(p)}</td>
       <td data-label="Status">${p.featured ? '<i class="fas fa-star" style="color:#FFD700"></i>' : '—'}${p.bestSeller ? ' <span class="badge badge--novo">Mais vendido</span>' : ''}${p.promoActive ? ' <span class="badge badge--novo">Promo</span>' : ''}</td>
       <td data-label="Ações">
         <div class="table__actions">
@@ -1750,6 +1753,145 @@ function renderProducts() {
     </tr>
   `;
   }).join('');
+}
+
+function stockFilterValue() {
+  return document.getElementById('stock-filter')?.value || 'all';
+}
+
+function stockMatchesFilter(product, filter) {
+  const stock = Storage.productStockQty?.(product);
+  if (filter === 'tracked') return stock !== null;
+  if (filter === 'low') return stock !== null && stock > 0 && stock <= 5;
+  if (filter === 'out') return stock !== null && stock <= 0;
+  return true;
+}
+
+function renderStockSummary(products) {
+  const el = document.getElementById('stock-summary');
+  if (!el) return;
+  let tracked = 0;
+  let low = 0;
+  let out = 0;
+  products.forEach((p) => {
+    const stock = Storage.productStockQty?.(p);
+    if (stock === null) return;
+    tracked += 1;
+    if (stock <= 0) out += 1;
+    else if (stock <= 5) low += 1;
+  });
+  el.innerHTML = `
+    <div class="stock-summary__card">
+      <span class="stock-summary__label">Com controle</span>
+      <strong class="stock-summary__value">${tracked}</strong>
+    </div>
+    <div class="stock-summary__card stock-summary__card--warn">
+      <span class="stock-summary__label">Estoque baixo</span>
+      <strong class="stock-summary__value">${low}</strong>
+    </div>
+    <div class="stock-summary__card stock-summary__card--danger">
+      <span class="stock-summary__label">Esgotados</span>
+      <strong class="stock-summary__value">${out}</strong>
+    </div>
+  `;
+}
+
+function renderStock() {
+  const tbody = document.querySelector('#stock-table tbody');
+  const empty = document.getElementById('stock-empty');
+  if (!tbody) return;
+
+  const products = Storage.getProducts();
+  const filter = stockFilterValue();
+  const filtered = products.filter((p) => stockMatchesFilter(p, filter));
+
+  renderStockSummary(products);
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+
+  tbody.innerHTML = filtered.map((p) => {
+    const onMenu = p.active !== false;
+    const stock = Storage.productStockQty?.(p);
+    const inputValue = stock === null ? '' : String(stock);
+    return `
+    <tr class="mobile-card" data-stock-id="${p.id}">
+      <td data-label="Produto">
+        <div class="stock-product">
+          ${adminImgTag(p.image || lookupKnownPhoto(p.id, p.name), p.name)}
+          <strong>${escapeHtml(p.name)}</strong>
+        </div>
+      </td>
+      <td data-label="Categoria">${Storage.getCategoryName(p.categoryId)}</td>
+      <td data-label="No site">${onMenu ? '<span class="badge badge--ok">No site</span>' : '<span class="badge badge--muted">Fora</span>'}</td>
+      <td data-label="Situação">${formatAdminStock(p)}</td>
+      <td data-label="Quantidade">
+        <input type="number" class="stock-input" id="stock-input-${p.id}" min="0" step="1" placeholder="Sem limite" value="${inputValue}" inputmode="numeric">
+      </td>
+      <td data-label="Ações">
+        <button type="button" class="btn btn--secondary btn--sm" onclick="saveProductStock('${p.id}')">
+          <i class="fas fa-save"></i> Salvar
+        </button>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
+async function saveProductStock(productId) {
+  const product = Storage.getProducts().find((p) => p.id === productId);
+  const input = document.getElementById(`stock-input-${productId}`);
+  if (!product || !input) return;
+
+  const raw = String(input.value || '').trim();
+  let stock = null;
+  if (raw !== '') {
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 0) {
+      showToast('Informe um número válido (0 ou mais).', 'error');
+      input.focus();
+      return;
+    }
+    stock = n;
+  }
+
+  const payload = { ...product, stock };
+  const btn = input.closest('tr')?.querySelector('button');
+  const prev = btn?.innerHTML || '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  }
+
+  const result = await Storage.saveProductAsync(payload);
+  if (result?.ok) {
+    showToast('Estoque atualizado!', 'success');
+    renderStock();
+    renderProducts();
+    renderDashboard();
+  } else {
+    showToast(result?.error || 'Não sincronizou. Tente de novo.', 'error');
+  }
+
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = prev;
+  }
+}
+
+function initStockPage() {
+  document.getElementById('stock-filter')?.addEventListener('change', renderStock);
+  document.getElementById('stock-table')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.matches('.stock-input')) return;
+    e.preventDefault();
+    const row = e.target.closest('[data-stock-id]');
+    const id = row?.dataset.stockId;
+    if (id) saveProductStock(id);
+  });
 }
 
 async function toggleProductActive(id, active) {
@@ -2949,4 +3091,5 @@ window.openEditOrderStatus = openEditOrderStatus;
 window.viewOrder = viewOrder;
 window.deleteOrder = deleteOrder;
 window.closeModal = closeModal;
+window.saveProductStock = saveProductStock;
 window.navigateTo = navigateTo;
