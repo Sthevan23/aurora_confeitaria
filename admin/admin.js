@@ -3187,6 +3187,7 @@ let analyticsPeriod = '7d';
 let analyticsPeriodBound = false;
 let analyticsHourChart = null;
 let analyticsDailyChart = null;
+let analyticsWeekdayChart = null;
 let analyticsLoading = false;
 
 async function fetchAnalyticsData(period) {
@@ -3219,15 +3220,112 @@ function formatAnalyticsPage(page) {
   return map[page] || page || '—';
 }
 
-function renderAnalyticsSummary(summary) {
+function formatAnalyticsDelta(value) {
+  if (value === null || value === undefined) return { text: '—', cls: 'is-neutral' };
+  if (value > 0) return { text: `▲ +${value}%`, cls: 'is-up' };
+  if (value < 0) return { text: `▼ ${value}%`, cls: 'is-down' };
+  return { text: '→ 0%', cls: 'is-neutral' };
+}
+
+function convBadgeClass(rate) {
+  if (rate >= 25) return 'is-good';
+  if (rate >= 10) return 'is-mid';
+  return 'is-low';
+}
+
+function renderAnalyticsHeader(data) {
+  const label = document.getElementById('analytics-period-label');
+  const updated = document.getElementById('analytics-updated');
+  const compare = document.getElementById('analytics-compare-label');
+  if (label) label.textContent = data.periodLabel || 'Período selecionado';
+  if (compare) compare.textContent = data.compareLabel || 'Comparativo com período anterior';
+  if (updated && data.generatedAt) {
+    const dt = new Date(data.generatedAt.replace(' ', 'T') + '-03:00');
+    const when = Number.isNaN(dt.getTime())
+      ? data.generatedAt
+      : dt.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    updated.textContent = `Atualizado: ${when}`;
+  }
+}
+
+function renderAnalyticsInsights(insights) {
+  const list = document.getElementById('analytics-insights-list');
+  if (!list) return;
+  const items = Array.isArray(insights) ? insights : [];
+  list.innerHTML = items.map((text) => `<li>${escapeHtml(text)}</li>`).join('');
+}
+
+function renderAnalyticsKpis(summary, delta) {
   const s = summary || {};
+  const d = delta || s.delta || {};
+
   document.getElementById('an-visitors').textContent = String(s.uniqueVisitors ?? 0);
   document.getElementById('an-pageviews').textContent = String(s.pageViews ?? 0);
-  document.getElementById('an-productviews').textContent = String(s.productViews ?? 0);
-  document.getElementById('an-cart').textContent = String(s.addToCart ?? 0);
-  document.getElementById('an-checkout').textContent = String(s.beginCheckout ?? 0);
   document.getElementById('an-orders').textContent = String(s.ordersCreated ?? 0);
   document.getElementById('an-conversion').textContent = `${s.conversionRate ?? 0}%`;
+  document.getElementById('an-cart').textContent = String(s.addToCart ?? 0);
+  document.getElementById('an-abandon').textContent = `${s.abandonCheckout ?? 0}%`;
+
+  const avgEl = document.getElementById('an-avg-pages');
+  if (avgEl) avgEl.textContent = `${s.avgPagesPerVisitor ?? 0} pág./visitante`;
+
+  const checkoutMeta = document.getElementById('an-checkout-meta');
+  if (checkoutMeta) {
+    checkoutMeta.textContent = `${s.beginCheckout ?? 0} checkouts iniciados`;
+  }
+
+  [
+    ['an-visitors-delta', d.uniqueVisitors],
+    ['an-orders-delta', d.ordersCreated],
+    ['an-cart-delta', d.addToCart],
+  ].forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const fmt = formatAnalyticsDelta(val);
+    el.textContent = fmt.text;
+    el.className = `analytics-kpi__delta ${fmt.cls}`;
+  });
+}
+
+function renderAnalyticsFunnel(funnel, summary, peak) {
+  const pipeline = document.getElementById('analytics-funnel-pipeline');
+  const metrics = document.getElementById('analytics-funnel-metrics');
+  const peakBadge = document.getElementById('analytics-peak-badge');
+  const steps = Array.isArray(funnel) ? funnel : [];
+  const maxVal = Math.max(1, ...steps.map((st) => st.value || 0));
+
+  if (pipeline) {
+    pipeline.innerHTML = steps.map((step) => {
+      const pct = Math.max(4, Math.round(((step.value || 0) / maxVal) * 100));
+      return `
+        <div class="analytics-funnel-step">
+          <span class="analytics-funnel-step__label">${escapeHtml(step.label)}</span>
+          <div class="analytics-funnel-step__value">${step.value ?? 0}</div>
+          <div class="analytics-funnel-step__bar-wrap">
+            <div class="analytics-funnel-step__bar" style="width:${pct}%"></div>
+          </div>
+          <span class="analytics-funnel-step__rate">${step.rate ?? 0}%</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (metrics && summary) {
+    metrics.innerHTML = `
+      <div class="analytics-funnel-metric">Produto → Carrinho<strong>${summary.cartRate ?? 0}%</strong></div>
+      <div class="analytics-funnel-metric">Carrinho → Checkout<strong>${summary.checkoutRate ?? 0}%</strong></div>
+      <div class="analytics-funnel-metric">Checkout → Pedido<strong>${summary.orderRate ?? 0}%</strong></div>
+    `;
+  }
+
+  if (peakBadge) {
+    if (peak?.peakCount > 0) {
+      peakBadge.hidden = false;
+      peakBadge.textContent = `Pico: ${peak.peakHourLabel} (${peak.peakCount} views)`;
+    } else {
+      peakBadge.hidden = true;
+    }
+  }
 }
 
 function renderAnalyticsHourChart(byHour) {
@@ -3242,8 +3340,8 @@ function renderAnalyticsHourChart(byHour) {
       datasets: [{
         label: 'Page views',
         data: Array.isArray(byHour) ? byHour : [],
-        backgroundColor: 'rgba(33, 150, 243, 0.65)',
-        borderColor: '#2196F3',
+        backgroundColor: 'rgba(233, 30, 99, 0.55)',
+        borderColor: '#E91E63',
         borderWidth: 1,
         borderRadius: 6,
       }],
@@ -3254,7 +3352,7 @@ function renderAnalyticsHourChart(byHour) {
       plugins: { legend: { display: false } },
       scales: {
         y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f0f0' } },
-        x: { grid: { display: false } },
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
       },
     },
   });
@@ -3278,9 +3376,10 @@ function renderAnalyticsDailyChart(dailyVisits) {
         label: 'Visitas',
         data: rows.map((r) => r.total),
         borderColor: '#9C27B0',
-        backgroundColor: 'rgba(156, 39, 176, 0.15)',
+        backgroundColor: 'rgba(156, 39, 176, 0.12)',
         fill: true,
-        tension: 0.3,
+        tension: 0.35,
+        pointRadius: 3,
       }],
     },
     options: {
@@ -3295,51 +3394,132 @@ function renderAnalyticsDailyChart(dailyVisits) {
   });
 }
 
+function renderAnalyticsWeekdayChart(byWeekday) {
+  const ctx = document.getElementById('analytics-weekday-chart');
+  if (!ctx || typeof Chart === 'undefined') return;
+  if (analyticsWeekdayChart) analyticsWeekdayChart.destroy();
+  const rows = Array.isArray(byWeekday) ? byWeekday : [];
+  analyticsWeekdayChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map((r) => r.label),
+      datasets: [{
+        label: 'Visitas',
+        data: rows.map((r) => r.total),
+        backgroundColor: 'rgba(33, 150, 243, 0.5)',
+        borderColor: '#2196F3',
+        borderWidth: 1,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderAnalyticsSourceList(containerId, emptyId, rows, labelKey) {
+  const container = document.getElementById(containerId);
+  const empty = document.getElementById(emptyId);
+  const items = Array.isArray(rows) ? rows : [];
+  if (!container) return;
+
+  if (empty) empty.hidden = items.length > 0;
+  if (items.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const max = Math.max(1, ...items.map((r) => r.sessions || 0));
+  container.innerHTML = items.map((row) => {
+    const count = row.sessions || 0;
+    const pct = Math.round((count / max) * 100);
+    const label = labelKey === 'location'
+      ? formatAnalyticsLocation(row)
+      : (row.source || '—');
+    return `
+      <div class="analytics-source-row">
+        <span class="analytics-source-row__label">${escapeHtml(label)}</span>
+        <span class="analytics-source-row__count">${count}</span>
+        <div class="analytics-source-row__bar-wrap">
+          <div class="analytics-source-row__bar" style="width:${pct}%"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function renderAnalyticsTables(data) {
   const productsBody = document.querySelector('#analytics-products-table tbody');
   const productsEmpty = document.getElementById('analytics-products-empty');
   const products = data.topProducts || [];
+  const maxViews = Math.max(1, ...products.map((p) => p.views || 0));
+
   if (productsBody) {
-    productsBody.innerHTML = products.map((row) => `
-      <tr>
-        <td data-label="Produto"><strong>${escapeHtml(row.productName || row.productId || '—')}</strong></td>
-        <td data-label="Visualizações">${row.views ?? 0}</td>
-        <td data-label="Carrinho">${row.adds ?? 0}</td>
-      </tr>
-    `).join('');
+    productsBody.innerHTML = products.map((row, i) => {
+      const conv = row.conversionRate ?? 0;
+      const barPct = Math.round(((row.views || 0) / maxViews) * 100);
+      const rankCls = i < 3 ? 'is-top' : '';
+      return `
+        <tr>
+          <td data-label="#"><span class="analytics-rank ${rankCls}">${i + 1}</span></td>
+          <td data-label="Produto"><strong>${escapeHtml(row.productName || row.productId || '—')}</strong></td>
+          <td data-label="Visualizações">${row.views ?? 0}</td>
+          <td data-label="Carrinho">${row.adds ?? 0}</td>
+          <td data-label="Conversão">
+            <span class="analytics-conv-badge ${convBadgeClass(conv)}">${conv}%</span>
+          </td>
+          <td data-label="Interesse" class="analytics-bar-cell">
+            <div class="analytics-interest-bar">
+              <div class="analytics-interest-bar__fill" style="width:${barPct}%"></div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
   if (productsEmpty) productsEmpty.hidden = products.length > 0;
 
   const pagesBody = document.querySelector('#analytics-pages-table tbody');
   const pagesEmpty = document.getElementById('analytics-pages-empty');
   const pages = data.topPages || [];
+  const totalPageViews = pages.reduce((sum, p) => sum + (p.total || 0), 0) || 1;
+
   if (pagesBody) {
-    pagesBody.innerHTML = pages.map((row) => `
-      <tr>
-        <td data-label="Página">${escapeHtml(formatAnalyticsPage(row.page))}</td>
-        <td data-label="Views">${row.total ?? 0}</td>
-      </tr>
-    `).join('');
+    pagesBody.innerHTML = pages.map((row) => {
+      const share = Math.round(((row.total || 0) / totalPageViews) * 100);
+      return `
+        <tr>
+          <td data-label="Página">${escapeHtml(formatAnalyticsPage(row.page))}</td>
+          <td data-label="Views">${row.total ?? 0}</td>
+          <td data-label="Share">${share}%</td>
+        </tr>
+      `;
+    }).join('');
   }
   if (pagesEmpty) pagesEmpty.hidden = pages.length > 0;
 
-  const locBody = document.querySelector('#analytics-locations-table tbody');
-  const locEmpty = document.getElementById('analytics-locations-empty');
-  const locations = data.locations || [];
-  if (locBody) {
-    locBody.innerHTML = locations.map((row) => `
-      <tr>
-        <td data-label="Local">${escapeHtml(formatAnalyticsLocation(row))}</td>
-        <td data-label="Sessões">${row.sessions ?? 0}</td>
-      </tr>
-    `).join('');
-  }
-  if (locEmpty) locEmpty.hidden = locations.length > 0;
+  renderAnalyticsSourceList('analytics-referrers-list', 'analytics-referrers-empty', data.referrers);
+  renderAnalyticsSourceList('analytics-locations-list', 'analytics-locations-empty', data.locations, 'location');
+}
+
+function setAnalyticsLoading(isLoading) {
+  const loading = document.getElementById('analytics-loading');
+  const content = document.getElementById('analytics-content');
+  if (loading) loading.hidden = !isLoading;
+  if (content) content.hidden = isLoading;
 }
 
 async function loadAnalytics() {
   if (analyticsLoading) return;
   analyticsLoading = true;
+  setAnalyticsLoading(true);
   const refreshBtn = document.getElementById('analytics-refresh');
   if (refreshBtn) {
     refreshBtn.disabled = true;
@@ -3347,11 +3527,20 @@ async function loadAnalytics() {
   }
   try {
     const data = await fetchAnalyticsData(analyticsPeriod);
-    renderAnalyticsSummary(data.summary);
+    renderAnalyticsHeader(data);
+    renderAnalyticsInsights(data.insights);
+    renderAnalyticsKpis(data.summary, data.summary?.delta);
+    renderAnalyticsFunnel(data.funnel, data.summary, {
+      peakHourLabel: data.peakHourLabel,
+      peakCount: data.peakCount,
+    });
     renderAnalyticsHourChart(data.byHour);
     renderAnalyticsDailyChart(data.dailyVisits);
+    renderAnalyticsWeekdayChart(data.byWeekday);
     renderAnalyticsTables(data);
+    setAnalyticsLoading(false);
   } catch (err) {
+    setAnalyticsLoading(false);
     showToast(err.message || 'Erro ao carregar análises', 'error');
   } finally {
     analyticsLoading = false;

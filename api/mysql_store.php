@@ -2163,17 +2163,228 @@ function aurora_analytics_geo_lookup(string $ip): array {
 }
 
 function aurora_analytics_period_start(string $period): string {
+  return aurora_analytics_period_range($period)['since'];
+}
+
+function aurora_analytics_period_range(string $period): array {
   $tz = new DateTimeZone('America/Sao_Paulo');
   $now = new DateTime('now', $tz);
+
   if ($period === 'today') {
-    return $now->format('Y-m-d') . ' 00:00:00';
+    $since = new DateTime($now->format('Y-m-d') . ' 00:00:00', $tz);
+    $prevUntil = clone $since;
+    $prevSince = clone $since;
+    $prevSince->modify('-1 day');
+    return [
+      'since' => $since->format('Y-m-d H:i:s'),
+      'until' => null,
+      'prevSince' => $prevSince->format('Y-m-d H:i:s'),
+      'prevUntil' => $prevUntil->format('Y-m-d H:i:s'),
+      'label' => 'Hoje',
+      'compareLabel' => 'vs. ontem',
+    ];
   }
+
   if ($period === '7d') {
-    $now->modify('-7 days');
-    return $now->format('Y-m-d H:i:s');
+    $since = clone $now;
+    $since->modify('-7 days');
+    $prevUntil = clone $since;
+    $prevSince = clone $since;
+    $prevSince->modify('-7 days');
+    return [
+      'since' => $since->format('Y-m-d H:i:s'),
+      'until' => null,
+      'prevSince' => $prevSince->format('Y-m-d H:i:s'),
+      'prevUntil' => $prevUntil->format('Y-m-d H:i:s'),
+      'label' => 'Últimos 7 dias',
+      'compareLabel' => 'vs. 7 dias anteriores',
+    ];
   }
-  $now->modify('-30 days');
-  return $now->format('Y-m-d H:i:s');
+
+  $since = clone $now;
+  $since->modify('-30 days');
+  $prevUntil = clone $since;
+  $prevSince = clone $since;
+  $prevSince->modify('-30 days');
+  return [
+    'since' => $since->format('Y-m-d H:i:s'),
+    'until' => null,
+    'prevSince' => $prevSince->format('Y-m-d H:i:s'),
+    'prevUntil' => $prevUntil->format('Y-m-d H:i:s'),
+    'label' => 'Últimos 30 dias',
+    'compareLabel' => 'vs. 30 dias anteriores',
+  ];
+}
+
+function aurora_analytics_delta(int $current, int $previous): ?float {
+  if ($previous === 0) {
+    return $current > 0 ? 100.0 : null;
+  }
+  return round((($current - $previous) / $previous) * 100, 1);
+}
+
+function aurora_analytics_metrics(PDO $pdo, string $since, ?string $until = null): array {
+  $sessionBind = [$since];
+  $sessionUntil = '';
+  if ($until) {
+    $sessionUntil = ' AND last_seen < ?';
+    $sessionBind[] = $until;
+  }
+
+  $visitorsStmt = $pdo->prepare(
+    'SELECT COUNT(*) FROM analytics_sessions WHERE last_seen >= ?' . $sessionUntil
+  );
+  $visitorsStmt->execute($sessionBind);
+  $uniqueVisitors = (int) $visitorsStmt->fetchColumn();
+
+  $eventBind = [$since];
+  $eventUntil = '';
+  if ($until) {
+    $eventUntil = ' AND created_at < ?';
+    $eventBind[] = $until;
+  }
+
+  $countEvent = function (string $type) use ($pdo, $eventBind, $eventUntil): int {
+    $stmt = $pdo->prepare(
+      'SELECT COUNT(*) FROM analytics_events WHERE event_type = ? AND created_at >= ?' . $eventUntil
+    );
+    $stmt->execute(array_merge([$type], $eventBind));
+    return (int) $stmt->fetchColumn();
+  };
+
+  $countSessionsEvent = function ($types) use ($pdo, $eventBind, $eventUntil): int {
+    if (!is_array($types)) {
+      $types = [$types];
+    }
+    $placeholders = implode(',', array_fill(0, count($types), '?'));
+    $stmt = $pdo->prepare(
+      "SELECT COUNT(DISTINCT session_id) FROM analytics_events
+       WHERE event_type IN ($placeholders) AND created_at >= ?" . $eventUntil
+    );
+    $stmt->execute(array_merge($types, $eventBind));
+    return (int) $stmt->fetchColumn();
+  };
+
+  $pageViews = $countEvent('page_view');
+  $productViews = $countEvent('product_view') + $countEvent('product_click');
+  $addToCart = $countEvent('add_to_cart');
+  $beginCheckout = $countEvent('begin_checkout');
+  $ordersCreated = $countEvent('order_created');
+
+  $sessionsProductView = $countSessionsEvent(['product_view', 'product_click']);
+  $sessionsAddCart = $countSessionsEvent('add_to_cart');
+  $sessionsCheckout = $countSessionsEvent('begin_checkout');
+  $sessionsOrder = $countSessionsEvent('order_created');
+
+  $avgPages = 0.0;
+  if ($uniqueVisitors > 0) {
+    $avgPages = round($pageViews / $uniqueVisitors, 1);
+  }
+
+  $cartRate = $sessionsProductView > 0
+    ? round(($sessionsAddCart / $sessionsProductView) * 100, 1)
+    : 0;
+  $checkoutRate = $sessionsAddCart > 0
+    ? round(($sessionsCheckout / $sessionsAddCart) * 100, 1)
+    : 0;
+  $orderRate = $sessionsCheckout > 0
+    ? round(($sessionsOrder / $sessionsCheckout) * 100, 1)
+    : 0;
+  $conversionRate = $uniqueVisitors > 0
+    ? round(($sessionsOrder / $uniqueVisitors) * 100, 1)
+    : 0;
+  $abandonCheckout = $beginCheckout > 0
+    ? round((max(0, $beginCheckout - $ordersCreated) / $beginCheckout) * 100, 1)
+    : 0;
+
+  return [
+    'uniqueVisitors' => $uniqueVisitors,
+    'pageViews' => $pageViews,
+    'productViews' => $productViews,
+    'addToCart' => $addToCart,
+    'beginCheckout' => $beginCheckout,
+    'ordersCreated' => $ordersCreated,
+    'sessionsProductView' => $sessionsProductView,
+    'sessionsAddCart' => $sessionsAddCart,
+    'sessionsCheckout' => $sessionsCheckout,
+    'sessionsOrder' => $sessionsOrder,
+    'avgPagesPerVisitor' => $avgPages,
+    'cartRate' => $cartRate,
+    'checkoutRate' => $checkoutRate,
+    'orderRate' => $orderRate,
+    'conversionRate' => $conversionRate,
+    'abandonCheckout' => $abandonCheckout,
+  ];
+}
+
+function aurora_analytics_format_referrer(string $ref): string {
+  $ref = trim($ref);
+  if ($ref === '') {
+    return 'Acesso direto';
+  }
+  $host = parse_url($ref, PHP_URL_HOST);
+  if (is_string($host) && $host !== '') {
+    $host = preg_replace('/^www\./i', '', $host);
+    if (stripos($host, 'instagram') !== false) return 'Instagram';
+    if (stripos($host, 'facebook') !== false) return 'Facebook';
+    if (stripos($host, 'google') !== false) return 'Google';
+    if (stripos($host, 'whatsapp') !== false) return 'WhatsApp';
+    return $host;
+  }
+  return 'Outros';
+}
+
+function aurora_analytics_build_insights(array $current, array $extra): array {
+  $insights = [];
+
+  $deltaVisitors = $extra['delta']['uniqueVisitors'] ?? null;
+  if ($deltaVisitors !== null) {
+    if ($deltaVisitors >= 15) {
+      $insights[] = "Tráfego em alta (+{$deltaVisitors}% de visitantes). Aproveite para destacar produtos campeões.";
+    } elseif ($deltaVisitors <= -15) {
+      $insights[] = "Tráfego caiu ({$deltaVisitors}% de visitantes). Vale reforçar divulgação no Instagram/WhatsApp.";
+    }
+  }
+
+  $peakHour = (int) ($extra['peakHour'] ?? -1);
+  if ($peakHour >= 0 && ($extra['peakCount'] ?? 0) > 0) {
+    $label = str_pad((string) $peakHour, 2, '0', STR_PAD_LEFT) . 'h';
+    $insights[] = "Horário de pico: {$label}. Programe posts e respostas rápidas nesse intervalo.";
+  }
+
+  $topProduct = $extra['topProduct'] ?? null;
+  if (is_array($topProduct) && ($topProduct['views'] ?? 0) >= 3) {
+    $name = (string) ($topProduct['productName'] ?? 'Produto');
+    $insights[] = "Produto mais visto: {$name}. Mantenha foto, preço e estoque atualizados.";
+  }
+
+  $lowConv = $extra['lowConversionProduct'] ?? null;
+  if (is_array($lowConv) && ($lowConv['views'] ?? 0) >= 3 && ($lowConv['conversionRate'] ?? 100) < 15) {
+    $name = (string) ($lowConv['productName'] ?? 'Produto');
+    $rate = (float) ($lowConv['conversionRate'] ?? 0);
+    $insights[] = "{$name} chama atenção ({$lowConv['views']} views) mas converte pouco ({$rate}%). Revise preço, descrição ou foto.";
+  }
+
+  if (($current['abandonCheckout'] ?? 0) >= 40 && ($current['beginCheckout'] ?? 0) >= 2) {
+    $insights[] = "Abandono no checkout: {$current['abandonCheckout']}%. Simplifique pagamento/entrega ou responda WhatsApp mais rápido.";
+  }
+
+  if (($current['conversionRate'] ?? 0) >= 5) {
+    $insights[] = "Taxa de conversão de {$current['conversionRate']}% — bom sinal de intenção de compra no site.";
+  } elseif (($current['uniqueVisitors'] ?? 0) >= 5 && ($current['ordersCreated'] ?? 0) === 0) {
+    $insights[] = "Visitantes entrando, mas nenhum pedido registrado no período. Confira se a loja está aberta e o checkout funciona.";
+  }
+
+  $topRef = $extra['topReferrer'] ?? '';
+  if ($topRef !== '' && $topRef !== 'Acesso direto') {
+    $insights[] = "Principal origem de tráfego: {$topRef}. Invista mais nesse canal.";
+  }
+
+  if ($insights === []) {
+    $insights[] = 'Continue divulgando o site — os dados ficam mais úteis com mais visitas no período.';
+  }
+
+  return array_slice($insights, 0, 5);
 }
 
 function aurora_track_event(PDO $pdo, array $body): array {
@@ -2290,27 +2501,20 @@ function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
   }
 
   $period = in_array($period, ['today', '7d', '30d'], true) ? $period : '7d';
-  $since = aurora_analytics_period_start($period);
+  $range = aurora_analytics_period_range($period);
+  $since = $range['since'];
+  $prevSince = $range['prevSince'];
+  $prevUntil = $range['prevUntil'];
 
-  $visitorsStmt = $pdo->prepare(
-    'SELECT COUNT(*) FROM analytics_sessions WHERE last_seen >= ?'
-  );
-  $visitorsStmt->execute([$since]);
-  $uniqueVisitors = (int) $visitorsStmt->fetchColumn();
+  $current = aurora_analytics_metrics($pdo, $since);
+  $previous = aurora_analytics_metrics($pdo, $prevSince, $prevUntil);
 
-  $countEvent = function (string $type) use ($pdo, $since): int {
-    $stmt = $pdo->prepare(
-      'SELECT COUNT(*) FROM analytics_events WHERE event_type = ? AND created_at >= ?'
-    );
-    $stmt->execute([$type, $since]);
-    return (int) $stmt->fetchColumn();
-  };
-
-  $pageViews = $countEvent('page_view');
-  $productViews = $countEvent('product_view') + $countEvent('product_click');
-  $addToCart = $countEvent('add_to_cart');
-  $beginCheckout = $countEvent('begin_checkout');
-  $ordersCreated = $countEvent('order_created');
+  $delta = [
+    'uniqueVisitors' => aurora_analytics_delta($current['uniqueVisitors'], $previous['uniqueVisitors']),
+    'pageViews' => aurora_analytics_delta($current['pageViews'], $previous['pageViews']),
+    'ordersCreated' => aurora_analytics_delta($current['ordersCreated'], $previous['ordersCreated']),
+    'addToCart' => aurora_analytics_delta($current['addToCart'], $previous['addToCart']),
+  ];
 
   $hourStmt = $pdo->prepare(
     "SELECT HOUR(created_at) AS hr, COUNT(*) AS total
@@ -2322,10 +2526,17 @@ function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
   $hourStmt->execute([$since]);
   $byHourRaw = $hourStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
   $byHour = array_fill(0, 24, 0);
+  $peakHour = 0;
+  $peakCount = 0;
   foreach ($byHourRaw as $row) {
     $h = (int) ($row['hr'] ?? -1);
+    $total = (int) ($row['total'] ?? 0);
     if ($h >= 0 && $h <= 23) {
-      $byHour[$h] = (int) ($row['total'] ?? 0);
+      $byHour[$h] = $total;
+      if ($total > $peakCount) {
+        $peakCount = $total;
+        $peakHour = $h;
+      }
     }
   }
 
@@ -2345,6 +2556,27 @@ function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
     ];
   }
 
+  $weekdayStmt = $pdo->prepare(
+    "SELECT WEEKDAY(created_at) AS wd, COUNT(*) AS total
+     FROM analytics_events
+     WHERE event_type = 'page_view' AND created_at >= ?
+     GROUP BY wd
+     ORDER BY wd"
+  );
+  $weekdayStmt->execute([$since]);
+  $weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+  $byWeekday = array_fill(0, 7, 0);
+  foreach ($weekdayStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+    $wd = (int) ($row['wd'] ?? -1);
+    if ($wd >= 0 && $wd <= 6) {
+      $byWeekday[$wd] = (int) ($row['total'] ?? 0);
+    }
+  }
+  $byWeekdayLabeled = [];
+  foreach ($weekdayLabels as $i => $label) {
+    $byWeekdayLabeled[] = ['label' => $label, 'total' => $byWeekday[$i]];
+  }
+
   $topProductsStmt = $pdo->prepare(
     "SELECT product_id, product_name,
             SUM(CASE WHEN event_type IN ('product_view','product_click') THEN 1 ELSE 0 END) AS views,
@@ -2360,13 +2592,26 @@ function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
   );
   $topProductsStmt->execute([$since]);
   $topProducts = [];
+  $topProduct = null;
+  $lowConversionProduct = null;
   foreach ($topProductsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
-    $topProducts[] = [
+    $views = (int) ($row['views'] ?? 0);
+    $adds = (int) ($row['adds'] ?? 0);
+    $conv = $views > 0 ? round(($adds / $views) * 100, 1) : 0;
+    $item = [
       'productId' => (string) ($row['product_id'] ?? ''),
       'productName' => (string) ($row['product_name'] ?? ''),
-      'views' => (int) ($row['views'] ?? 0),
-      'adds' => (int) ($row['adds'] ?? 0),
+      'views' => $views,
+      'adds' => $adds,
+      'conversionRate' => $conv,
     ];
+    $topProducts[] = $item;
+    if (!$topProduct) {
+      $topProduct = $item;
+    }
+    if ($views >= 3 && ($lowConversionProduct === null || $conv < ($lowConversionProduct['conversionRate'] ?? 100))) {
+      $lowConversionProduct = $item;
+    }
   }
 
   $topPagesStmt = $pdo->prepare(
@@ -2406,25 +2651,97 @@ function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
     ];
   }
 
+  $referrersStmt = $pdo->prepare(
+    "SELECT referrer, COUNT(*) AS sessions
+     FROM analytics_sessions
+     WHERE last_seen >= ?
+     GROUP BY referrer
+     ORDER BY sessions DESC
+     LIMIT 12"
+  );
+  $referrersStmt->execute([$since]);
+  $referrers = [];
+  $topReferrer = '';
+  foreach ($referrersStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+    $label = aurora_analytics_format_referrer((string) ($row['referrer'] ?? ''));
+    $sessions = (int) ($row['sessions'] ?? 0);
+    $referrers[] = ['source' => $label, 'sessions' => $sessions];
+    if ($topReferrer === '' && $sessions > 0) {
+      $topReferrer = $label;
+    }
+  }
+
+  $baseVisitors = max(1, $current['uniqueVisitors']);
+  $funnel = [
+    [
+      'key' => 'visitors',
+      'label' => 'Visitantes',
+      'value' => $current['uniqueVisitors'],
+      'rate' => 100,
+    ],
+    [
+      'key' => 'product',
+      'label' => 'Viram produto',
+      'value' => $current['sessionsProductView'],
+      'rate' => round(($current['sessionsProductView'] / $baseVisitors) * 100, 1),
+    ],
+    [
+      'key' => 'cart',
+      'label' => 'Add. carrinho',
+      'value' => $current['sessionsAddCart'],
+      'rate' => round(($current['sessionsAddCart'] / $baseVisitors) * 100, 1),
+    ],
+    [
+      'key' => 'checkout',
+      'label' => 'Checkout',
+      'value' => $current['sessionsCheckout'],
+      'rate' => round(($current['sessionsCheckout'] / $baseVisitors) * 100, 1),
+    ],
+    [
+      'key' => 'order',
+      'label' => 'Pedido',
+      'value' => $current['sessionsOrder'],
+      'rate' => round(($current['sessionsOrder'] / $baseVisitors) * 100, 1),
+    ],
+  ];
+
+  $insights = aurora_analytics_build_insights($current, [
+    'delta' => $delta,
+    'peakHour' => $peakHour,
+    'peakCount' => $peakCount,
+    'topProduct' => $topProduct,
+    'lowConversionProduct' => $lowConversionProduct && ($lowConversionProduct['conversionRate'] ?? 100) < 15
+      ? $lowConversionProduct : null,
+    'topReferrer' => $topReferrer,
+  ]);
+
   return [
     'ok' => true,
     'period' => $period,
+    'periodLabel' => $range['label'],
+    'compareLabel' => $range['compareLabel'],
     'since' => $since,
-    'summary' => [
-      'uniqueVisitors' => $uniqueVisitors,
-      'pageViews' => $pageViews,
-      'productViews' => $productViews,
-      'addToCart' => $addToCart,
-      'beginCheckout' => $beginCheckout,
-      'ordersCreated' => $ordersCreated,
-      'conversionRate' => $uniqueVisitors > 0
-        ? round(($ordersCreated / $uniqueVisitors) * 100, 1)
-        : 0,
-    ],
+    'generatedAt' => (new DateTime('now', new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d H:i:s'),
+    'summary' => array_merge($current, [
+      'previous' => [
+        'uniqueVisitors' => $previous['uniqueVisitors'],
+        'pageViews' => $previous['pageViews'],
+        'ordersCreated' => $previous['ordersCreated'],
+        'addToCart' => $previous['addToCart'],
+      ],
+      'delta' => $delta,
+    ]),
+    'funnel' => $funnel,
+    'insights' => $insights,
+    'peakHour' => $peakHour,
+    'peakHourLabel' => str_pad((string) $peakHour, 2, '0', STR_PAD_LEFT) . 'h',
+    'peakCount' => $peakCount,
     'byHour' => $byHour,
+    'byWeekday' => $byWeekdayLabeled,
     'dailyVisits' => $dailyVisits,
     'topProducts' => $topProducts,
     'topPages' => $topPages,
     'locations' => $locations,
+    'referrers' => $referrers,
   ];
 }
