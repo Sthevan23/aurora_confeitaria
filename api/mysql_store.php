@@ -2351,6 +2351,9 @@ function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
             SUM(CASE WHEN event_type = 'add_to_cart' THEN 1 ELSE 0 END) AS adds
      FROM analytics_events
      WHERE created_at >= ? AND product_id IS NOT NULL AND product_id <> ''
+       AND product_name NOT LIKE '%INFORMAÇÕES%'
+       AND product_name NOT LIKE '%Informações%'
+       AND product_id NOT LIKE 'info%'
      GROUP BY product_id, product_name
      ORDER BY views DESC, adds DESC
      LIMIT 15"

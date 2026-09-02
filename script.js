@@ -1252,7 +1252,9 @@ function openLightbox(productId) {
   // Tira o foco do card do produto (evita o browser “puxar” a página até ele)
   blurWithoutScroll();
   focusLightboxOptions();
-  window.AuroraAnalytics?.productView(product);
+  const isInfoProduct = /informações/i.test(product.name || '')
+    || String(product.categoryId || '').toLowerCase().startsWith('info');
+  if (!isInfoProduct) window.AuroraAnalytics?.productView(product);
 }
 
 function closeLightbox() {

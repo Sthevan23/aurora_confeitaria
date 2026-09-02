@@ -3210,6 +3210,15 @@ function formatAnalyticsLocation(row) {
   return parts.join(' · ') || 'Desconhecido';
 }
 
+function formatAnalyticsPage(page) {
+  const map = {
+    'index.html': 'Início (cardápio)',
+    'cart.html': 'Carrinho',
+    'pipocas-gourmet.html': 'Pipocas gourmet',
+  };
+  return map[page] || page || '—';
+}
+
 function renderAnalyticsSummary(summary) {
   const s = summary || {};
   document.getElementById('an-visitors').textContent = String(s.uniqueVisitors ?? 0);
@@ -3241,6 +3250,7 @@ function renderAnalyticsHourChart(byHour) {
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
         y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f0f0' } },
@@ -3275,6 +3285,7 @@ function renderAnalyticsDailyChart(dailyVisits) {
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
         y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f0f0' } },
@@ -3305,7 +3316,7 @@ function renderAnalyticsTables(data) {
   if (pagesBody) {
     pagesBody.innerHTML = pages.map((row) => `
       <tr>
-        <td data-label="Página">${escapeHtml(row.page || '—')}</td>
+        <td data-label="Página">${escapeHtml(formatAnalyticsPage(row.page))}</td>
         <td data-label="Views">${row.total ?? 0}</td>
       </tr>
     `).join('');

@@ -415,10 +415,11 @@
     </section>
 
     <!-- Análises (tráfego e comportamento no site) -->
-    <section class="admin-page" id="page-analises">
+    <section class="admin-page analytics-page" id="page-analises">
       <p class="fin-note"><i class="fas fa-chart-column"></i> Visitas e cliques registrados automaticamente no site. Localidade aproximada por IP (sem dados pessoais identificáveis).</p>
 
-      <div class="page-actions page-actions--between">
+      <div class="analytics-stack">
+      <div class="page-actions page-actions--between analytics-toolbar">
         <div class="filter-tabs" id="analytics-period-tabs" role="tablist">
           <button type="button" class="filter-tab" data-period="today">Hoje</button>
           <button type="button" class="filter-tab active" data-period="7d">7 dias</button>
@@ -534,6 +535,7 @@
           </div>
           <p class="fin-empty" id="analytics-locations-empty" hidden>Localidade indisponível neste período.</p>
         </div>
+      </div>
       </div>
     </section>
 
@@ -729,7 +731,7 @@
   <script src="../js/default-data.js?v=20"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=69"></script>
-  <script src="admin.js?v=60"></script>
+  <script src="admin.js?v=61"></script>
 </body>
 </html>
 

@@ -495,22 +495,83 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 
 .stats-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .stats-grid--4 { grid-template-columns: repeat(4, 1fr); }
-.stats-grid--3 { grid-template-columns: repeat(3, 1fr); }
 
-.analytics-funnel {
-  margin-top: -0.25rem;
-  margin-bottom: 1.25rem;
+/* --- Análises --- */
+.analytics-page .analytics-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.stat-card--compact {
+.analytics-page .analytics-stack .stats-grid,
+.analytics-page .analytics-stack .dashboard-grid {
+  margin-bottom: 0;
+}
+
+.analytics-page .analytics-toolbar {
+  margin-bottom: 0;
+}
+
+.analytics-page .chart-container {
+  position: relative;
+  height: 260px;
+  max-height: 260px;
+  padding: 16px 20px 20px;
+  overflow: hidden;
+}
+
+.analytics-page .card .table-responsive {
+  padding: 0 4px 4px;
+}
+
+.analytics-page .card .fin-empty {
+  margin: 0 20px 20px;
+}
+
+.analytics-funnel {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.analytics-funnel .stat-card--compact {
+  display: flex;
+  background: var(--branco);
+  border-radius: var(--radius);
+  box-shadow: var(--sombra);
   padding: 1rem 1.15rem;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.35rem;
 }
 
-.stat-card--compact .stat-card__value {
+.analytics-funnel .stat-card--compact .stat-card__value {
   font-size: 1.35rem;
+}
+
+@media (max-width: 1100px) {
+  .analytics-page .stats-grid--4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .analytics-page .stats-grid--3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .analytics-page .stats-grid--4,
+  .analytics-page .stats-grid--3 {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-page .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-page .chart-container {
+    height: 220px;
+    max-height: 220px;
+  }
 }
 
 .stat-card {
@@ -1955,6 +2016,34 @@ body.sidebar-open {
   .page-actions--between {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* Análises: filtros no topo (não fixos no rodapé como outras páginas) */
+  .analytics-page .analytics-toolbar {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .analytics-page .analytics-toolbar .btn {
+    width: auto;
+    min-height: 40px;
+  }
+
+  .analytics-page {
+    padding-bottom: 20px;
   }
 
   .fin-note {
