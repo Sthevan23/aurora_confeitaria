@@ -170,7 +170,7 @@ function aurora_ensure_draft_products(PDO $pdo): void {
         'description' => 'Cone trufado artesanal — em preparação. Ajuste preço e foto no admin antes de publicar.',
         'price' => 0,
         'categoryId' => 'cat-especiais',
-        'image' => '',
+        'image' => 'products/cone-trufado.jpg',
         'featured' => false,
         'slug' => 'cone-trufado',
         'size' => '',
@@ -189,7 +189,7 @@ function aurora_ensure_draft_products(PDO $pdo): void {
         'description' => 'Brownie cravejado artesanal — em preparação. Ajuste preço e foto no admin antes de publicar.',
         'price' => 0,
         'categoryId' => 'cat-especiais',
-        'image' => '',
+        'image' => 'products/brownie-cravejado.jpg',
         'featured' => false,
         'slug' => 'brownie-cravejado',
         'size' => '',
@@ -204,11 +204,19 @@ function aurora_ensure_draft_products(PDO $pdo): void {
       ],
     ];
 
-    $check = $pdo->prepare('SELECT id FROM products WHERE id = ? LIMIT 1');
+    $check = $pdo->prepare('SELECT id, image FROM products WHERE id = ? LIMIT 1');
+    $setImg = $pdo->prepare('UPDATE products SET image = ? WHERE id = ?');
     foreach ($drafts as $draft) {
       $check->execute([$draft['id']]);
-      if ($check->fetchColumn()) continue;
-      aurora_save_one_product($pdo, $draft);
+      $row = $check->fetch(PDO::FETCH_ASSOC);
+      if (!$row) {
+        aurora_save_one_product($pdo, $draft);
+        continue;
+      }
+      $current = trim((string) ($row['image'] ?? ''));
+      if ($current === '' || str_starts_with($current, 'data:')) {
+        $setImg->execute([(string) $draft['image'], $draft['id']]);
+      }
     }
   } catch (Throwable $e) {
     // Não derruba o site se o seed falhar
