@@ -11,6 +11,7 @@ window.AuroraCart = (() => {
 
   let items = loadItems();
   let coupon = loadCoupon();
+  let lastAddError = null;
   const listeners = new Set();
 
   function notify(reason) {
@@ -102,8 +103,13 @@ window.AuroraCart = (() => {
   }
 
   function persist() {
-    localStorage.setItem(CART_KEY, JSON.stringify(items));
+    try {
+      localStorage.setItem(CART_KEY, JSON.stringify(items));
+    } catch {
+      return false;
+    }
     notify('cart');
+    return true;
   }
 
   function getItems() {
@@ -209,28 +215,39 @@ window.AuroraCart = (() => {
   }
 
   function addItem(item) {
+    lastAddError = null;
+    const productId = String(item?.productId || '').trim();
+    if (!productId) {
+      lastAddError = 'invalid';
+      return false;
+    }
+
     const notes = String(item.notes || '').trim();
-    const key = lineKey(item.productId, item.flavor, item.size, notes);
+    const key = lineKey(productId, item.flavor, item.size, notes);
     const existing = items.find((row) => row.key === key);
     let qty = Math.max(1, Number(item.qty) || 1);
-    const cap = maxLineQty(item.productId, existing?.key || '');
+    const cap = maxLineQty(productId, existing?.key || '');
     if (cap <= 0) {
+      lastAddError = 'stock';
       notify('stock-error');
       return false;
     }
     qty = Math.min(qty, cap);
     const price = Number(item.price) > 0 ? Number(item.price) : resolveItemPrice(item);
     if (!(price > 0)) {
+      lastAddError = 'price';
       notify('price-error');
       return false;
     }
+
+    const prevQty = existing ? Number(existing.qty) || 0 : 0;
     if (existing) {
-      existing.qty = (Number(existing.qty) || 0) + qty;
+      existing.qty = prevQty + qty;
       if (!(Number(existing.price) > 0)) existing.price = price;
     } else {
       items.push({
         key,
-        productId: item.productId,
+        productId,
         name: item.name,
         price,
         qty,
@@ -241,7 +258,14 @@ window.AuroraCart = (() => {
         notes,
       });
     }
-    persist();
+
+    if (!persist()) {
+      if (existing) existing.qty = prevQty;
+      else items = items.filter((row) => row.key !== key);
+      lastAddError = 'storage';
+      notify('persist-error');
+      return false;
+    }
     return true;
   }
 
@@ -456,6 +480,7 @@ window.AuroraCart = (() => {
     CART_KEY, CUSTOMER_KEY, COUPON_KEY, FULFILLMENT_KEY, PAYMENT_KEY,
     onChange, getItems, count, subtotal, discount, payable,
     addItem, updateQty, removeItem, clear, zeroPriceItems, repairItemPrices, repairItemImages, repairCartItems,
+    getLastAddError: () => lastAddError,
     maxQtyForProduct,
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,

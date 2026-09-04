@@ -144,11 +144,87 @@ function aurora_fill_missing_product_images(PDO $pdo, array &$products): void {
 }
 
 /**
+ * Rascunhos fora do cardápio (active=0). Só cria se o id ainda não existir.
+ * Não republica o site — produtos inativos ficam só no admin.
+ */
+function aurora_ensure_draft_products(PDO $pdo): void {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+
+  try {
+    $productsExists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' LIMIT 1"
+    )->fetchColumn();
+    if (!$productsExists) return;
+
+    $catExists = $pdo->prepare('SELECT id FROM categories WHERE id = ? LIMIT 1');
+    $catExists->execute(['cat-especiais']);
+    if (!$catExists->fetchColumn()) return;
+
+    $drafts = [
+      [
+        'id' => 'p-cone-trufado',
+        'name' => 'Cone Trufado',
+        'description' => 'Cone trufado artesanal — em preparação. Ajuste preço e foto no admin antes de publicar.',
+        'price' => 0,
+        'categoryId' => 'cat-especiais',
+        'image' => '',
+        'featured' => false,
+        'slug' => 'cone-trufado',
+        'size' => '',
+        'flavors' => [],
+        'promoActive' => false,
+        'promoPrice' => null,
+        'promoLabel' => '',
+        'bestSeller' => false,
+        'active' => false,
+        'available' => false,
+        'sortOrder' => 900,
+      ],
+      [
+        'id' => 'p-brownie-cravejado',
+        'name' => 'Brownie Cravejado',
+        'description' => 'Brownie cravejado artesanal — em preparação. Ajuste preço e foto no admin antes de publicar.',
+        'price' => 0,
+        'categoryId' => 'cat-especiais',
+        'image' => '',
+        'featured' => false,
+        'slug' => 'brownie-cravejado',
+        'size' => '',
+        'flavors' => [],
+        'promoActive' => false,
+        'promoPrice' => null,
+        'promoLabel' => '',
+        'bestSeller' => false,
+        'active' => false,
+        'available' => false,
+        'sortOrder' => 901,
+      ],
+    ];
+
+    $check = $pdo->prepare('SELECT id FROM products WHERE id = ? LIMIT 1');
+    foreach ($drafts as $draft) {
+      $check->execute([$draft['id']]);
+      if ($check->fetchColumn()) continue;
+      aurora_save_one_product($pdo, $draft);
+    }
+  } catch (Throwable $e) {
+    // Não derruba o site se o seed falhar
+  }
+}
+
+/**
  * @param 'full'|'public' $mode
  */
 function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
   if (!aurora_db_ready($pdo)) {
     return null;
+  }
+
+  if (function_exists('aurora_ensure_draft_products')) {
+    aurora_ensure_draft_products($pdo);
   }
 
   if (function_exists('aurora_protect_product_photos')) {

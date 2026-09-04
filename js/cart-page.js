@@ -574,7 +574,9 @@
   }
 
   async function boot() {
+    Cart.syncFromStorage?.();
     await Storage.initCloud({ full: false }).catch(() => false);
+    Cart.syncFromStorage?.();
     Cart.repairCartItems?.();
     fillCustomer();
     applyStoreStatus();

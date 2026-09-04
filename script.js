@@ -398,7 +398,14 @@ function addToCart(item) {
   if (Cart) {
     const ok = Cart.addItem(item);
     if (!ok) {
-      showCartFeedback('Quantidade máxima em estoque atingida');
+      const err = Cart.getLastAddError?.();
+      if (err === 'price') {
+        showCartFeedback('Escolha o sabor ou confira o preço do produto.');
+      } else if (err === 'storage') {
+        showCartFeedback('Não deu para salvar o carrinho. Libere espaço ou tente outro navegador.');
+      } else {
+        showCartFeedback('Quantidade máxima em estoque atingida.');
+      }
       return false;
     }
     cartItems = Cart.getItems();
@@ -1208,6 +1215,11 @@ function openLightbox(productId) {
   const product = getProducts().find((p) => p.id === productId);
   if (!product) return;
   if (product.available === false) return;
+  const stock = Storage.productStockQty?.(product);
+  if (stock !== null && stock <= 0) {
+    showCartFeedback('Produto esgotado no momento.');
+    return;
+  }
   selectedProduct = product;
   selectedFlavors = [];
   lightboxQty = 1;
@@ -1322,9 +1334,10 @@ function addCurrentProductToCart() {
 
   const notes = document.getElementById('lightbox-notes')?.value.trim() || '';
 
+  let addedQty = 0;
   pricedLines.forEach((line) => {
     const detail = [product.size, line.flavor].filter(Boolean).join(' · ');
-    addToCart({
+    const ok = addToCart({
       productId: product.id,
       name: product.name,
       price: line.price,
@@ -1335,7 +1348,17 @@ function addCurrentProductToCart() {
       image: resolveProductImage(product),
       notes,
     });
+    if (ok) addedQty += line.qty;
   });
+
+  if (addedQty <= 0) {
+    if (addBtn) {
+      addBtn.classList.remove('is-added');
+      const label = addBtn.querySelector('.order-lightbox__add-label');
+      if (label) label.textContent = 'Adicionar ao carrinho';
+    }
+    return;
+  }
 
   if (addBtn) {
     addBtn.classList.add('is-added');
@@ -2187,10 +2210,15 @@ function initParallax() {
 
 async function boot() {
   Storage.init();
+  Cart.syncFromStorage?.();
   let status = false;
   try {
     status = await Storage.initCloud({ full: false });
   } catch { /* ignore */ }
+
+  Cart.syncFromStorage?.();
+  Cart.repairCartItems?.();
+  syncCartFromShared();
 
   const hasProducts = (Storage.getProducts?.() || []).length > 0;
   if (status !== true) {
@@ -2220,6 +2248,7 @@ async function boot() {
     renderProducts();
     renderGallery();
     applyStoreStatus();
+    syncCartFromShared();
   });
 }
 
