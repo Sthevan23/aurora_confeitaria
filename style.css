@@ -3031,7 +3031,7 @@ body.store-is-closed .btn[data-order] {
   pointer-events: none;
 }
 
-.flavor-options span {
+.flavor-options > label:not(.flavor-option-card) > span {
   display: inline-flex;
   align-items: center;
   min-height: 2.25rem;
@@ -3048,8 +3048,8 @@ body.store-is-closed .btn[data-order] {
     border-color 180ms var(--ease-out);
 }
 
-.flavor-options label.is-active span,
-.flavor-options input:checked + span {
+.flavor-options > label:not(.flavor-option-card).is-active > span,
+.flavor-options > label:not(.flavor-option-card) input:checked + span {
   background: var(--color-pink);
   border-color: var(--color-pink);
   color: #fff;
@@ -3748,6 +3748,12 @@ body.store-is-closed .btn[data-order] {
 }
 
 .flavor-option-card__name {
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+  border-radius: 0;
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--color-brown-deep);
@@ -3756,11 +3762,31 @@ body.store-is-closed .btn[data-order] {
 }
 
 .flavor-option-card__price {
+  display: block;
   flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+  border-radius: 0;
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--color-pink-deep);
   font-variant-numeric: tabular-nums;
+}
+
+.flavor-option-card.is-active .flavor-option-card__name,
+.flavor-option-card input:checked + .flavor-option-card__body .flavor-option-card__name,
+.flavor-option-card.is-active .flavor-option-card__price,
+.flavor-option-card input:checked + .flavor-option-card__body .flavor-option-card__price {
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+
+.flavor-option-card.is-active .flavor-option-card__price,
+.flavor-option-card input:checked + .flavor-option-card__body .flavor-option-card__price {
+  color: var(--color-pink-deep);
 }
 
 .flavor-option-card.is-active .flavor-option-card__body,
@@ -3849,9 +3875,48 @@ body.store-is-closed .btn[data-order] {
   width: 100%;
 }
 
+.flavor-unit__summary {
+  display: none;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin: 0 0 0.45rem;
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid rgba(252, 120, 144, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(252, 120, 144, 0.08);
+  color: var(--color-brown-deep);
+  text-align: left;
+  cursor: pointer;
+}
+
+.flavor-unit__summary span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-brown-soft);
+}
+
+.flavor-unit__summary strong {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--color-brown-deep);
+}
+
+.flavor-unit.is-collapsed .flavor-unit__label,
+.flavor-unit.is-collapsed .flavor-options {
+  display: none;
+}
+
+.flavor-unit.is-collapsed .flavor-unit__summary {
+  display: flex;
+}
+
 .order-lightbox__panel--product .flavor-options--stacked {
-  max-height: min(280px, 42vh);
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   overscroll-behavior: contain;
   padding-right: 0.15rem;
 }

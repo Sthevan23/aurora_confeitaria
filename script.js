@@ -1200,6 +1200,55 @@ function buildFlavorOptionsHtml(product, flavors, unitIdx, current) {
   }).join('');
 }
 
+function syncFlavorUnitCollapse(product, focusIdx = null) {
+  const qty = Math.max(1, lightboxQty);
+  if (qty < 2) return;
+  const units = [...document.querySelectorAll('#lightbox-flavors .flavor-unit')];
+  if (!units.length) return;
+
+  let openIdx = focusIdx;
+  if (openIdx == null || openIdx < 0) {
+    openIdx = selectedFlavors.slice(0, qty).findIndex((f) => !f);
+    if (openIdx < 0) openIdx = qty - 1;
+  }
+
+  units.forEach((unitEl) => {
+    const idx = Number(unitEl.dataset.unit) || 0;
+    const picked = selectedFlavors[idx] || '';
+    const isOpen = idx === openIdx;
+    unitEl.classList.toggle('is-collapsed', !isOpen && !!picked);
+    unitEl.classList.toggle('is-open', isOpen);
+
+    let summary = unitEl.querySelector('.flavor-unit__summary');
+    if (!summary) {
+      summary = document.createElement('button');
+      summary.type = 'button';
+      summary.className = 'flavor-unit__summary';
+      unitEl.insertBefore(summary, unitEl.querySelector('.flavor-options'));
+      summary.addEventListener('click', () => {
+        syncFlavorUnitCollapse(product, idx);
+        unitEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
+    }
+
+    if (picked) {
+      const price = resolveProductPrice(product, picked);
+      summary.hidden = false;
+      summary.innerHTML = `<span>Unidade ${idx + 1}</span><strong>${picked}${price > 0 ? ` · ${Storage.formatCurrency(price)}` : ''}</strong>`;
+    } else {
+      summary.hidden = true;
+      summary.textContent = '';
+    }
+  });
+
+  const openUnit = units[openIdx];
+  if (openUnit) {
+    requestAnimationFrame(() => {
+      openUnit.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }
+}
+
 function bindLightboxFlavorInputs(product, multi) {
   const flavorRoot = document.getElementById('acc-flavor');
   document.querySelectorAll('#lightbox-flavors .flavor-unit').forEach((unitEl) => {
@@ -1217,10 +1266,13 @@ function bindLightboxFlavorInputs(product, multi) {
         flavorRoot?.classList.toggle('is-done', done);
         if (multi) {
           flavorRoot?.classList.add('is-open');
+          const nextEmpty = selectedFlavors.slice(0, lightboxQty).findIndex((f) => !f);
+          syncFlavorUnitCollapse(product, nextEmpty >= 0 ? nextEmpty : unitIdx);
         }
       });
     });
   });
+  if (multi) syncFlavorUnitCollapse(product);
 }
 
 function flavorSummaryText(product) {
@@ -1273,7 +1325,7 @@ function renderLightboxFlavors() {
     const current = selectedFlavors[unitIdx] || '';
     const options = buildFlavorOptionsHtml(product, flavors, unitIdx, current);
     return `
-      <div class="flavor-unit" data-unit="${unitIdx}">
+      <div class="flavor-unit${multi && unitIdx > 0 && !current ? '' : ''}" data-unit="${unitIdx}">
         ${multi ? `<p class="flavor-unit__label">Unidade ${unitIdx + 1}</p>` : ''}
         <div class="flavor-options flavor-options--stacked">${options}</div>
       </div>`;
