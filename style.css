@@ -990,6 +990,15 @@ p {
   color: #fff;
 }
 
+.product-card__badge--info {
+  background: #5c4a4e;
+  color: #fff;
+}
+
+.product-card--info .product-card__desc {
+  white-space: pre-line;
+}
+
 .filter-btn {
   border: 1px solid var(--color-line);
   background: var(--color-white);

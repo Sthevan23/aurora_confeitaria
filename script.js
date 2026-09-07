@@ -877,15 +877,30 @@ function isInfoProduct(product) {
   return cat ? isInfoCategory(cat) : false;
 }
 
-function getMenuProducts() {
+function getShopProducts() {
   return getProducts().filter((p) => !isInfoProduct(p));
+}
+
+function getMenuProducts() {
+  return getProducts();
+}
+
+function sortMenuProducts(list) {
+  return list.slice().sort((a, b) => {
+    const aInfo = isInfoProduct(a) ? 0 : 1;
+    const bInfo = isInfoProduct(b) ? 0 : 1;
+    if (aInfo !== bInfo) return aInfo - bInfo;
+    const sortDiff = (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0);
+    if (sortDiff !== 0) return sortDiff;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+  });
 }
 
 function renderFilters() {
   const box = document.getElementById('category-filter');
   if (!box) return;
 
-  const menuProducts = getMenuProducts();
+  const menuProducts = getShopProducts();
   const countByCat = new Map();
   menuProducts.forEach((p) => {
     const id = String(p.categoryId || '');
@@ -954,6 +969,28 @@ function renderFilters() {
 }
 
 function productCardHTML(p, { bestSeller = false } = {}) {
+  if (isInfoProduct(p)) {
+    const desc = String(p.description || '').trim();
+    const shortDesc = desc.length > 140 ? `${desc.slice(0, 140).trim()}…` : desc;
+    return `
+      <article class="product-card product-card--info" data-order="${p.id}" role="button" tabindex="0" aria-label="Ler ${p.name}">
+        <div class="product-card__img">
+          ${imgTag(p.image, p.name)}
+          <span class="product-card__badge product-card__badge--info">Importante</span>
+        </div>
+        <div class="product-card__body">
+          <span class="product-card__category">${Storage.getCategoryName(p.categoryId)}</span>
+          <h3 class="product-card__name">${p.name}</h3>
+          <p class="product-card__desc">${shortDesc}</p>
+          <div class="product-card__footer">
+            <span class="product-card__price">Leitura</span>
+            <button type="button" class="btn btn--secondary btn--sm" data-order="${p.id}">Ler</button>
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
   const stock = Storage.productStockQty?.(p);
   const outOfStock = stock !== null && stock <= 0;
   const unavailable = p.available === false || outOfStock;
@@ -1026,17 +1063,19 @@ function bindProductOrderButtons(root) {
 function renderBestsellers() {
   const grid = document.getElementById('bestsellers-grid');
   if (!grid) return;
-  const items = getMenuProducts().filter((p) => p.bestSeller);
+  const items = getShopProducts().filter((p) => p.bestSeller);
   const list = items.length
     ? items
-    : getMenuProducts().filter((p) => p.featured).slice(0, 4);
+    : getShopProducts().filter((p) => p.featured).slice(0, 4);
   grid.innerHTML = list.map((p) => productCardHTML(p, { bestSeller: true })).join('');
   bindProductOrderButtons(grid);
 }
 
 function renderProducts() {
-  const products = getMenuProducts().filter(
-    (p) => activeFilter === 'all' || p.categoryId === activeFilter,
+  const products = sortMenuProducts(
+    getMenuProducts().filter(
+      (p) => activeFilter === 'all' || p.categoryId === activeFilter,
+    ),
   );
   const grid = document.getElementById('products-grid');
   grid.innerHTML = products.map((p) => productCardHTML(p)).join('');
@@ -1303,7 +1342,7 @@ function openLightbox(productId) {
     descEl.textContent = descText;
     descEl.hidden = !descText;
   }
-  document.getElementById('lightbox-scroll')?.classList.toggle('has-flavors', productHasFlavors(product));
+  document.getElementById('lightbox-scroll')?.classList.toggle('has-flavors', !isInfoProduct(product) && productHasFlavors(product));
   document.getElementById('order-error').hidden = true;
   const notes = document.getElementById('lightbox-notes');
   if (notes) notes.value = '';
@@ -1311,15 +1350,49 @@ function openLightbox(productId) {
   if (qtyValue) qtyValue.textContent = '1';
 
   const addBtn = document.getElementById('lightbox-add-cart');
+  const isInfo = isInfoProduct(product);
+  const qtyStepper = document.getElementById('lightbox-qty-stepper');
+  const notesLabel = notes?.closest('label') || notes?.parentElement;
+  const qtyRow = document.querySelector('.order-qty-row');
+  const lineTotal = document.getElementById('lightbox-line-total');
+  const unitPrice = document.getElementById('lightbox-unit-price');
   if (addBtn) {
     addBtn.classList.remove('is-added');
     addBtn.disabled = false;
     const label = addBtn.querySelector('.order-lightbox__add-label');
-    if (label) label.textContent = 'Adicionar ao carrinho';
+    if (isInfo) {
+      addBtn.hidden = true;
+      if (label) label.textContent = 'Fechar';
+    } else {
+      addBtn.hidden = false;
+      if (label) label.textContent = 'Adicionar ao carrinho';
+    }
   }
+  if (qtyStepper) qtyStepper.hidden = !!isInfo;
+  if (qtyRow) qtyRow.hidden = !!isInfo;
+  if (notesLabel) notesLabel.hidden = !!isInfo;
+  if (lineTotal) lineTotal.hidden = !!isInfo;
+  if (unitPrice) {
+    if (isInfo) {
+      unitPrice.textContent = 'Pagamento e condições';
+      unitPrice.hidden = false;
+    } else {
+      unitPrice.hidden = false;
+    }
+  }
+  document.getElementById('lightbox-flavors')?.toggleAttribute('hidden', isInfo);
+  document.getElementById('lightbox-scroll')?.classList.toggle('is-info', isInfo);
 
-  renderLightboxFlavors();
-  updateLightboxTotals();
+  if (!isInfo) {
+    renderLightboxFlavors();
+    updateLightboxTotals();
+  } else {
+    const flavorsBox = document.getElementById('lightbox-flavors');
+    if (flavorsBox) {
+      flavorsBox.innerHTML = '';
+      flavorsBox.hidden = true;
+    }
+  }
 
   const lb = document.getElementById('order-lightbox');
   const alreadyOpen = lb?.classList.contains('is-open');
@@ -1328,8 +1401,7 @@ function openLightbox(productId) {
   if (!alreadyOpen) lockBodyScroll();
   // Tira o foco do card do produto (evita o browser “puxar” a página até ele)
   blurWithoutScroll();
-  focusLightboxOptions();
-  const isInfo = isInfoProduct(product);
+  if (!isInfo) focusLightboxOptions();
   if (!isInfo) window.AuroraAnalytics?.productView(product);
 }
 
