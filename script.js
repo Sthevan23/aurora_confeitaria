@@ -855,20 +855,54 @@ function renderMarquee() {
     .join('');
 }
 
+function isInfoCategory(category) {
+  const name = String(category?.name || '');
+  const slug = String(category?.slug || '');
+  const id = String(category?.id || '');
+  return /informa/i.test(name)
+    || /informa/i.test(slug)
+    || id.toLowerCase().startsWith('info')
+    || id.toLowerCase().includes('informa');
+}
+
+function isInfoProduct(product) {
+  if (!product) return false;
+  if (/informa/i.test(String(product.name || ''))) return true;
+  const catId = String(product.categoryId || '');
+  if (catId.toLowerCase().startsWith('info') || catId.toLowerCase().includes('informa')) return true;
+  const categories = typeof Storage !== 'undefined' && Storage.getCategories
+    ? Storage.getCategories()
+    : [];
+  const cat = categories.find((c) => String(c.id) === catId);
+  return cat ? isInfoCategory(cat) : false;
+}
+
+function getMenuProducts() {
+  return getProducts().filter((p) => !isInfoProduct(p));
+}
+
 function renderFilters() {
   const box = document.getElementById('category-filter');
   if (!box) return;
 
-  const categories = typeof Storage !== 'undefined' && Storage.getCategories
+  const menuProducts = getMenuProducts();
+  const used = new Set(menuProducts.map((p) => String(p.categoryId || '')));
+  const categories = (typeof Storage !== 'undefined' && Storage.getCategories
     ? Storage.getCategories()
-    : [];
+    : []
+  ).filter((c) => !isInfoCategory(c) && used.has(String(c.id)));
+
   const buttons = [{ key: 'all', label: 'Todos' }];
   if (categories.length) {
     categories.forEach((c) => buttons.push({ key: c.id, label: c.name || c.id }));
   } else {
     FILTERS.filter((key) => key !== 'all').forEach((key) => {
-      buttons.push({ key, label: CATEGORY_LABELS[key] || key });
+      if (used.has(key)) buttons.push({ key, label: CATEGORY_LABELS[key] || key });
     });
+  }
+
+  if (activeFilter !== 'all' && !buttons.some((b) => b.key === activeFilter)) {
+    activeFilter = 'all';
   }
 
   box.innerHTML = buttons.map(({ key, label }) => {
@@ -961,16 +995,16 @@ function bindProductOrderButtons(root) {
 function renderBestsellers() {
   const grid = document.getElementById('bestsellers-grid');
   if (!grid) return;
-  const items = getProducts().filter((p) => p.bestSeller);
+  const items = getMenuProducts().filter((p) => p.bestSeller);
   const list = items.length
     ? items
-    : getProducts().filter((p) => p.featured).slice(0, 4);
+    : getMenuProducts().filter((p) => p.featured).slice(0, 4);
   grid.innerHTML = list.map((p) => productCardHTML(p, { bestSeller: true })).join('');
   bindProductOrderButtons(grid);
 }
 
 function renderProducts() {
-  const products = getProducts().filter(
+  const products = getMenuProducts().filter(
     (p) => activeFilter === 'all' || p.categoryId === activeFilter,
   );
   const grid = document.getElementById('products-grid');
@@ -1264,9 +1298,8 @@ function openLightbox(productId) {
   // Tira o foco do card do produto (evita o browser “puxar” a página até ele)
   blurWithoutScroll();
   focusLightboxOptions();
-  const isInfoProduct = /informações/i.test(product.name || '')
-    || String(product.categoryId || '').toLowerCase().startsWith('info');
-  if (!isInfoProduct) window.AuroraAnalytics?.productView(product);
+  const isInfo = isInfoProduct(product);
+  if (!isInfo) window.AuroraAnalytics?.productView(product);
 }
 
 function closeLightbox() {
