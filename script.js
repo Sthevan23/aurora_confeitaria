@@ -886,34 +886,65 @@ function renderFilters() {
   if (!box) return;
 
   const menuProducts = getMenuProducts();
-  const used = new Set(menuProducts.map((p) => String(p.categoryId || '')));
+  const countByCat = new Map();
+  menuProducts.forEach((p) => {
+    const id = String(p.categoryId || '');
+    if (!id) return;
+    countByCat.set(id, (countByCat.get(id) || 0) + 1);
+  });
+
   const categories = (typeof Storage !== 'undefined' && Storage.getCategories
     ? Storage.getCategories()
     : []
-  ).filter((c) => !isInfoCategory(c) && used.has(String(c.id)));
+  )
+    .filter((c) => !isInfoCategory(c) && countByCat.has(String(c.id)))
+    .sort((a, b) => {
+      const diff = (countByCat.get(String(b.id)) || 0) - (countByCat.get(String(a.id)) || 0);
+      if (diff !== 0) return diff;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+    });
+
+  const PRIMARY_LIMIT = 5;
+  const primary = categories.slice(0, PRIMARY_LIMIT);
+  const extra = categories.slice(PRIMARY_LIMIT);
 
   const buttons = [{ key: 'all', label: 'Todos' }];
-  if (categories.length) {
-    categories.forEach((c) => buttons.push({ key: c.id, label: c.name || c.id }));
+  if (primary.length) {
+    primary.forEach((c) => buttons.push({ key: c.id, label: c.name || c.id }));
   } else {
     FILTERS.filter((key) => key !== 'all').forEach((key) => {
-      if (used.has(key)) buttons.push({ key, label: CATEGORY_LABELS[key] || key });
+      if (countByCat.has(key)) buttons.push({ key, label: CATEGORY_LABELS[key] || key });
     });
   }
 
-  if (activeFilter !== 'all' && !buttons.some((b) => b.key === activeFilter)) {
-    activeFilter = 'all';
-  }
+  const allKeys = new Set(['all', ...categories.map((c) => c.id)]);
+  if (!allKeys.has(activeFilter)) activeFilter = 'all';
 
-  box.innerHTML = buttons.map(({ key, label }) => {
+  const pill = ({ key, label }) => {
     const safe = String(label)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/"/g, '&quot;');
     return `<button type="button" class="filter-btn ${activeFilter === key ? 'is-active' : ''}" data-filter="${key}">${safe}</button>`;
-  }).join('');
+  };
 
-  box.querySelectorAll('.filter-btn').forEach((btn) => {
+  let html = buttons.map(pill).join('');
+  if (extra.length) {
+    const extraActive = extra.some((c) => c.id === activeFilter);
+    const activeExtraLabel = extra.find((c) => c.id === activeFilter)?.name || 'Mais';
+    html += `
+      <details class="filter-more ${extraActive ? 'is-active' : ''}">
+        <summary class="filter-btn filter-more__summary ${extraActive ? 'is-active' : ''}">${extraActive ? String(activeExtraLabel).replace(/&/g, '&amp;').replace(/</g, '&lt;') : 'Mais'} ▾</summary>
+        <div class="filter-more__menu" role="menu">
+          ${extra.map((c) => pill({ key: c.id, label: c.name || c.id })).join('')}
+        </div>
+      </details>
+    `;
+  }
+
+  box.innerHTML = html;
+
+  box.querySelectorAll('.filter-btn[data-filter]').forEach((btn) => {
     btn.addEventListener('click', () => {
       activeFilter = btn.dataset.filter;
       renderFilters();

@@ -332,10 +332,34 @@
     }
   }
 
+  function splitFullName(value) {
+    const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return { nome: '', sobrenome: '' };
+    if (parts.length === 1) return { nome: parts[0], sobrenome: '' };
+    return { nome: parts[0], sobrenome: parts.slice(1).join(' ') };
+  }
+
+  function syncMobileBar() {
+    const bar = document.getElementById('cart-mobile-bar');
+    const totalEl = document.getElementById('cart-mobile-bar-total');
+    const count = Cart.count();
+    if (totalEl) totalEl.textContent = Cart.formatMoney(Cart.payable());
+    if (bar) bar.hidden = count === 0;
+  }
+
+  function renderReorderButton() {
+    const btn = document.getElementById('cart-page-reorder');
+    if (!btn) return;
+    const last = Cart.loadLastOrder?.();
+    btn.hidden = !(last?.items?.length);
+  }
+
   function renderAll() {
     renderBadge();
     renderItems();
     renderSummary();
+    syncMobileBar();
+    renderReorderButton();
   }
 
   function syncPaymentNote(pay) {
@@ -345,12 +369,12 @@
 
   function fillCustomer() {
     const c = Cart.loadCustomer();
-    const nome = document.getElementById('cart-page-nome');
-    const sobrenome = document.getElementById('cart-page-sobrenome');
+    const fullname = document.getElementById('cart-page-fullname');
     const phone = document.getElementById('cart-page-phone');
     const address = document.getElementById('cart-page-address');
-    if (nome) nome.value = c.nome;
-    if (sobrenome) sobrenome.value = c.sobrenome;
+    if (fullname) {
+      fullname.value = [c.nome, c.sobrenome].filter(Boolean).join(' ');
+    }
     if (address) address.value = c.address || '';
     if (phone) {
       phone.value = c.phone ? formatPhoneBR(c.phone) : '';
@@ -369,9 +393,10 @@
   }
 
   function saveFormCustomer() {
+    const parts = splitFullName(document.getElementById('cart-page-fullname')?.value || '');
     Cart.saveCustomer({
-      nome: document.getElementById('cart-page-nome')?.value || '',
-      sobrenome: document.getElementById('cart-page-sobrenome')?.value || '',
+      nome: parts.nome,
+      sobrenome: parts.sobrenome,
       phone: document.getElementById('cart-page-phone')?.value || '',
       address: document.getElementById('cart-page-address')?.value || '',
     });
@@ -457,8 +482,9 @@
       }
       return;
     }
-    const nome = document.getElementById('cart-page-nome')?.value.trim() || '';
-    const sobrenome = document.getElementById('cart-page-sobrenome')?.value.trim() || '';
+    const nomeParts = splitFullName(document.getElementById('cart-page-fullname')?.value || '');
+    const nome = nomeParts.nome;
+    const sobrenome = nomeParts.sobrenome;
     const address = document.getElementById('cart-page-address')?.value.trim() || '';
     const phoneInput = document.getElementById('cart-page-phone');
     if (phoneInput) phoneInput.value = formatPhoneBR(phoneInput.value);
@@ -480,7 +506,8 @@
       return;
     }
     if (!nome || !sobrenome) {
-      if (error) { error.textContent = 'Preencha nome e sobrenome.'; error.hidden = false; }
+      if (error) { error.textContent = 'Informe nome e sobrenome.'; error.hidden = false; }
+      document.getElementById('cart-page-fullname')?.focus();
       return;
     }
     if (phone.length < 10 || phone.length > 11) {
@@ -565,6 +592,7 @@
       payment,
       loyalty: saved.loyalty || null,
     });
+    Cart.saveLastOrder?.(snapshot);
     Cart.clear();
     if (btn) {
       btn.disabled = false;
@@ -591,11 +619,25 @@
       renderAll();
     });
     document.getElementById('cart-page-checkout')?.addEventListener('click', checkout);
+    document.getElementById('cart-mobile-bar-checkout')?.addEventListener('click', () => {
+      document.getElementById('cart-page-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      checkout();
+    });
+    document.getElementById('cart-page-reorder')?.addEventListener('click', () => {
+      const result = Cart.restoreLastOrder?.();
+      if (!result?.ok) {
+        showFeedback('Não foi possível montar o pedido anterior.');
+        return;
+      }
+      showFeedback('Pedido anterior adicionado ao carrinho');
+      renderAll();
+    });
 
     document.querySelectorAll('input[name="cart-page-fulfillment"]').forEach((el) => {
       el.addEventListener('change', () => {
         Cart.setFulfillment(el.value);
         renderSummary();
+        syncMobileBar();
       });
     });
 
@@ -608,7 +650,7 @@
       });
     });
 
-    ['cart-page-nome', 'cart-page-sobrenome', 'cart-page-phone', 'cart-page-address'].forEach((id) => {
+    ['cart-page-fullname', 'cart-page-phone', 'cart-page-address'].forEach((id) => {
       document.getElementById(id)?.addEventListener('change', saveFormCustomer);
     });
 

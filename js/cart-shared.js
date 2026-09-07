@@ -297,6 +297,54 @@ window.AuroraCart = (() => {
     persist();
   }
 
+  const LAST_ORDER_KEY = 'aurora_last_order_v1';
+
+  function saveLastOrder(snapshot) {
+    try {
+      const rows = (snapshot || []).map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        price: item.price,
+        qty: item.qty,
+        flavor: item.flavor || '',
+        size: item.size || '',
+        detail: item.detail || '',
+        image: item.image || '',
+        notes: item.notes || '',
+      }));
+      if (!rows.length) return;
+      localStorage.setItem(LAST_ORDER_KEY, JSON.stringify({
+        at: Date.now(),
+        items: rows,
+        fulfillment: getFulfillment(),
+        payment: getPayment(),
+      }));
+    } catch { /* ignore */ }
+  }
+
+  function loadLastOrder() {
+    try {
+      const raw = localStorage.getItem(LAST_ORDER_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  function restoreLastOrder() {
+    const last = loadLastOrder();
+    if (!last?.items?.length) return { ok: false, reason: 'empty' };
+    let added = 0;
+    last.items.forEach((item) => {
+      if (addItem({ ...item, qty: item.qty || 1 })) added += 1;
+    });
+    if (last.fulfillment) setFulfillment(last.fulfillment);
+    if (last.payment) setPayment(last.payment);
+    return { ok: added > 0, added };
+  }
+
   function loadCustomer() {
     try {
       const raw = localStorage.getItem(CUSTOMER_KEY);
@@ -487,5 +535,6 @@ window.AuroraCart = (() => {
     getPayment, setPayment, paymentLabel, paymentWhatsAppLine,
     getDeliveryFee, getDeliveryNote, formatMoney, formatPhoneBR,
     buildWhatsAppMessage, syncFromStorage,
+    saveLastOrder, loadLastOrder, restoreLastOrder,
   };
 })();

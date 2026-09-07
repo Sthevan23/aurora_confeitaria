@@ -340,6 +340,71 @@ function updateStockAlertBadge() {
   badge.title = `${alerts.length} item(ns) com estoque baixo ou zerado`;
 }
 
+function collectCatalogAlerts() {
+  const alerts = [];
+  (Storage.getProducts() || []).forEach((p) => {
+    if (p.active === false) return;
+    if (/informa/i.test(String(p.name || ''))) return;
+    const image = String(p.image || '').trim();
+    const noPhoto = !image || image.startsWith('data:');
+    const price = Number(p.price);
+    const flavorPrices = p.flavorPrices && typeof p.flavorPrices === 'object'
+      ? Object.values(p.flavorPrices).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    const noPrice = !(price > 0) && !flavorPrices.length;
+
+    if (noPhoto) {
+      alerts.push({
+        level: 'warn',
+        id: p.id,
+        name: p.name,
+        message: 'Sem foto no cardápio',
+      });
+    }
+    if (noPrice) {
+      alerts.push({
+        level: 'danger',
+        id: p.id,
+        name: p.name,
+        message: 'Sem preço definido',
+      });
+    }
+  });
+
+  return alerts.sort((a, b) => {
+    if (a.level === b.level) return String(a.name).localeCompare(String(b.name), 'pt-BR');
+    return a.level === 'danger' ? -1 : 1;
+  });
+}
+
+function renderDashboardCatalogAlerts() {
+  const card = document.getElementById('dashboard-catalog-alert');
+  const list = document.getElementById('dashboard-catalog-alert-list');
+  if (!card || !list) return;
+
+  const alerts = collectCatalogAlerts();
+  if (!alerts.length) {
+    card.hidden = true;
+    list.innerHTML = '';
+    return;
+  }
+
+  card.hidden = false;
+  list.innerHTML = alerts.slice(0, 12).map((alert) => {
+    const icon = alert.level === 'danger' ? 'fa-circle-xmark' : 'fa-camera';
+    return `
+      <li class="dashboard-stock-alert__item dashboard-stock-alert__item--${alert.level}">
+        <span class="dashboard-stock-alert__icon" aria-hidden="true"><i class="fas ${icon}"></i></span>
+        <div class="dashboard-stock-alert__body">
+          <strong>${escapeHtml(alert.name)}</strong>
+          <span class="dashboard-stock-alert__meta">${escapeHtml(alert.message)}</span>
+        </div>
+        <button type="button" class="btn btn--secondary btn--sm" onclick="editProduct('${alert.id}')">Editar</button>
+      </li>
+    `;
+  }).join('');
+}
+
 function renderDashboardStockAlerts() {
   const card = document.getElementById('dashboard-stock-alert');
   const list = document.getElementById('dashboard-stock-alert-list');
@@ -380,6 +445,7 @@ function renderDashboard() {
   document.getElementById('stat-products').textContent = stats.totalProducts;
 
   renderDashboardStockAlerts();
+  renderDashboardCatalogAlerts();
 
   const allOrders = sortOrdersNewestFirst(Storage.getOrders());
   const recent = allOrders.slice(0, 8);
