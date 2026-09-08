@@ -812,7 +812,17 @@ function applySettings() {
 
   const heroBg = document.getElementById('hero-bg');
   if (heroBg && s.banner) {
-    heroBg.style.backgroundImage = `url('${imgSrc(s.banner)}')`;
+    const bannerUrl = imgSrc(s.banner);
+    heroBg.style.backgroundImage = `url('${bannerUrl}')`;
+    let preload = document.querySelector('link[data-hero-preload]');
+    if (!preload) {
+      preload = document.createElement('link');
+      preload.rel = 'preload';
+      preload.as = 'image';
+      preload.setAttribute('data-hero-preload', '1');
+      document.head.appendChild(preload);
+    }
+    preload.href = bannerUrl;
   }
 
   const sobreImg = document.getElementById('sobre-image');
@@ -1122,13 +1132,30 @@ function renderProducts() {
 }
 
 function renderGallery() {
-  const products = getProducts().slice(0, 8);
+  const grid = document.getElementById('gallery-grid');
+  if (!grid) return;
   const ig = Storage.getSettings().instagramUser || '@a.aurora.confeitaria';
-  document.getElementById('gallery-grid').innerHTML = products.map((p, index) => `
-    <figure class="gallery__item" ${index % 2 === 1 ? 'data-delay' : ''}>
-      ${imgTag(p.image, p.name)}
+  const gallery = (Storage.getGallery?.() || []).filter((item) => {
+    const src = typeof item === 'string' ? item : (item?.image || item?.src || '');
+    return String(src || '').trim() && !String(src).startsWith('data:');
+  });
+  const fromGallery = gallery.slice(0, 8).map((item, index) => {
+    const src = typeof item === 'string' ? item : (item.image || item.src || '');
+    const caption = typeof item === 'string'
+      ? 'Aurora'
+      : (item.caption || item.name || 'Aurora');
+    return { src, caption, delay: index % 2 === 1 };
+  });
+  const fromProducts = getShopProducts()
+    .filter((p) => p.image)
+    .slice(0, 8)
+    .map((p, index) => ({ src: p.image, caption: p.name, delay: index % 2 === 1 }));
+  const items = fromGallery.length ? fromGallery : fromProducts;
+  grid.innerHTML = items.map((item) => `
+    <figure class="gallery__item"${item.delay ? ' data-delay' : ''}>
+      ${imgTag(item.src, item.caption)}
       <figcaption>
-        <span>${p.name}</span>
+        <span>${String(item.caption || 'Aurora').replace(/</g, '&lt;')}</span>
         <small>${ig}</small>
       </figcaption>
     </figure>

@@ -1870,20 +1870,46 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
       }
     }
 
-    $ins = $pdo->prepare(
-      'INSERT INTO orders (
-        id, number, client_id, client_name, client_whatsapp, total, status, ordered_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())'
-    );
-    $ins->execute([
-      $orderId,
-      $orderNumber,
-      $clientId,
-      $name,
-      $phone,
-      $total,
-      'novo',
-    ]);
+    $notes = trim((string) ($order['notes'] ?? ''));
+    $hasNotes = false;
+    try {
+      $hasNotes = (bool) $pdo->query("SHOW COLUMNS FROM orders LIKE 'notes'")->fetch();
+    } catch (Throwable $e) {
+      $hasNotes = false;
+    }
+
+    if ($hasNotes) {
+      $ins = $pdo->prepare(
+        'INSERT INTO orders (
+          id, number, client_id, client_name, client_whatsapp, total, status, notes, ordered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+      );
+      $ins->execute([
+        $orderId,
+        $orderNumber,
+        $clientId,
+        $name,
+        $phone,
+        $total,
+        'novo',
+        $notes !== '' ? $notes : null,
+      ]);
+    } else {
+      $ins = $pdo->prepare(
+        'INSERT INTO orders (
+          id, number, client_id, client_name, client_whatsapp, total, status, ordered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())'
+      );
+      $ins->execute([
+        $orderId,
+        $orderNumber,
+        $clientId,
+        $name,
+        $phone,
+        $total,
+        'novo',
+      ]);
+    }
 
     aurora_reserve_stock_for_order($pdo, $order['items'] ?? []);
 
@@ -1906,6 +1932,13 @@ function aurora_create_order(PDO $pdo, array $order, ?array $client = null): arr
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     throw $e;
+  }
+
+  // Atualiza cardápio público para refletir estoque esgotado no site
+  try {
+    aurora_write_public_catalog($pdo);
+  } catch (Throwable $e) {
+    // pedido já gravado — não falha a venda por causa do JSON
   }
 
   return [

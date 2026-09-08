@@ -1388,11 +1388,21 @@ const Storage = (() => {
   function getDashboardStats() {
     const orders = getOrders();
     const finished = orders.filter((o) => o.status === 'finalizado');
-    const totalSales = finished.reduce((sum, o) => sum + o.total, 0);
-    const today = new Date().toISOString().split('T')[0];
-    const todaySales = finished.filter((o) => o.date.startsWith(today)).reduce((s, o) => s + o.total, 0);
+    const totalSales = finished.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const todayKey = new Date().toISOString().split('T')[0];
+    const isToday = (o) => {
+      const raw = String(o.date || o.orderedAt || o.createdAt || '');
+      return raw.startsWith(todayKey);
+    };
+    const todayOrders = orders.filter(isToday);
+    const todaySales = finished.filter(isToday).reduce((s, o) => s + (Number(o.total) || 0), 0);
     const month = new Date().toISOString().slice(0, 7);
-    const monthSales = finished.filter((o) => o.date.startsWith(month)).reduce((s, o) => s + o.total, 0);
+    const monthSales = finished.filter((o) => String(o.date || '').startsWith(month)).reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const pendingToday = todayOrders.filter((o) => {
+      const st = String(o.status || '').toLowerCase();
+      return st === 'novo' || st === 'preparando' || st === 'em preparo' || st === 'em_preparo';
+    });
+    const novos = orders.filter((o) => String(o.status || '').toLowerCase() === 'novo');
     return {
       totalOrders: orders.length,
       totalSales,
@@ -1400,6 +1410,9 @@ const Storage = (() => {
       totalProducts: getProducts().length,
       todaySales,
       monthSales,
+      todayOrders: todayOrders.length,
+      pendingToday: pendingToday.length,
+      novos: novos.length,
     };
   }
 

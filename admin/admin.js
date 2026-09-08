@@ -436,16 +436,65 @@ function renderDashboardStockAlerts() {
   }).join('');
 }
 
+function renderDashboardTodayBoard() {
+  const list = document.getElementById('dashboard-today-list');
+  const lead = document.getElementById('dashboard-today-lead');
+  if (!list) return;
+  const todayKey = new Date().toISOString().split('T')[0];
+  const orders = sortOrdersNewestFirst(Storage.getOrders()).filter((o) => {
+    const raw = String(o.date || o.orderedAt || o.createdAt || '');
+    if (!raw.startsWith(todayKey)) return false;
+    const st = String(o.status || '').toLowerCase();
+    return st === 'novo' || st === 'preparando' || st === 'em preparo' || st === 'em_preparo';
+  }).slice(0, 8);
+
+  if (lead) {
+    lead.textContent = orders.length
+      ? `${orders.length} pedido(s) precisando de atenção agora.`
+      : 'Nenhum pedido pendente hoje. Quando chegar um novo, aparece aqui.';
+  }
+
+  if (!orders.length) {
+    list.innerHTML = '';
+    return;
+  }
+
+  list.innerHTML = orders.map((o) => {
+    const st = String(o.status || 'novo');
+    const items = (o.items || []).slice(0, 2).map((i) => `${i.qty}x ${escapeHtml(i.name)}`).join(' · ');
+    return `
+      <li class="dashboard-stock-alert__item dashboard-stock-alert__item--${st === 'novo' ? 'danger' : 'warn'}">
+        <span class="dashboard-stock-alert__icon" aria-hidden="true"><i class="fas fa-receipt"></i></span>
+        <div class="dashboard-stock-alert__body">
+          <strong>${escapeHtml(o.number || o.id)} · ${escapeHtml(o.clientName || 'Cliente')}</strong>
+          <span class="dashboard-stock-alert__meta">${statusBadge(o.status)} · ${items || 'Sem itens'} · ${Storage.formatCurrency(o.total || 0)}</span>
+        </div>
+        <button type="button" class="btn btn--secondary btn--sm" onclick="viewOrder('${o.id}')">Abrir</button>
+      </li>
+    `;
+  }).join('');
+}
+
 function renderDashboard() {
   const stats = Storage.getDashboardStats();
 
-  document.getElementById('stat-orders').textContent = stats.totalOrders;
-  document.getElementById('stat-sales').textContent = Storage.formatCurrency(stats.totalSales);
-  document.getElementById('stat-clients').textContent = stats.totalClients;
-  document.getElementById('stat-products').textContent = stats.totalProducts;
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  setText('stat-novos', String(stats.novos || 0));
+  setText('stat-pending-today', String(stats.pendingToday || 0));
+  setText('stat-orders-today', String(stats.todayOrders || 0));
+  setText('stat-sales-today', Storage.formatCurrency(stats.todaySales || 0));
+  // Compat com cards antigos, se existirem
+  setText('stat-orders', String(stats.totalOrders || 0));
+  setText('stat-sales', Storage.formatCurrency(stats.totalSales || 0));
+  setText('stat-clients', String(stats.totalClients || 0));
+  setText('stat-products', String(stats.totalProducts || 0));
 
   renderDashboardStockAlerts();
   renderDashboardCatalogAlerts();
+  renderDashboardTodayBoard();
 
   const allOrders = sortOrdersNewestFirst(Storage.getOrders());
   const recent = allOrders.slice(0, 8);
