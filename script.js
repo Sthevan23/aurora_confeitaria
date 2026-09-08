@@ -391,10 +391,6 @@ function resolveLiveCoupon(coupon) {
 }
 
 function addToCart(item) {
-  if (typeof Storage !== 'undefined' && Storage.isStoreOpen && !Storage.isStoreOpen()) {
-    showCartFeedback(Storage.storeClosedMessage?.() || 'Loja fechada no momento.');
-    return false;
-  }
   if (Cart) {
     const ok = Cart.addItem(item);
     if (!ok) {

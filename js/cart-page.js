@@ -459,6 +459,14 @@
       el.disabled = !open;
       el.setAttribute('aria-disabled', open ? 'false' : 'true');
     });
+    const closedNote = document.getElementById('cart-page-closed-note');
+    if (closedNote) closedNote.hidden = open;
+    const mobileBtn = document.getElementById('cart-mobile-bar-checkout');
+    if (mobileBtn && !open) {
+      mobileBtn.textContent = 'Loja fechada';
+    } else if (mobileBtn) {
+      mobileBtn.textContent = 'Finalizar no WhatsApp';
+    }
   }
 
   async function checkout() {

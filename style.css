@@ -1445,45 +1445,6 @@ body.store-is-closed .header__nav a {
   color: var(--color-brown-deep);
 }
 
-body.store-banner-visible .header--solid {
-  top: var(--store-banner-h);
-  position: sticky;
-}
-
-body.store-banner-visible.cart-page .cart-page__main {
-  scroll-margin-top: calc(var(--header-h) + var(--store-banner-h) + 1rem);
-}
-
-@media (max-width: 640px) {
-  body.store-banner-visible {
-    --store-banner-h: 3.35rem;
-  }
-
-  .store-status-banner__inner {
-    flex-direction: column;
-    gap: 0.15rem;
-    min-height: 3.35rem;
-    padding: 0.4rem 0.35rem;
-    font-size: 0.8rem;
-  }
-
-  .store-status-banner__inner i {
-    display: none;
-  }
-}
-
-@media (max-width: 860px) {
-  .hero__content {
-    padding-top: calc(var(--header-h) + var(--store-banner-h) + var(--info-strip-h) + env(safe-area-inset-top, 0px) + 1.1rem);
-  }
-}
-
-body.store-is-closed .product-card:not(.product-card--unavailable) [data-order],
-body.store-is-closed .btn[data-order] {
-  pointer-events: none;
-  opacity: 0.55;
-}
-
 .product-card__stock-hint {
   margin: -0.35rem 0 0.85rem;
   font-size: 0.8rem;
@@ -4652,6 +4613,28 @@ body.cart-page .whatsapp-float {
 
 .payment__hint strong {
   color: var(--color-brown-deep);
+}
+
+.cart-closed-note {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: #fff8eb;
+  border: 1px solid color-mix(in srgb, #b86a00 28%, var(--color-line));
+  color: #7a5200;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.cart-closed-note[hidden] {
+  display: none !important;
+}
+
+body.store-is-closed .cart-summary__cta:disabled,
+body.store-is-closed #cart-mobile-bar-checkout:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .payment__note {
