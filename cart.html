@@ -11,16 +11,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
-  <link rel="stylesheet" href="style.css?v=62">
+  <link rel="stylesheet" href="style.css?v=63">
 </head>
 <body class="cart-page">
-  <div class="store-status-banner" id="store-status-banner" hidden role="status" aria-live="polite">
-    <div class="container store-status-banner__inner">
-      <i class="fa-solid fa-clock" aria-hidden="true"></i>
-      <span id="store-status-banner-text">Loja fechada no momento.</span>
-    </div>
-  </div>
-
   <header class="header header--solid" id="header">
     <div class="container header__inner">
       <a class="cart-page__back" href="index.html#produtos" aria-label="Voltar ao cardápio">
@@ -136,6 +129,9 @@
 
             <div class="cart-payment cart-payment--checkout">
               <p class="cart-checkout__label">Forma de pagamento</p>
+              <p class="payment__hint" id="cart-page-payment-hint">
+                <strong>Pix</strong> sem taxa · <strong>Dinheiro</strong> no local · <strong>Cartão</strong> com taxa da operadora (repassada)
+              </p>
               <div class="payment payment--chips" role="radiogroup" aria-label="Forma de pagamento">
                 <label class="payment__option payment__option--pix">
                   <input type="radio" name="cart-page-payment" value="pix" id="cart-page-payment-pix" checked>
@@ -160,7 +156,7 @@
                 </label>
               </div>
               <p class="payment__note" id="cart-page-payment-card-note" hidden>
-                No cartão de crédito, a taxa da operadora é repassada ao cliente.
+                No cartão de crédito, a taxa da operadora é repassada ao cliente no valor final.
               </p>
             </div>
 
@@ -192,6 +188,6 @@
   <script src="js/storage.js?v=71"></script>
   <script src="js/analytics.js?v=1"></script>
   <script src="js/cart-shared.js?v=13"></script>
-  <script src="js/cart-page.js?v=22"></script>
+  <script src="js/cart-page.js?v=24"></script>
 </body>
 </html>

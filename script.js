@@ -699,23 +699,12 @@ function getProducts() {
 function applyStoreStatus() {
   if (typeof Storage === 'undefined' || !Storage.isStoreOpen) return;
   const open = Storage.isStoreOpen();
-  const banner = document.getElementById('store-status-banner');
-  const text = document.getElementById('store-status-banner-text');
   document.body?.classList.toggle('store-is-closed', !open);
-  document.body?.classList.toggle('store-banner-visible', !open);
+  document.body?.classList.remove('store-banner-visible');
   const trustStatus = document.getElementById('hero-trust-status');
   if (trustStatus) {
     trustStatus.textContent = open ? 'Aberta agora' : 'Fechada agora';
     trustStatus.classList.toggle('is-closed', !open);
-  }
-  if (banner && text) {
-    if (!open) {
-      banner.hidden = false;
-      const hours = Storage.buildStoreHoursLabel?.(Storage.getSettings()) || 'Domingo a domingo · 10h às 22h';
-      text.innerHTML = `<strong>Estamos fechados agora.</strong> <span class="store-status-banner__hours">Horário: ${hours}</span>`;
-    } else {
-      banner.hidden = true;
-    }
   }
   document.querySelectorAll('[data-requires-store-open]').forEach((el) => {
     el.disabled = !open;
@@ -910,18 +899,48 @@ function getShopProducts() {
 }
 
 function getMenuProducts() {
-  return getProducts();
+  // Aviso importante vai no banner fino do topo — não compete com os produtos
+  return getProducts().filter((p) => !isInfoProduct(p));
 }
 
 function sortMenuProducts(list) {
   return list.slice().sort((a, b) => {
-    const aInfo = isInfoProduct(a) ? 0 : 1;
-    const bInfo = isInfoProduct(b) ? 0 : 1;
-    if (aInfo !== bInfo) return aInfo - bInfo;
     const sortDiff = (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0);
     if (sortDiff !== 0) return sortDiff;
     return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
   });
+}
+
+function getInfoProduct() {
+  return getProducts().find((p) => isInfoProduct(p)) || null;
+}
+
+function renderInfoStrip() {
+  const strip = document.getElementById('info-strip');
+  const titleEl = document.getElementById('info-strip-title');
+  const bodyEl = document.getElementById('info-strip-body');
+  const moreBtn = document.getElementById('info-strip-more');
+  if (!strip) return;
+
+  const info = getInfoProduct();
+  if (!info) {
+    strip.hidden = true;
+    document.body?.classList.remove('info-strip-visible');
+    return;
+  }
+
+  const title = String(info.name || 'Informações importantes').trim();
+  const desc = String(info.description || '').replace(/\s+/g, ' ').trim();
+  const short = desc.length > 110 ? `${desc.slice(0, 110).trim()}…` : desc;
+
+  if (titleEl) titleEl.textContent = title;
+  if (bodyEl) bodyEl.textContent = short ? ` — ${short}` : '';
+  strip.hidden = false;
+  document.body?.classList.add('info-strip-visible');
+
+  if (moreBtn) {
+    moreBtn.onclick = () => openLightbox(info.id);
+  }
 }
 
 function renderFilters() {
@@ -1091,13 +1110,11 @@ function bindProductOrderButtons(root) {
 function renderBestsellers() {
   const grid = document.getElementById('bestsellers-grid');
   if (!grid) return;
-  const infoFirst = getProducts().filter((p) => isInfoProduct(p));
   const items = getShopProducts().filter((p) => p.bestSeller);
-  const shopList = items.length
+  const list = items.length
     ? items
     : getShopProducts().filter((p) => p.featured).slice(0, 4);
-  const list = [...infoFirst, ...shopList.filter((p) => !isInfoProduct(p))];
-  grid.innerHTML = list.map((p) => productCardHTML(p, { bestSeller: !isInfoProduct(p) })).join('');
+  grid.innerHTML = list.map((p) => productCardHTML(p, { bestSeller: true })).join('');
   bindProductOrderButtons(grid);
 }
 
@@ -1296,6 +1313,18 @@ function syncFlavorUnitCollapse(product, focusIdx = null) {
   }
 }
 
+function applySameFlavorToAll(product, flavor) {
+  const qty = Math.max(1, lightboxQty);
+  const pick = String(flavor || '').trim();
+  if (!pick || qty < 2) return;
+  selectedFlavors = Array.from({ length: qty }, () => pick);
+  const summary = document.getElementById('flavor-summary');
+  if (summary) summary.textContent = flavorSummaryText(product);
+  updateLightboxTotals();
+  document.getElementById('acc-flavor')?.classList.add('is-done');
+  renderLightboxFlavors();
+}
+
 function bindLightboxFlavorInputs(product, multi) {
   const flavorRoot = document.getElementById('acc-flavor');
   document.querySelectorAll('#lightbox-flavors .flavor-unit').forEach((unitEl) => {
@@ -1309,6 +1338,12 @@ function bindLightboxFlavorInputs(product, multi) {
         if (summary) summary.textContent = flavorSummaryText(product);
         updateLightboxTotals();
 
+        const sameBtn = document.getElementById('flavor-same-all');
+        if (sameBtn && unitIdx === 0 && selectedFlavors[0]) {
+          sameBtn.hidden = false;
+          sameBtn.disabled = false;
+        }
+
         const done = allLightboxFlavorsSelected(product);
         flavorRoot?.classList.toggle('is-done', done);
         if (multi) {
@@ -1320,6 +1355,19 @@ function bindLightboxFlavorInputs(product, multi) {
     });
   });
   if (multi) syncFlavorUnitCollapse(product);
+
+  const sameBtn = document.getElementById('flavor-same-all');
+  if (sameBtn) {
+    sameBtn.hidden = !selectedFlavors[0];
+    sameBtn.addEventListener('click', () => {
+      const first = selectedFlavors[0] || '';
+      if (!first) {
+        syncFlavorUnitCollapse(product, 0);
+        return;
+      }
+      applySameFlavorToAll(product, first);
+    });
+  }
 }
 
 function flavorSummaryText(product) {
@@ -1402,7 +1450,12 @@ function renderLightboxFlavors() {
         <span class="order-acc__chevron">▾</span>
       </button>
       <div class="order-acc__body"><div class="order-acc__inner">
-        <p class="flavor-units__hint">Pode ser o mesmo sabor ou sabores diferentes.</p>
+        <div class="flavor-units__toolbar">
+          <p class="flavor-units__hint">Pode ser o mesmo sabor ou sabores diferentes.</p>
+          <button type="button" class="flavor-same-all" id="flavor-same-all" ${selectedFlavors[0] ? '' : 'hidden'}>
+            Mesmo sabor em todas
+          </button>
+        </div>
         <div class="flavor-units">${unitsHtml}</div>
       </div></div>
     </div>
@@ -1627,11 +1680,32 @@ function showCartFeedback(message) {
   `;
   el.hidden = false;
   el.classList.add('is-visible');
+  document.body?.classList.add('cart-feedback-visible');
   clearTimeout(showCartFeedback._t);
+  // No celular a barra fixa do carrinho permanece; o toast some mais tarde
+  const holdMs = window.matchMedia('(max-width: 860px)').matches ? 5200 : 3200;
   showCartFeedback._t = setTimeout(() => {
     el.classList.remove('is-visible');
     el.hidden = true;
-  }, 3200);
+    document.body?.classList.remove('cart-feedback-visible');
+  }, holdMs);
+  syncMobileCartBar();
+}
+
+function syncMobileCartBar() {
+  const bar = document.getElementById('mobile-cart-bar');
+  if (!bar) return;
+  const count = cartCount();
+  const total = cartPayable();
+  const text = document.getElementById('mobile-cart-bar-text');
+  const totalEl = document.getElementById('mobile-cart-bar-total');
+  const show = count > 0;
+  bar.hidden = !show;
+  document.body?.classList.toggle('mobile-cart-bar-visible', show);
+  if (text) {
+    text.textContent = count === 1 ? 'Ver carrinho (1 item)' : `Ver carrinho (${count} itens)`;
+  }
+  if (totalEl) totalEl.textContent = Storage.formatCurrency(total);
 }
 
 function pulseCartBadge() {
@@ -1707,6 +1781,7 @@ function renderCartUI() {
       headerTotal.hidden = true;
     }
   }
+  syncMobileCartBar();
 
   if (subtotalEl) subtotalEl.textContent = Storage.formatCurrency(subtotal);
   if (totalEl) totalEl.textContent = Storage.formatCurrency(payable);
@@ -2398,6 +2473,7 @@ async function boot() {
   }
 
   applySettings();
+  renderInfoStrip();
   renderMarquee();
   setInterval(applyStoreStatus, 60000);
   renderBestsellers();
@@ -2415,7 +2491,9 @@ async function boot() {
 
   window.addEventListener('storage-updated', () => {
     applySettings();
+    renderInfoStrip();
     renderBestsellers();
+    renderFilters();
     renderProducts();
     renderGallery();
     applyStoreStatus();

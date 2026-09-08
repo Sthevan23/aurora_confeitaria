@@ -453,19 +453,8 @@
   function applyStoreStatus() {
     if (typeof Storage === 'undefined' || !Storage.isStoreOpen) return;
     const open = Storage.isStoreOpen();
-    const banner = document.getElementById('store-status-banner');
-    const text = document.getElementById('store-status-banner-text');
     document.body?.classList.toggle('store-is-closed', !open);
-    document.body?.classList.toggle('store-banner-visible', !open);
-    if (banner && text) {
-      if (!open) {
-        banner.hidden = false;
-        const hours = Storage.buildStoreHoursLabel?.(Storage.getSettings()) || 'Domingo a domingo · 10h às 22h';
-        text.innerHTML = `<strong>Estamos fechados agora.</strong> <span class="store-status-banner__hours">Horário: ${hours}</span>`;
-      } else {
-        banner.hidden = true;
-      }
-    }
+    document.body?.classList.remove('store-banner-visible');
     document.querySelectorAll('[data-requires-store-open]').forEach((el) => {
       el.disabled = !open;
       el.setAttribute('aria-disabled', open ? 'false' : 'true');
