@@ -771,7 +771,9 @@ function applySettings() {
   const footerHours = document.getElementById('footer-hours');
   const hoursLabel = s.hours || Storage.buildStoreHoursLabel?.(s) || 'Domingo a domingo · 10h às 22h';
   if (footerHours) {
-    footerHours.textContent = hoursLabel;
+    const hoursText = footerHours.querySelector('span');
+    if (hoursText) hoursText.textContent = hoursLabel;
+    else footerHours.textContent = hoursLabel;
   }
   const heroHours = document.getElementById('hero-trust-hours');
   if (heroHours) heroHours.textContent = hoursLabel;

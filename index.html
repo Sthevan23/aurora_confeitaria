@@ -27,7 +27,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
-  <link rel="stylesheet" href="style.css?v=65">
+  <link rel="stylesheet" href="style.css?v=66">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -261,35 +261,47 @@
   </main>
 
   <footer class="footer">
-    <div class="container footer__top">
+    <div class="footer__wash" aria-hidden="true"></div>
+    <div class="container footer__shell">
       <div class="footer__brand">
         <a href="#topo" class="brand-logo brand-logo--footer" aria-label="Aurora Confeitaria Artesanal">
           <span class="brand-logo__name">Aurora</span>
           <span class="brand-logo__sub">Confeitaria Artesanal</span>
         </a>
-        <p class="footer__tagline">Feito com amor em Boa Esperança, MG.</p>
+        <p class="footer__tagline">Doces artesanais feitos com amor em Boa Esperança, MG.</p>
+        <a class="footer__cta" href="#mais-vendidos">Pedir agora</a>
       </div>
 
-      <nav class="footer__nav" aria-label="Rodapé">
-        <a href="#produtos">Cardápio</a>
-        <a href="#mais-vendidos">Mais vendidos</a>
-        <a href="#encomendas">Encomendas</a>
-        <a href="#contato">Contato</a>
-      </nav>
+      <div class="footer__panel">
+        <nav class="footer__nav" aria-label="Rodapé">
+          <p class="footer__label">Explorar</p>
+          <a href="#mais-vendidos">Mais vendidos</a>
+          <a href="#produtos">Cardápio</a>
+          <a href="#encomendas">Encomendas</a>
+          <a href="#contato">Contato</a>
+        </nav>
 
-      <div class="footer__channels">
-        <a id="footer-whatsapp" href="#" target="_blank" rel="noopener">
-          <i class="fab fa-whatsapp" aria-hidden="true"></i>
-          <span>WhatsApp</span>
-        </a>
-        <a id="footer-instagram" href="https://www.instagram.com/a.aurora.confeitaria" target="_blank" rel="noopener">
-          <i class="fab fa-instagram" aria-hidden="true"></i>
-          <span>@a.aurora.confeitaria</span>
-        </a>
-        <a id="footer-place" href="#" target="_blank" rel="noopener">
-          <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-          <span>Rua Casimiro Túlio Freire, 735 - Alta Vista</span>
-        </a>
+        <div class="footer__visit">
+          <p class="footer__label">Atendimento</p>
+          <p class="footer__hours" id="footer-hours">
+            <i class="fa-regular fa-clock" aria-hidden="true"></i>
+            <span>Domingo a domingo · 10h às 22h</span>
+          </p>
+          <a class="footer__place" id="footer-place" href="#" target="_blank" rel="noopener">
+            <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+            <span>Rua Casimiro Túlio Freire, 735 - Alta Vista</span>
+          </a>
+          <div class="footer__channels">
+            <a id="footer-whatsapp" href="#" target="_blank" rel="noopener">
+              <i class="fab fa-whatsapp" aria-hidden="true"></i>
+              <span>WhatsApp</span>
+            </a>
+            <a id="footer-instagram" href="https://www.instagram.com/a.aurora.confeitaria" target="_blank" rel="noopener">
+              <i class="fab fa-instagram" aria-hidden="true"></i>
+              <span>Instagram</span>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -297,7 +309,6 @@
       <div class="container footer__bottom-inner">
         <p>© <span id="footer-year"></span> Aurora Confeitaria Artesanal</p>
         <p id="footer-delivery">Pedidos pelo WhatsApp · Entrega R$ 7 (centro) · Bairros afastados consultar</p>
-        <p id="footer-hours">Domingo a domingo · 10h às 22h</p>
       </div>
     </div>
   </footer>
@@ -364,6 +375,6 @@
   <script src="js/storage.js?v=71"></script>
   <script src="js/analytics.js?v=1"></script>
   <script src="js/cart-shared.js?v=13"></script>
-  <script src="script.js?v=86"></script>
+  <script src="script.js?v=87"></script>
 </body>
 </html>
