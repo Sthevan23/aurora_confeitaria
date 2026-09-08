@@ -90,10 +90,88 @@
     const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
     if (mobile) {
       window.location.href = url;
-      return;
+      return true;
     }
     const win = window.open(url, '_blank');
-    if (!win) window.location.href = url;
+    if (win) return true;
+    try {
+      window.location.href = url;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function clearFieldErrors() {
+    document.querySelectorAll('.order-field.is-invalid, .is-invalid').forEach((el) => {
+      el.classList.remove('is-invalid');
+    });
+  }
+
+  function focusInvalid(el, message) {
+    const error = document.getElementById('cart-page-error');
+    if (error) {
+      error.textContent = message;
+      error.hidden = false;
+    }
+    clearFieldErrors();
+    const field = el?.closest?.('.order-field') || el;
+    field?.classList?.add('is-invalid');
+    try {
+      el?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    } catch { /* ignore */ }
+    try {
+      el?.focus?.({ preventScroll: true });
+    } catch {
+      el?.focus?.();
+    }
+    return false;
+  }
+
+  function pickupAddressText() {
+    const s = Storage.getSettings?.() || {};
+    return (
+      s.address ||
+      'Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG'
+    );
+  }
+
+  function fillScheduleOptions() {
+    const sel = document.getElementById('cart-page-schedule');
+    if (!sel) return;
+    const current = sel.value;
+    const s = Storage.getSettings?.() || {};
+    const openMin = (() => {
+      const m = String(s.openTime || '10:00').match(/^(\d{1,2}):(\d{2})$/);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : 10 * 60;
+    })();
+    const closeMin = (() => {
+      const m = String(s.closeTime || '22:00').match(/^(\d{1,2}):(\d{2})$/);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : 22 * 60;
+    })();
+    const fmt = (mins) => `${Math.floor(mins / 60)}h`;
+    const options = ['O mais breve possível'];
+    const start = Math.ceil(openMin / 60) * 60;
+    const end = closeMin > openMin ? closeMin : openMin + 8 * 60;
+    for (let t = start; t + 60 <= end; t += 60) {
+      options.push(`Hoje — ${fmt(t)} às ${fmt(t + 60)}`);
+    }
+    options.push('Amanhã — o mais breve possível');
+    for (let t = start; t + 60 <= end; t += 60) {
+      options.push(`Amanhã — ${fmt(t)} às ${fmt(t + 60)}`);
+    }
+
+    sel.innerHTML = `<option value="">Selecione o horário…</option>${
+      options.map((opt) => `<option value="${opt.replace(/"/g, '&quot;')}">${opt}</option>`).join('')
+    }`;
+    if (current && options.includes(current)) sel.value = current;
+  }
+
+  function syncPaymentExtras(pay) {
+    const note = document.getElementById('cart-page-payment-card-note');
+    if (note) note.hidden = pay !== 'cartao';
+    const changeWrap = document.getElementById('cart-page-change-wrap');
+    if (changeWrap) changeWrap.hidden = pay !== 'dinheiro';
   }
 
   function renderBadge() {
@@ -255,10 +333,25 @@
         feeNote.hidden = true;
       }
     }
+    const pickupNote = document.getElementById('cart-page-pickup-note');
+    if (pickupNote) {
+      if (mode === 'retirada') {
+        pickupNote.hidden = false;
+        pickupNote.textContent = `Retirada em ${pickupAddressText()}`;
+      } else {
+        pickupNote.hidden = true;
+      }
+    }
     if (deliveryLabel) deliveryLabel.textContent = `${Cart.formatMoney(fee)} no centro`;
 
     const addressWrap = document.getElementById('cart-page-address-wrap');
     if (addressWrap) addressWrap.hidden = mode !== 'entrega';
+    const scheduleHint = document.getElementById('cart-page-schedule-hint');
+    if (scheduleHint) {
+      scheduleHint.textContent = mode === 'entrega'
+        ? 'Escolha quando prefere receber a entrega.'
+        : 'Escolha quando prefere retirar no local.';
+    }
 
     // Cupom: mostra se existir cupom ativo no admin
     const couponBox = document.getElementById('cart-page-coupon');
@@ -363,8 +456,7 @@
   }
 
   function syncPaymentNote(pay) {
-    const note = document.getElementById('cart-page-payment-card-note');
-    if (note) note.hidden = pay !== 'cartao';
+    syncPaymentExtras(pay);
   }
 
   function fillCustomer() {
@@ -460,7 +552,15 @@
       el.setAttribute('aria-disabled', open ? 'false' : 'true');
     });
     const closedNote = document.getElementById('cart-page-closed-note');
-    if (closedNote) closedNote.hidden = open;
+    if (closedNote) {
+      closedNote.hidden = open;
+      if (!open) {
+        const next = Storage.getNextStoreOpenLabel?.() || '';
+        closedNote.textContent = next
+          ? `Loja fechada agora — ${next}. Você pode montar o carrinho e finalizar quando abrirmos.`
+          : (Storage.storeClosedMessage?.() || 'Loja fechada agora — você pode montar o carrinho e finalizar quando abrirmos.');
+      }
+    }
     const mobileBtn = document.getElementById('cart-mobile-bar-checkout');
     if (mobileBtn && !open) {
       mobileBtn.textContent = 'Loja fechada';
@@ -472,20 +572,31 @@
   async function checkout() {
     const error = document.getElementById('cart-page-error');
     const btn = document.getElementById('cart-page-checkout');
+    clearFieldErrors();
+
     if (typeof Storage !== 'undefined' && Storage.isStoreOpen && !Storage.isStoreOpen()) {
       if (error) {
         error.textContent = Storage.storeClosedMessage?.() || 'Loja fechada no momento.';
         error.hidden = false;
       }
+      closedNoteScroll();
       return;
     }
-    const nomeParts = splitFullName(document.getElementById('cart-page-fullname')?.value || '');
+
+    const nameEl = document.getElementById('cart-page-fullname');
+    const phoneInput = document.getElementById('cart-page-phone');
+    const addressEl = document.getElementById('cart-page-address');
+    const scheduleEl = document.getElementById('cart-page-schedule');
+    const changeEl = document.getElementById('cart-page-change');
+
+    const nomeParts = splitFullName(nameEl?.value || '');
     const nome = nomeParts.nome;
     const sobrenome = nomeParts.sobrenome;
-    const address = document.getElementById('cart-page-address')?.value.trim() || '';
-    const phoneInput = document.getElementById('cart-page-phone');
+    const address = addressEl?.value.trim() || '';
     if (phoneInput) phoneInput.value = formatPhoneBR(phoneInput.value);
     const phone = onlyDigits(phoneInput?.value || '');
+    const schedule = scheduleEl?.value.trim() || '';
+    const changeFor = changeEl?.value.trim() || '';
     const fulfillment = Cart.setFulfillment(
       document.querySelector('input[name="cart-page-fulfillment"]:checked')?.value || Cart.getFulfillment()
     );
@@ -500,22 +611,20 @@
         error.textContent = 'Escolha o sabor de cada item com preço zerado antes de finalizar.';
         error.hidden = false;
       }
+      document.getElementById('cart-page-items')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     if (!nome || !sobrenome) {
-      if (error) { error.textContent = 'Informe nome e sobrenome.'; error.hidden = false; }
-      document.getElementById('cart-page-fullname')?.focus();
-      return;
+      return focusInvalid(nameEl, 'Informe nome e sobrenome.');
     }
     if (phone.length < 10 || phone.length > 11) {
-      if (error) { error.textContent = 'Informe um WhatsApp válido com DDD.'; error.hidden = false; }
-      phoneInput?.focus();
-      return;
+      return focusInvalid(phoneInput, 'Informe um WhatsApp válido com DDD.');
     }
     if (fulfillment === 'entrega' && address.length < 8) {
-      if (error) { error.textContent = 'Informe o endereço completo para entrega.'; error.hidden = false; }
-      document.getElementById('cart-page-address')?.focus();
-      return;
+      return focusInvalid(addressEl, 'Informe o endereço completo para entrega.');
+    }
+    if (!schedule) {
+      return focusInvalid(scheduleEl, 'Escolha o horário preferido.');
     }
 
     const payment = Cart.setPayment(
@@ -534,7 +643,9 @@
     const notesParts = [
       fulfillment === 'entrega' ? 'Entrega' : 'Retirada',
       fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
+      schedule ? `Horário: ${schedule}` : '',
       `Pagamento: ${Cart.paymentWhatsAppLine(payment).replace(/\n/g, ' — ')}`,
+      payment === 'dinheiro' && changeFor ? `Troco para: ${changeFor}` : '',
       snapshot.map((i) => {
         const flavorBit = i.flavor ? ` (${i.flavor})` : '';
         const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -572,7 +683,6 @@
         btn.disabled = false;
         btn.textContent = prev;
       }
-      // Continua no WhatsApp para não perder a venda
     }
 
     window.AuroraAnalytics?.orderCreated({ total: payable, items: snapshot.length });
@@ -583,6 +693,8 @@
       fulfillment,
       address: fulfillment === 'entrega' ? address : '',
       payment,
+      schedule,
+      changeFor: payment === 'dinheiro' ? changeFor : '',
       loyalty: saved?.loyalty || null,
     });
     if (!saved?.ok) {
@@ -593,13 +705,27 @@
       }
       showFeedback('Abrindo WhatsApp (painel offline)');
     }
+
     Cart.saveLastOrder?.(snapshot);
-    Cart.clear();
+    const opened = openWhatsApp(message);
+    if (opened) {
+      Cart.clear();
+      renderAll();
+    } else if (error) {
+      error.textContent = 'Não foi possível abrir o WhatsApp. Seu carrinho foi mantido — tente de novo.';
+      error.hidden = false;
+      showFeedback('Carrinho mantido');
+    }
+
     if (btn) {
       btn.disabled = false;
       btn.textContent = prev;
     }
-    openWhatsApp(message);
+  }
+
+  function closedNoteScroll() {
+    const note = document.getElementById('cart-page-closed-note');
+    note?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
   }
 
   async function boot() {
@@ -608,8 +734,10 @@
     Cart.syncFromStorage?.();
     Cart.repairCartItems?.();
     fillCustomer();
+    fillScheduleOptions();
     applyStoreStatus();
     renderAll();
+    syncPaymentExtras(Cart.getPayment());
 
     Cart.onChange(() => renderAll());
 
@@ -621,7 +749,6 @@
     });
     document.getElementById('cart-page-checkout')?.addEventListener('click', checkout);
     document.getElementById('cart-mobile-bar-checkout')?.addEventListener('click', () => {
-      document.getElementById('cart-page-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       checkout();
     });
     document.getElementById('cart-page-reorder')?.addEventListener('click', () => {
@@ -646,13 +773,20 @@
       el.addEventListener('change', () => {
         if (el.checked) {
           Cart.setPayment(el.value);
-          syncPaymentNote(el.value);
+          syncPaymentExtras(el.value);
         }
       });
     });
 
-    ['cart-page-fullname', 'cart-page-phone', 'cart-page-address'].forEach((id) => {
-      document.getElementById(id)?.addEventListener('change', saveFormCustomer);
+    ['cart-page-fullname', 'cart-page-phone', 'cart-page-address', 'cart-page-schedule', 'cart-page-change'].forEach((id) => {
+      const el = document.getElementById(id);
+      el?.addEventListener('change', () => {
+        el.closest('.order-field')?.classList.remove('is-invalid');
+        saveFormCustomer();
+      });
+      el?.addEventListener('input', () => {
+        el.closest('.order-field')?.classList.remove('is-invalid');
+      });
     });
 
     const phoneEl = document.getElementById('cart-page-phone');

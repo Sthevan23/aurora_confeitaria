@@ -457,7 +457,7 @@ window.AuroraCart = (() => {
     );
   }
 
-  function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty, address, payment }) {
+  function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty, address, payment, schedule, changeFor }) {
     const s = typeof Storage !== 'undefined' ? Storage.getSettings() : {};
     const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
     repairItemPrices();
@@ -471,6 +471,8 @@ window.AuroraCart = (() => {
     const fee = mode === 'entrega' ? getDeliveryFee() : 0;
     const total = Math.max(0, sub - disc + fee);
     const pay = payment || getPayment();
+    const when = String(schedule || '').trim();
+    const change = String(changeFor || '').trim();
 
     const lines = list.map((item) => {
       const qty = Number(item.qty) || 1;
@@ -498,14 +500,18 @@ window.AuroraCart = (() => {
         (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde\n` : '\n');
     }
 
+    const scheduleBlock = when ? `\n*Horário preferido:* ${when}` : '';
+    const changeBlock = pay === 'dinheiro' && change ? `\n*Troco para:* ${change}` : '';
+
     return (
       `*Novo Pedido — ${storeName}*\n\n` +
       `*Cliente:*\n${fullName}\n${formatPhoneBR(phone)}\n\n` +
       `*Itens:*\n${lines}\n` +
       `${couponBlock}\n` +
       `*Total:* ${formatMoney(total)}\n` +
-      `*Pagamento:* ${paymentWhatsAppLine(pay)}\n` +
-      `${loyaltyBlock}\n` +
+      `*Pagamento:* ${paymentWhatsAppLine(pay)}${changeBlock}\n` +
+      `${loyaltyBlock}` +
+      `${scheduleBlock}\n` +
       `${fulfillmentBlock(mode, address)}\n\n` +
       `Aguardo confirmação 😊`
     );

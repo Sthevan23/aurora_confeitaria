@@ -714,21 +714,53 @@ const Storage = (() => {
     return now >= open || now < close;
   }
 
-  function isStoreOpen(settings) {
+  function isStoreOpen(settings, date = new Date()) {
     const s = settings || getSettings();
     const status = String(s.storeStatus || 'auto');
     if (status === 'open') return true;
     if (status === 'closed') return false;
-    return isStoreOpenBySchedule(s);
+    return isStoreOpenBySchedule(s, date);
+  }
+
+  function getNextStoreOpenLabel(settings, date = new Date()) {
+    const s = normalizeStoreSettings(settings || getSettings());
+    if (String(s.storeStatus || 'auto') === 'closed') return '';
+    if (isStoreOpen(s, date)) return '';
+
+    const days = normalizeOpenDays(s.openDays);
+    const openMin = parseTimeToMinutes(s.openTime || '10:00');
+    const closeMin = parseTimeToMinutes(s.closeTime || '22:00');
+    const openLabel = formatTimeLabel(s.openTime || '10:00');
+    if (openMin === null) return `Horário: ${buildStoreHoursLabel(s)}`;
+
+    const dayNames = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+    for (let offset = 0; offset < 8; offset += 1) {
+      const probe = new Date(date.getFullYear(), date.getMonth(), date.getDate() + offset, 12, 0, 0);
+      const day = probe.getDay();
+      if (days.length && !days.includes(day)) continue;
+
+      if (offset === 0) {
+        const nowMin = date.getHours() * 60 + date.getMinutes();
+        if (nowMin < openMin) return `Abre hoje às ${openLabel}`;
+        continue;
+      }
+
+      if (offset === 1) return `Abre amanhã às ${openLabel}`;
+      return `Abre ${dayNames[day]} às ${openLabel}`;
+    }
+    return `Horário: ${buildStoreHoursLabel(s)}`;
   }
 
   function storeClosedMessage(settings) {
     const s = normalizeStoreSettings(settings || getSettings());
     const hours = buildStoreHoursLabel(s);
     if (String(s.storeStatus || 'auto') === 'closed') {
-      return `A loja está fechada no momento. Horário: ${hours}.`;
+      return `A loja está fechada no momento. Horário usual: ${hours}.`;
     }
-    return `Estamos fechados agora. Horário de atendimento: ${hours}.`;
+    const next = getNextStoreOpenLabel(s);
+    return next
+      ? `Estamos fechados agora. ${next}.`
+      : `Estamos fechados agora. Horário de atendimento: ${hours}.`;
   }
 
   function getStoreStatusLabel(settings) {
@@ -1739,7 +1771,7 @@ const Storage = (() => {
     getSettings, saveSettings, saveSettingsAsync,
     normalizeStock, productTracksStock, productStockQty, getProductById, isProductOrderable, productStockLabel,
     normalizeOpenDays, buildStoreHoursLabel, isStoreOpen, isStoreOpenBySchedule,
-    storeClosedMessage, getStoreStatusLabel,
+    storeClosedMessage, getStoreStatusLabel, getNextStoreOpenLabel,
     getProducts, saveProducts, saveProductsAsync, saveProductAsync, deleteProductAsync, setProductActiveAsync, publishCatalogAsync,
     getCategories, saveCategories,
     getClients, saveClients,

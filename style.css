@@ -4812,6 +4812,39 @@ body.store-is-closed #cart-mobile-bar-checkout:disabled {
   color: var(--color-brown-soft);
 }
 
+.cart-summary__note--pickup {
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-pink) 8%, #fff);
+  border: 1px solid color-mix(in srgb, var(--color-pink) 20%, var(--color-line));
+  color: var(--color-brown-deep);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.order-field.is-invalid input,
+.order-field.is-invalid textarea,
+.order-field.is-invalid select,
+.is-invalid {
+  border-color: #d14343 !important;
+  box-shadow: 0 0 0 3px rgba(209, 67, 67, 0.12);
+}
+
+.cart-change {
+  margin-top: 0.65rem;
+}
+
+.cart-page select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--color-brown-deep);
+  font: inherit;
+}
+
 .cart-loyalty {
   margin: 0 0 1rem;
   padding: 0.85rem 0.95rem;
