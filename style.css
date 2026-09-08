@@ -563,7 +563,35 @@ p {
   text-transform: uppercase;
   text-align: center;
   color: var(--color-brown);
-  margin-bottom: 1.8rem;
+  margin-bottom: 0.85rem;
+}
+
+.hero__trust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.55rem;
+  margin: 0 auto 1.35rem;
+  max-width: 38rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(61, 38, 16, 0.1);
+  color: var(--color-brown-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.hero__trust #hero-trust-status {
+  color: #1f7a4d;
+}
+
+.hero__trust #hero-trust-status.is-closed {
+  color: #9a3b3b;
 }
 
 .hero__place span {

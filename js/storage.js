@@ -582,32 +582,8 @@ const Storage = (() => {
   }
 
   async function loginOfflineFallback(email, password) {
-    const def = (typeof AURORA_DEFAULT_DATA !== 'undefined' && AURORA_DEFAULT_DATA) ? AURORA_DEFAULT_DATA : null;
-    const authEmail = String(def?.auth?.email || 'auroraconfeitaria2022@gmail.com').trim();
-    const authPass = String(def?.auth?.password || 'aurora123');
-    if (String(email || '').trim() !== authEmail || String(password || '') !== authPass) {
-      return { ok: false, reason: 'auth' };
-    }
-
-    // Entra com catálogo estático/cache — painel abre mesmo com API 503
-    let loaded = false;
-    try {
-      loaded = await pullStaticCatalog();
-    } catch { loaded = false; }
-    if (!loaded) loaded = applyPublicCache(loadPublicCache());
-    if (!loaded) loaded = applyDefaultCatalog();
-    if (!loaded) {
-      setMemory(emptyStore());
-    }
-
-    const data = getAll();
-    data.auth = { email: authEmail, password: authPass };
-    setMemory(data);
-    savePublicCache(data);
-    setAdminPassword(password);
-    cloudEnabled = false;
-    lastLoadFromCache = true;
-    return { ok: true, offline: true };
+    // Não usa senha embutida no site público — só login remoto.
+    return { ok: false, reason: 'offline', error: 'Servidor indisponível. Tente de novo em alguns minutos.' };
   }
 
   async function loginRemote(email, password) {

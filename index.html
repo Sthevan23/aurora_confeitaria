@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="style.css?v=59">
+  <link rel="stylesheet" href="style.css?v=60">
 </head>
 <body>
   <div class="store-status-banner" id="store-status-banner" hidden role="status" aria-live="polite">
@@ -76,9 +76,16 @@
           <span id="hero-place">Boa Esperança, MG</span>
         </p>
 
+        <p class="hero__trust" id="hero-trust">
+          <span id="hero-trust-status">Aberta agora</span>
+          <span aria-hidden="true">·</span>
+          <span id="hero-trust-hours">Domingo a domingo · 10h às 22h</span>
+          <span aria-hidden="true">·</span>
+          <span id="hero-trust-delivery">Entrega R$ 7,00 no centro</span>
+        </p>
+
         <div class="hero__actions">
-          <a class="btn btn--primary" href="#produtos">Ver cardápio</a>
-          <a class="btn btn--secondary" href="#produtos">Montar pedido</a>
+          <a class="btn btn--primary" href="#mais-vendidos">Pedir agora</a>
           <a class="btn btn--ghost" id="hero-instagram" href="#" target="_blank" rel="noopener">Instagram</a>
         </div>
       </div>
@@ -269,117 +276,6 @@
     <i class="fab fa-whatsapp"></i>
   </a>
 
-  <div class="cart-drawer" id="cart-drawer" hidden>
-    <button type="button" class="cart-drawer__backdrop" id="cart-close-backdrop" aria-label="Fechar carrinho"></button>
-    <aside class="cart-drawer__panel" aria-label="Carrinho">
-      <header class="cart-drawer__head">
-        <div>
-          <p class="cart-drawer__eyebrow">Seu pedido</p>
-          <h2 class="cart-drawer__title">Carrinho</h2>
-          <p class="cart-drawer__subtitle" id="cart-subtitle">Nenhum item ainda</p>
-        </div>
-        <button type="button" class="cart-drawer__close" id="cart-close" aria-label="Fechar">×</button>
-      </header>
-      <div class="cart-drawer__body" id="cart-items"></div>
-      <footer class="cart-drawer__foot">
-        <div class="cart-drawer__total" id="cart-total-row" hidden>
-          <span>Subtotal</span>
-          <strong id="cart-subtotal">R$ 0,00</strong>
-        </div>
-        <div class="cart-drawer__discount" id="cart-discount-row" hidden>
-          <span>Desconto <em id="cart-coupon-label"></em></span>
-          <strong id="cart-discount">− R$ 0,00</strong>
-        </div>
-        <div class="cart-drawer__total cart-drawer__total--final" id="cart-final-row" hidden>
-          <span>Total</span>
-          <strong id="cart-total">R$ 0,00</strong>
-        </div>
-        <div class="cart-coupon" id="cart-coupon" hidden>
-          <label class="order-field" for="cart-coupon-input">Cupom de desconto</label>
-          <div class="cart-coupon__row">
-            <input type="text" id="cart-coupon-input" placeholder="Ex: AURORA10" autocomplete="off" maxlength="40">
-            <button type="button" class="btn btn--ghost" id="cart-coupon-apply">Aplicar</button>
-          </div>
-          <p class="cart-coupon__msg" id="cart-coupon-msg" hidden></p>
-          <button type="button" class="cart-coupon__remove" id="cart-coupon-remove" hidden>Remover cupom</button>
-        </div>
-        <div class="cart-checkout" id="cart-checkout" hidden>
-          <p class="cart-checkout__label cart-checkout__label--spaced">Como prefere receber?</p>
-          <div class="fulfillment" role="radiogroup" aria-label="Entrega ou retirada">
-            <label class="fulfillment__option">
-              <input type="radio" name="cart-fulfillment" value="retirada" id="cart-fulfillment-retirada" checked>
-              <span>
-                <strong>Retirada</strong>
-                <small>Buscar no local</small>
-              </span>
-            </label>
-            <label class="fulfillment__option">
-              <input type="radio" name="cart-fulfillment" value="entrega" id="cart-fulfillment-entrega">
-              <span>
-                <strong>Entrega</strong>
-                <small data-delivery-fee-label>R$ 7,00 no centro</small>
-              </span>
-            </label>
-          </div>
-          <p class="cart-drawer__delivery" id="cart-delivery-note" hidden>
-            Entrega: <strong>R$ 7,00</strong> região central · bairros mais afastados, consultar no WhatsApp
-          </p>
-          <p class="cart-drawer__delivery cart-drawer__delivery--pickup" id="cart-pickup-note" hidden>
-            Retirada em <strong>Rua Casimiro Túlio Freire, 735 - Alta Vista</strong> · Boa Esperança, MG
-          </p>
-          <p class="cart-checkout__label">Dados para finalizar</p>
-          <div class="cart-checkout__fields">
-            <label class="order-field">Nome *<input type="text" id="cart-nome" placeholder="Nome" autocomplete="given-name"></label>
-            <label class="order-field">Sobrenome *<input type="text" id="cart-sobrenome" placeholder="Sobrenome" autocomplete="family-name"></label>
-          </div>
-          <label class="order-field">WhatsApp *<input type="tel" id="cart-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
-          <div class="cart-address" id="cart-address-wrap" hidden>
-            <label class="order-field" for="cart-address">
-              Endereço de entrega *
-              <textarea id="cart-address" rows="3" maxlength="280" placeholder="Rua, número, bairro, referência…" autocomplete="street-address"></textarea>
-            </label>
-            <p class="cart-address__hint">Informe rua, número e bairro para a entrega.</p>
-          </div>
-          <div class="cart-payment cart-payment--checkout">
-            <p class="cart-checkout__label">Forma de pagamento</p>
-            <div class="payment payment--stacked" role="radiogroup" aria-label="Forma de pagamento">
-              <label class="payment__option">
-                <input type="radio" name="cart-payment" value="pix" id="cart-payment-pix" checked>
-                <span>
-                  <strong>Pix</strong>
-                  <small>Pagamento instantâneo</small>
-                </span>
-              </label>
-              <label class="payment__option">
-                <input type="radio" name="cart-payment" value="dinheiro" id="cart-payment-dinheiro">
-                <span>
-                  <strong>Dinheiro</strong>
-                  <small>Na entrega ou retirada</small>
-                </span>
-              </label>
-              <label class="payment__option">
-                <input type="radio" name="cart-payment" value="cartao" id="cart-payment-cartao">
-                <span>
-                  <strong>Cartão</strong>
-                  <small>Link de crédito · repasse da taxa</small>
-                </span>
-              </label>
-            </div>
-            <p class="payment__note" id="cart-payment-card-note" hidden>
-              No cartão de crédito, a taxa da operadora é repassada ao cliente.
-            </p>
-          </div>
-          <p class="cart-drawer__error" id="cart-error" hidden></p>
-          <button type="button" class="btn btn--secondary" id="cart-checkout-btn" data-requires-store-open>Finalizar pedido</button>
-        </div>
-        <div class="cart-drawer__actions">
-          <button type="button" class="btn btn--ghost" id="cart-continue">Continuar comprando</button>
-          <a class="btn btn--ghost" id="cart-go-menu" href="#produtos" hidden>Ver cardápio</a>
-        </div>
-      </footer>
-    </aside>
-  </div>
-
   <div class="order-lightbox" id="order-lightbox" hidden>
     <button type="button" class="order-lightbox__backdrop" id="lightbox-backdrop" aria-label="Fechar"></button>
     <div class="order-lightbox__panel order-lightbox__panel--product">
@@ -425,11 +321,11 @@
 
   <div class="cart-feedback" id="cart-feedback" hidden aria-live="polite"></div>
 
-  <script src="js/default-data.js?v=22"></script>
+  <script src="js/default-data.js?v=23"></script>
   <script src="js/product-photos.js?v=3"></script>
-  <script src="js/storage.js?v=69"></script>
+  <script src="js/storage.js?v=70"></script>
   <script src="js/analytics.js?v=1"></script>
   <script src="js/cart-shared.js?v=13"></script>
-  <script src="script.js?v=79"></script>
+  <script src="script.js?v=80"></script>
 </body>
 </html>

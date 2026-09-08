@@ -615,8 +615,9 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
   const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
   const coupon = appliedCoupon ? resolveLiveCoupon(appliedCoupon) : null;
   const discount = coupon ? Storage.calcCouponDiscount(coupon, subtotal) : 0;
-  const total = Math.max(0, subtotal - discount);
   const mode = fulfillment === 'entrega' || fulfillment === 'retirada' ? fulfillment : getFulfillment();
+  const fee = mode === 'entrega' ? getDeliveryFee() : 0;
+  const total = Math.max(0, subtotal - discount + fee);
   const pay = payment || (Cart?.getPayment?.() || 'pix');
   const payLabel = Cart?.paymentLabel?.(pay)
     || (pay === 'dinheiro' ? 'Dinheiro' : pay === 'cartao' ? 'Link para cartão de crédito (repasse da taxa)' : 'Pix');
@@ -651,6 +652,10 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
     )
     : '';
 
+  const feeBlock = mode === 'entrega'
+    ? `Taxa de entrega (centro): ${Storage.formatCurrency(fee)}\n`
+    : '';
+
   let loyaltyBlock = '';
   if (loyalty && loyalty.eligible) {
     const gift = loyalty.gift || '1 brinde surpresa da Aurora';
@@ -674,6 +679,7 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
     `ITENS DO PEDIDO (${items.length}):\n\n` +
     `${lines}\n` +
     `${couponBlock}` +
+    `${feeBlock}` +
     `TOTAL A PAGAR: ${Storage.formatCurrency(total)}\n` +
     `PAGAMENTO: ${payLabel}\n` +
     `${payNote}` +
@@ -697,6 +703,11 @@ function applyStoreStatus() {
   const text = document.getElementById('store-status-banner-text');
   document.body?.classList.toggle('store-is-closed', !open);
   document.body?.classList.toggle('store-banner-visible', !open);
+  const trustStatus = document.getElementById('hero-trust-status');
+  if (trustStatus) {
+    trustStatus.textContent = open ? 'Aberta agora' : 'Fechada agora';
+    trustStatus.classList.toggle('is-closed', !open);
+  }
   if (banner && text) {
     if (!open) {
       banner.hidden = false;
@@ -773,8 +784,15 @@ function applySettings() {
   }
 
   const footerHours = document.getElementById('footer-hours');
+  const hoursLabel = s.hours || Storage.buildStoreHoursLabel?.(s) || 'Domingo a domingo · 10h às 22h';
   if (footerHours) {
-    footerHours.textContent = s.hours || Storage.buildStoreHoursLabel?.(s) || 'Domingo a domingo · 10h às 22h';
+    footerHours.textContent = hoursLabel;
+  }
+  const heroHours = document.getElementById('hero-trust-hours');
+  if (heroHours) heroHours.textContent = hoursLabel;
+  const heroDelivery = document.getElementById('hero-trust-delivery');
+  if (heroDelivery) {
+    heroDelivery.textContent = `Entrega ${formatDeliveryFeeText()} no centro · Retirada no Alta Vista`;
   }
 
   const feeLabel = formatDeliveryFeeText();
@@ -1647,7 +1665,7 @@ function renderCartUI() {
   }
 
   const discount = cartDiscount();
-  const payable = Math.max(0, subtotal - discount);
+  const payable = cartPayable();
 
   if (countEl) {
     countEl.textContent = String(count);
@@ -1852,31 +1870,15 @@ function applyCartCoupon() {
 }
 
 function openCart() {
-  const drawer = document.getElementById('cart-drawer');
-  if (!drawer) return;
-  // Fecha o menu hambúrguer se estiver aberto
-  const nav = document.getElementById('nav-menu');
-  const toggle = document.getElementById('nav-toggle');
-  if (nav?.classList.contains('is-open')) {
-    nav.classList.remove('is-open');
-    toggle?.classList.remove('is-open');
-    toggle?.setAttribute('aria-expanded', 'false');
-  }
-  renderCartUI();
-  fillCustomerFields();
-  const wasOpen = drawer.classList.contains('is-open');
-  drawer.hidden = false;
-  drawer.classList.add('is-open');
-  if (!wasOpen) lockBodyScroll();
-  bindPhoneMask(document.getElementById('cart-phone'));
+  window.location.href = 'cart.html';
 }
 
 function closeCart() {
-  const drawer = document.getElementById('cart-drawer');
-  if (!drawer || !drawer.classList.contains('is-open')) return;
-  drawer.classList.remove('is-open');
-  drawer.hidden = true;
-  unlockBodyScroll();
+  /* carrinho só em cart.html */
+}
+
+function initCart() {
+  renderCartUI();
 }
 
 async function checkoutCart() {
@@ -2001,14 +2003,10 @@ async function checkoutCart() {
       btn.disabled = false;
       btn.textContent = prevLabel || 'Finalizar pedido';
     }
-    if (error) {
-      error.textContent = saved?.error || 'Não deu para gravar no painel. Tente de novo em instantes.';
-      error.hidden = false;
-    }
-    return;
+    // Continua no WhatsApp para não perder a venda se o painel estiver fora
   }
 
-  const message = buildCartWhatsAppMessage({
+  let message = buildCartWhatsAppMessage({
     fullName,
     phone,
     items: itemsSnapshot,
@@ -2017,6 +2015,13 @@ async function checkoutCart() {
     payment,
     loyalty: saved?.loyalty || null,
   });
+  if (!saved?.ok) {
+    message += '\n\n⚠️ Painel offline — confirmar este pedido manualmente.';
+    if (error) {
+      error.textContent = 'Painel offline. Abrindo WhatsApp para não perder o pedido…';
+      error.hidden = false;
+    }
+  }
   clearCart();
   closeCart();
   if (btn) {
@@ -2232,64 +2237,13 @@ function initLightbox() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (document.getElementById('cart-drawer')?.classList.contains('is-open')) closeCart();
-    else closeLightbox();
+    closeLightbox();
   });
 }
 
 function syncPaymentNote(pay) {
   const note = document.getElementById('cart-payment-card-note');
   if (note) note.hidden = pay !== 'cartao';
-}
-
-function initCart() {
-  renderCartUI();
-  // Header vai para cart.html — não abre mais o drawer
-  document.getElementById('cart-close')?.addEventListener('click', closeCart);
-  document.getElementById('cart-close-backdrop')?.addEventListener('click', closeCart);
-  document.getElementById('cart-checkout-btn')?.addEventListener('click', checkoutCart);
-  document.getElementById('cart-continue')?.addEventListener('click', continueShopping);
-  document.querySelectorAll('input[name="cart-fulfillment"], input[name="order-fulfillment"]').forEach((input) => {
-    input.addEventListener('change', () => {
-      if (input.checked) setFulfillment(input.value);
-    });
-  });
-  document.querySelectorAll('input[name="cart-payment"]').forEach((input) => {
-    input.addEventListener('change', () => {
-      if (input.checked && Cart?.setPayment) Cart.setPayment(input.value);
-      if (input.checked) syncPaymentNote(input.value);
-    });
-  });
-  const pay = Cart?.getPayment?.() || 'pix';
-  document.querySelectorAll('input[name="cart-payment"]').forEach((el) => {
-    el.checked = el.value === pay;
-  });
-  syncPaymentNote(pay);
-  document.getElementById('cart-coupon-apply')?.addEventListener('click', applyCartCoupon);
-  document.getElementById('cart-coupon-remove')?.addEventListener('click', () => {
-    const msg = document.getElementById('cart-coupon-msg');
-    if (msg) {
-      msg.hidden = true;
-      delete msg.dataset.keep;
-    }
-    saveAppliedCoupon(null);
-  });
-  document.getElementById('cart-coupon-input')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      applyCartCoupon();
-    }
-  });
-  document.getElementById('cart-go-menu')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    continueShopping();
-  });
-  ['cart-nome', 'cart-sobrenome', 'cart-phone'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('change', () => {
-      saveCustomer(readCustomerFromCart());
-    });
-  });
-  bindPhoneMask(document.getElementById('cart-phone'));
 }
 
 function normalizePhoneBR(value) {

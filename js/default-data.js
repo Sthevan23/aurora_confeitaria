@@ -28,8 +28,8 @@ const AURORA_DEFAULT_DATA = {
     "sobreText2": "Mais do que vender sobremesas, queremos criar experiências. Também acreditamos em fazer a diferença onde estamos — compartilhar o bem faz parte da nossa essência. Seja bem-vindo à Aurora Confeitaria."
   },
   "auth": {
-    "email": "auroraconfeitaria2022@gmail.com",
-    "password": "aurora123"
+    "email": "",
+    "password": ""
   },
   "categories": [
     { "id": "cat-copos", "name": "Copos Brownie", "slug": "copos" },

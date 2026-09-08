@@ -575,23 +575,27 @@
         btn.disabled = false;
         btn.textContent = prev;
       }
-      if (error) {
-        error.textContent = saved?.error || 'Não deu para gravar no painel. Tente de novo em instantes.';
-        error.hidden = false;
-      }
-      return;
+      // Continua no WhatsApp para não perder a venda
     }
 
     window.AuroraAnalytics?.orderCreated({ total: payable, items: snapshot.length });
 
-    const message = Cart.buildWhatsAppMessage({
+    let message = Cart.buildWhatsAppMessage({
       fullName,
       phone,
       fulfillment,
       address: fulfillment === 'entrega' ? address : '',
       payment,
-      loyalty: saved.loyalty || null,
+      loyalty: saved?.loyalty || null,
     });
+    if (!saved?.ok) {
+      message += '\n\n⚠️ Painel offline — confirmar este pedido manualmente.';
+      if (error) {
+        error.textContent = 'Painel offline. Abrindo WhatsApp para não perder o pedido…';
+        error.hidden = false;
+      }
+      showFeedback('Abrindo WhatsApp (painel offline)');
+    }
     Cart.saveLastOrder?.(snapshot);
     Cart.clear();
     if (btn) {
