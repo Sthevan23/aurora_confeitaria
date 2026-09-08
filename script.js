@@ -16,6 +16,52 @@ const CATEGORY_LABELS = {
 
 const FILTERS = ['all', 'cat-copos', 'cat-sandu', 'cat-cookies', 'cat-potes', 'cat-salgados', 'cat-bolos', 'cat-especiais'];
 
+try {
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+} catch { /* ignore */ }
+
+function isPageReload() {
+  try {
+    const nav = performance.getEntriesByType?.('navigation')?.[0];
+    if (nav?.type === 'reload') return true;
+    if (typeof performance.navigation !== 'undefined' && performance.navigation.type === 1) return true;
+  } catch { /* ignore */ }
+  return false;
+}
+
+function forceScrollTop() {
+  const html = document.documentElement;
+  const prev = html.style.scrollBehavior;
+  html.style.scrollBehavior = 'auto';
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  html.style.scrollBehavior = prev;
+}
+
+function pinTopAfterReload() {
+  if (!isPageReload()) return;
+  if (location.hash) {
+    try {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    } catch { /* ignore */ }
+  }
+  forceScrollTop();
+  requestAnimationFrame(() => {
+    forceScrollTop();
+    requestAnimationFrame(forceScrollTop);
+  });
+  setTimeout(forceScrollTop, 0);
+  setTimeout(forceScrollTop, 120);
+  setTimeout(forceScrollTop, 400);
+}
+
+pinTopAfterReload();
+window.addEventListener('pageshow', (event) => {
+  // bfcache / reload: garante topo
+  if (event.persisted || isPageReload()) pinTopAfterReload();
+});
+
 let activeFilter = 'all';
 let selectedProduct = null;
 let selectedFlavors = [];
@@ -2457,6 +2503,7 @@ async function boot() {
   initContactForm();
   initHeroWords();
   initParallax();
+  pinTopAfterReload();
 
   window.AuroraAnalytics?.pageView('index.html');
 

@@ -28,6 +28,20 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
   <link rel="stylesheet" href="style.css?v=66">
+  <script>
+    // Evita o navegador reabrir a página no meio (scroll restoration)
+    try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+    (function () {
+      var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+      var isReload = (nav && nav.type === 'reload') || (performance.navigation && performance.navigation.type === 1);
+      if (isReload) {
+        if (location.hash) {
+          try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+        }
+        window.scrollTo(0, 0);
+      }
+    })();
+  </script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -375,6 +389,6 @@
   <script src="js/storage.js?v=71"></script>
   <script src="js/analytics.js?v=1"></script>
   <script src="js/cart-shared.js?v=13"></script>
-  <script src="script.js?v=87"></script>
+  <script src="script.js?v=88"></script>
 </body>
 </html>
