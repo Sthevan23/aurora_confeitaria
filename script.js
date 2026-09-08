@@ -1078,11 +1078,13 @@ function bindProductOrderButtons(root) {
 function renderBestsellers() {
   const grid = document.getElementById('bestsellers-grid');
   if (!grid) return;
+  const infoFirst = getProducts().filter((p) => isInfoProduct(p));
   const items = getShopProducts().filter((p) => p.bestSeller);
-  const list = items.length
+  const shopList = items.length
     ? items
     : getShopProducts().filter((p) => p.featured).slice(0, 4);
-  grid.innerHTML = list.map((p) => productCardHTML(p, { bestSeller: true })).join('');
+  const list = [...infoFirst, ...shopList.filter((p) => !isInfoProduct(p))];
+  grid.innerHTML = list.map((p) => productCardHTML(p, { bestSeller: !isInfoProduct(p) })).join('');
   bindProductOrderButtons(grid);
 }
 
