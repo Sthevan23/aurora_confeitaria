@@ -915,34 +915,6 @@ function getInfoProduct() {
   return getProducts().find((p) => isInfoProduct(p)) || null;
 }
 
-function renderInfoStrip() {
-  const strip = document.getElementById('info-strip');
-  const titleEl = document.getElementById('info-strip-title');
-  const bodyEl = document.getElementById('info-strip-body');
-  const moreBtn = document.getElementById('info-strip-more');
-  if (!strip) return;
-
-  const info = getInfoProduct();
-  if (!info) {
-    strip.hidden = true;
-    document.body?.classList.remove('info-strip-visible');
-    return;
-  }
-
-  const title = String(info.name || 'Informações importantes').trim();
-  const desc = String(info.description || '').replace(/\s+/g, ' ').trim();
-  const short = desc.length > 110 ? `${desc.slice(0, 110).trim()}…` : desc;
-
-  if (titleEl) titleEl.textContent = title;
-  if (bodyEl) bodyEl.textContent = short ? ` — ${short}` : '';
-  strip.hidden = false;
-  document.body?.classList.add('info-strip-visible');
-
-  if (moreBtn) {
-    moreBtn.onclick = () => openLightbox(info.id);
-  }
-}
-
 function renderFilters() {
   const box = document.getElementById('category-filter');
   if (!box) return;
@@ -2473,7 +2445,6 @@ async function boot() {
   }
 
   applySettings();
-  renderInfoStrip();
   renderMarquee();
   setInterval(applyStoreStatus, 60000);
   renderBestsellers();
@@ -2491,7 +2462,6 @@ async function boot() {
 
   window.addEventListener('storage-updated', () => {
     applySettings();
-    renderInfoStrip();
     renderBestsellers();
     renderFilters();
     renderProducts();
