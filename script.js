@@ -1568,6 +1568,8 @@ function openLightbox(productId) {
   const alreadyOpen = lb?.classList.contains('is-open');
   lb.hidden = false;
   lb.classList.add('is-open');
+  document.body?.classList.add('lightbox-open');
+  syncMobileCartBar();
   if (!alreadyOpen) lockBodyScroll();
   // Tira o foco do card do produto (evita o browser “puxar” a página até ele)
   blurWithoutScroll();
@@ -1582,8 +1584,10 @@ function closeLightbox() {
   blurWithoutScroll();
   lb.classList.remove('is-open');
   lb.hidden = true;
+  document.body?.classList.remove('lightbox-open');
   unlockBodyScroll();
   selectedProduct = null;
+  syncMobileCartBar();
   // Rede de segurança se o foco do card tentar rolar a página de novo
   setTimeout(() => restoreScrollY(savedY), 0);
 }
@@ -1717,7 +1721,9 @@ function syncMobileCartBar() {
   const total = cartPayable();
   const text = document.getElementById('mobile-cart-bar-text');
   const totalEl = document.getElementById('mobile-cart-bar-total');
-  const show = count > 0;
+  const lightboxOpen = document.body?.classList.contains('lightbox-open')
+    || document.getElementById('order-lightbox')?.classList.contains('is-open');
+  const show = count > 0 && !lightboxOpen;
   bar.hidden = !show;
   document.body?.classList.toggle('mobile-cart-bar-visible', show);
   if (text) {
