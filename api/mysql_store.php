@@ -224,6 +224,65 @@ function aurora_ensure_draft_products(PDO $pdo): void {
 }
 
 /**
+ * Produção do dia (insumos) — só cria se o id ainda não existir,
+ * para não sobrescrever contagens que a dona já ajustou no admin.
+ */
+function aurora_ensure_production_inventory(PDO $pdo): void {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+
+  try {
+    aurora_ensure_inventory_items_table($pdo);
+    if (!aurora_table_exists($pdo, 'inventory_items')) return;
+
+    $batch = 'Produção 08/09/2026';
+    $items = [
+      ['id' => 'inv-prod-cone-kinder', 'name' => 'Cone Kinder', 'stock' => 6],
+      ['id' => 'inv-prod-cone-ninho-nutella', 'name' => 'Cone Ninho com Nutella', 'stock' => 1],
+      ['id' => 'inv-prod-cone-brigadeiro-caramelo', 'name' => 'Cone Brigadeiro com caramelo', 'stock' => 1],
+      ['id' => 'inv-prod-cone-ninho-nutella-brownie', 'name' => 'Cone Ninho com Nutella e brownie', 'stock' => 1],
+      ['id' => 'inv-prod-brownie-fatia', 'name' => 'Brownie Fatia', 'stock' => 7],
+      ['id' => 'inv-prod-browkie', 'name' => 'Browkie', 'stock' => 5],
+      ['id' => 'inv-prod-brownie-individual-pequeno', 'name' => 'Brownie individual pequeno', 'stock' => 6],
+      ['id' => 'inv-prod-caixinha-4-docinhos', 'name' => 'Caixinhas de 4 docinhos', 'stock' => 4],
+      ['id' => 'inv-prod-afogadinho-brigadeiro-caramelo', 'name' => 'Afogadinho brigadeiro com caramelo', 'stock' => 8],
+      ['id' => 'inv-prod-afogadinho-brownie-brigadeiro-nutella', 'name' => 'Afogadinho de brownie brigadeiro com Nutella', 'stock' => 4],
+      ['id' => 'inv-prod-afogadinho-ninho-nutella', 'name' => 'Afogadinho ninho com Nutella', 'stock' => 1],
+      ['id' => 'inv-prod-bolo-pote-ninho-morango', 'name' => 'Bolo de pote ninho com geleia de morango', 'stock' => 1],
+      ['id' => 'inv-prod-copo-frutas-amarelas', 'name' => 'Copo da felicidade — frutas amarelas', 'stock' => 2],
+      ['id' => 'inv-prod-copo-pessego', 'name' => 'Copo da felicidade — pêssego', 'stock' => 1],
+      ['id' => 'inv-prod-palha-chocolate', 'name' => 'Palha Italiana chocolate', 'stock' => 7],
+      ['id' => 'inv-prod-palha-oreo', 'name' => 'Palha Italiana Oreo', 'stock' => 9],
+      ['id' => 'inv-prod-fatia-quadrada-browkie', 'name' => 'Fatia quadrada pequena browkie', 'stock' => 12],
+      ['id' => 'inv-prod-cookies-tradicional', 'name' => 'Cookies tradicional', 'stock' => 8],
+      ['id' => 'inv-prod-recheio-coxinha-frango', 'name' => 'Recheio de coxinha de frango', 'stock' => 4],
+      ['id' => 'inv-prod-fatia-bolo-chocolate', 'name' => 'Fatia de bolo chocolate', 'stock' => 3],
+      ['id' => 'inv-prod-fatia-bolo-prestigio', 'name' => 'Fatia de bolo prestígio', 'stock' => 5],
+      ['id' => 'inv-prod-fatia-bolo-cereja', 'name' => 'Fatia de bolo cereja', 'stock' => 1],
+      ['id' => 'inv-prod-fatia-bolo-ameixa', 'name' => 'Fatia de bolo ameixa', 'stock' => 1],
+    ];
+
+    $check = $pdo->prepare('SELECT id FROM inventory_items WHERE id = ? LIMIT 1');
+    foreach ($items as $i => $row) {
+      $check->execute([$row['id']]);
+      if ($check->fetchColumn()) continue;
+      aurora_save_one_inventory_item($pdo, [
+        'id' => $row['id'],
+        'name' => $row['name'],
+        'unit' => 'un',
+        'stock' => (float) $row['stock'],
+        'minStock' => 1,
+        'notes' => $batch,
+        'sortOrder' => $i,
+      ]);
+    }
+  } catch (Throwable $e) {
+    // Não derruba o painel se o seed falhar
+  }
+}
+
+/**
  * @param 'full'|'public' $mode
  */
 function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
@@ -233,6 +292,10 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
 
   if (function_exists('aurora_ensure_draft_products')) {
     aurora_ensure_draft_products($pdo);
+  }
+
+  if (function_exists('aurora_ensure_production_inventory')) {
+    aurora_ensure_production_inventory($pdo);
   }
 
   if (function_exists('aurora_protect_product_photos')) {
