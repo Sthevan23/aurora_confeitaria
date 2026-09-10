@@ -29,8 +29,12 @@ const Storage = (() => {
 
   const RESTORE_PHOTOS = PING.replace(/ping\.php(?:\?.*)?$/, 'restore_photos.php');
 
+  // Só no admin — no site público isso compete com pedidos no pico
   try {
-    fetch(RESTORE_PHOTOS + (RESTORE_PHOTOS.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' }).catch(() => {});
+    const path = window.location.pathname || '';
+    if (path.includes('/admin/')) {
+      fetch(RESTORE_PHOTOS + (RESTORE_PHOTOS.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' }).catch(() => {});
+    }
   } catch { /* ignore */ }
 
   let cloudEnabled = false;
@@ -331,16 +335,42 @@ const Storage = (() => {
     }
     try {
       const res = await fetchWithTimeout(url, options, ms);
+      // Admin (force) não pode travar o breaker — senão o painel fica inutilizável no pico
       if (res.status === 503 || res.status === 403) {
-        tripApiBreaker(res.status === 403 ? 3 * 60 * 1000 : 45 * 1000);
+        if (!force) tripApiBreaker(res.status === 403 ? 3 * 60 * 1000 : 45 * 1000);
       } else if (res.ok) {
         clearApiBreaker();
+        if (force) cloudEnabled = true;
       }
       return res;
     } catch (err) {
       if (!force) tripApiBreaker(5 * 60 * 1000);
       throw err;
     }
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function adminFetchWithRetry(options, ms = 20000, attempts = 3) {
+    let lastRes = null;
+    let lastErr = null;
+    for (let i = 0; i < attempts; i += 1) {
+      clearApiBreaker();
+      try {
+        const res = await apiFetch(API, options, ms, { force: true });
+        lastRes = res;
+        if (res.ok || (res.status !== 503 && res.status !== 403 && res.status !== 502)) {
+          return res;
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+      if (i < attempts - 1) await sleep(700 * (i + 1));
+    }
+    if (lastRes) return lastRes;
+    throw lastErr || new Error('Falha de conexão');
   }
 
   async function probeCloud() {
@@ -1015,15 +1045,14 @@ const Storage = (() => {
     const timeoutMs = img.startsWith('data:') && img.length > 200000 ? 90000 : 20000;
 
     try {
-      clearApiBreaker();
-      const res = await apiFetch(API, {
+      const res = await adminFetchWithRetry({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Password': password,
         },
         body: JSON.stringify({ action: 'save_product', product }),
-      }, timeoutMs, { force: true });
+      }, timeoutMs, 3);
 
       let result = {};
       try {
@@ -1042,13 +1071,15 @@ const Storage = (() => {
       const msg = result.error
         || result.detail
         || (res.status === 401 ? 'Senha inválida. Faça login de novo.' : '')
-        || (res.status === 503 ? 'Servidor ocupado. Aguarde 1 minuto e tente de novo.' : '')
+        || (res.status === 503 || res.status === 403
+          ? 'Servidor ocupado no pico. Aguarde alguns segundos e tente de novo.'
+          : '')
         || 'Não sincronizou com o servidor.';
       console.warn('[Aurora] Falha ao salvar produto', res.status, result);
       return { ok: false, error: msg };
     } catch (err) {
       console.warn('[Aurora] Erro ao salvar produto', err);
-      return { ok: false, error: 'Sem conexão com o servidor. Verifique a internet e tente de novo.' };
+      return { ok: false, error: 'Servidor ocupado ou sem conexão. Tente de novo em alguns segundos.' };
     }
   }
 
@@ -1063,15 +1094,14 @@ const Storage = (() => {
     }
 
     try {
-      clearApiBreaker();
-      const res = await apiFetch(API, {
+      const res = await adminFetchWithRetry({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Password': password,
         },
         body: JSON.stringify({ action: 'delete_product', id }),
-      }, 12000, { force: true });
+      }, 15000, 3);
 
       let result = {};
       try {
@@ -1239,8 +1269,7 @@ const Storage = (() => {
     const password = getAdminPassword();
     if (!password || !productId) return false;
     try {
-      clearApiBreaker();
-      const res = await apiFetch(API, {
+      const res = await adminFetchWithRetry({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1251,7 +1280,7 @@ const Storage = (() => {
           id: productId,
           active: !!active,
         }),
-      }, 20000, { force: true });
+      }, 20000, 3);
       const result = await res.json().catch(() => ({}));
       if (!res.ok || result.ok === false) return false;
 

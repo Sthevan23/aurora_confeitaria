@@ -218,6 +218,7 @@ if ($method === 'POST') {
     || $actionName === 'save_catalog_order'
     || $actionName === 'save_product'
     || $actionName === 'delete_product'
+    || $actionName === 'set_product_active'
     || $actionName === 'save_settings'
     || $actionName === 'save_inventory_item'
     || $actionName === 'delete_inventory_item'
@@ -372,15 +373,14 @@ if ($method === 'POST') {
       } catch (Throwable $e) {
         $wrote = false;
       }
-      if (!$wrote) {
-        json_out([
-          'ok' => false,
-          'error' => 'Salvou no banco, mas não atualizou catalog.json (permissão?).',
-          'id' => $productId,
-          'active' => $active === 1,
-        ], 500);
-      }
-      json_out(['ok' => true, 'id' => $productId, 'active' => $active === 1, 'catalog' => true]);
+      // No pico, o banco manda: não falha o painel se o JSON estático atrasar
+      json_out([
+        'ok' => true,
+        'id' => $productId,
+        'active' => $active === 1,
+        'catalog' => (bool) $wrote,
+        'warning' => $wrote ? null : 'Salvou no banco; catalog.json pode atualizar no próximo publish.',
+      ]);
     } catch (Throwable $e) {
       json_out(['error' => 'Falha ao atualizar produto', 'detail' => $e->getMessage()], 500);
     }

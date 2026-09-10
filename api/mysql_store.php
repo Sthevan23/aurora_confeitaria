@@ -2316,7 +2316,7 @@ function aurora_analytics_ip_hash(string $ip): string {
   return hash('sha256', $ip . '|aurora_analytics_v1');
 }
 
-function aurora_analytics_geo_lookup(string $ip): array {
+function aurora_analytics_geo_lookup(string $ip, bool $allowExternal = true): array {
   if (
     $ip === ''
     || $ip === '127.0.0.1'
@@ -2326,17 +2326,27 @@ function aurora_analytics_geo_lookup(string $ip): array {
     return ['country' => '', 'region' => '', 'city' => ''];
   }
 
-  if (!empty($_SERVER['HTTP_CF_IPCOUNTRY']) && $_SERVER['HTTP_CF_IPCOUNTRY'] !== 'XX') {
-    return [
-      'country' => substr((string) $_SERVER['HTTP_CF_IPCOUNTRY'], 0, 80),
-      'region' => '',
-      'city' => '',
-    ];
+  // Headers do host/CDN primeiro — não trava processo PHP
+  foreach (['HTTP_CF_IPCOUNTRY', 'HTTP_X_COUNTRY_CODE', 'GEOIP_COUNTRY_CODE', 'HTTP_X_APPENGINE_COUNTRY'] as $header) {
+    if (empty($_SERVER[$header]) || $_SERVER[$header] === 'XX') continue;
+    $raw = strtoupper(trim((string) $_SERVER[$header]));
+    $cc = substr($raw, 0, 2);
+    $country = ($cc === 'BR' || stripos($raw, 'BRASIL') !== false || stripos($raw, 'BRAZIL') !== false)
+      ? 'Brasil'
+      : substr((string) $_SERVER[$header], 0, 80);
+    $city = substr(trim((string) ($_SERVER['HTTP_CF_IPCITY'] ?? '')), 0, 120);
+    $region = substr(trim((string) ($_SERVER['HTTP_CF_REGION'] ?? $_SERVER['HTTP_CF_REGION_CODE'] ?? '')), 0, 120);
+    return ['country' => $country, 'region' => $region, 'city' => $city];
+  }
+
+  // No pico: não chama API externa em page_view (segura processos da Hostinger)
+  if (!$allowExternal) {
+    return ['country' => '', 'region' => '', 'city' => ''];
   }
 
   $ctx = stream_context_create([
     'http' => [
-      'timeout' => 2,
+      'timeout' => 0.4,
       'header' => "Accept: application/json\r\n",
     ],
   ]);
@@ -2349,8 +2359,10 @@ function aurora_analytics_geo_lookup(string $ip): array {
   if (!is_array($json) || ($json['status'] ?? '') !== 'success') {
     return ['country' => '', 'region' => '', 'city' => ''];
   }
+  $country = trim((string) ($json['country'] ?? ''));
+  if ($country === 'Brazil') $country = 'Brasil';
   return [
-    'country' => substr((string) ($json['country'] ?? ''), 0, 80),
+    'country' => substr($country, 0, 80),
     'region' => substr((string) ($json['regionName'] ?? ''), 0, 120),
     'city' => substr((string) ($json['city'] ?? ''), 0, 120),
   ];
@@ -2600,7 +2612,7 @@ function aurora_track_event(PDO $pdo, array $body): array {
      WHERE session_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)'
   );
   $rateStmt->execute([$sessionId]);
-  if ((int) $rateStmt->fetchColumn() > 120) {
+  if ((int) $rateStmt->fetchColumn() > 80) {
     return ['ok' => true, 'throttled' => true];
   }
 
@@ -2620,13 +2632,15 @@ function aurora_track_event(PDO $pdo, array $body): array {
 
   $ip = aurora_analytics_client_ip();
   $ipHash = aurora_analytics_ip_hash($ip);
+  // Geo externa só em eventos de compra — page_view não pode travar o servidor no fim de semana
+  $allowExternalGeo = in_array($eventType, ['add_to_cart', 'begin_checkout', 'order_created'], true);
 
   $existing = $pdo->prepare('SELECT country, region, city FROM analytics_sessions WHERE session_id = ? LIMIT 1');
   $existing->execute([$sessionId]);
   $sessionRow = $existing->fetch(PDO::FETCH_ASSOC);
 
   if (!$sessionRow) {
-    $geo = aurora_analytics_geo_lookup($ip);
+    $geo = aurora_analytics_geo_lookup($ip, $allowExternalGeo);
     $ins = $pdo->prepare(
       'INSERT INTO analytics_sessions
        (session_id, ip_hash, country, region, city, referrer, landing_page, user_agent)
@@ -2649,8 +2663,9 @@ function aurora_track_event(PDO $pdo, array $body): array {
       ($sessionRow['country'] ?? '') === ''
       && ($sessionRow['city'] ?? '') === ''
       && $ip !== ''
+      && $allowExternalGeo
     ) {
-      $geo = aurora_analytics_geo_lookup($ip);
+      $geo = aurora_analytics_geo_lookup($ip, true);
       if (($geo['country'] ?? '') !== '' || ($geo['city'] ?? '') !== '') {
         $geoUpd = $pdo->prepare(
           'UPDATE analytics_sessions SET country = ?, region = ?, city = ?, ip_hash = COALESCE(ip_hash, ?)
@@ -2829,7 +2844,15 @@ function aurora_get_analytics(PDO $pdo, string $period = '7d'): array {
     "SELECT country, region, city, COUNT(*) AS sessions
      FROM analytics_sessions
      WHERE last_seen >= ?
-       AND (country IS NOT NULL AND country <> '' OR city IS NOT NULL AND city <> '')
+       AND (
+         country IN ('BR', 'Brasil', 'Brazil')
+         OR country LIKE 'Brasil%'
+         OR LOWER(country) LIKE '%brazil%'
+       )
+       AND (
+         (city IS NOT NULL AND city <> '')
+         OR (region IS NOT NULL AND region <> '')
+       )
      GROUP BY country, region, city
      ORDER BY sessions DESC
      LIMIT 20"
