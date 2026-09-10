@@ -431,10 +431,26 @@ window.AuroraCart = (() => {
     return 'Pix';
   }
 
+  function getPixInfo() {
+    const s = typeof Storage !== 'undefined' ? (Storage.getSettings?.() || {}) : {};
+    let key = String(s.pixKey || '').trim();
+    if (!key) {
+      let wa = String(s.whatsapp || '5535987216486').replace(/\D/g, '') || '5535987216486';
+      if (wa.startsWith('55') && wa.length >= 12) wa = wa.slice(2);
+      key = wa;
+    }
+    const name = String(s.pixName || 'Clara / Aurora Confeitaria').trim() || 'Clara / Aurora Confeitaria';
+    return { key, name };
+  }
+
   function paymentWhatsAppLine(value) {
     const label = paymentLabel(value);
     if (value === 'cartao') {
       return `${label}\nObs.: taxa do cartão repassada ao cliente.`;
+    }
+    if (value === 'pix') {
+      const pix = getPixInfo();
+      return `${label}\nChave Pix (${pix.name}): ${pix.key}`;
     }
     return label;
   }
@@ -501,7 +517,12 @@ window.AuroraCart = (() => {
     }
 
     const scheduleBlock = when ? `\n*Horário preferido:* ${when}` : '';
-    const changeBlock = pay === 'dinheiro' && change ? `\n*Troco para:* ${change}` : '';
+    let changeBlock = '';
+    if (pay === 'dinheiro' && change) {
+      changeBlock = change === 'preciso'
+        ? `\n*Troco:* preciso de troco`
+        : `\n*Troco:* preciso de troco para ${change}`;
+    }
 
     return (
       `*Novo Pedido — ${storeName}*\n\n` +
@@ -538,7 +559,7 @@ window.AuroraCart = (() => {
     maxQtyForProduct,
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,
-    getPayment, setPayment, paymentLabel, paymentWhatsAppLine,
+    getPayment, setPayment, paymentLabel, paymentWhatsAppLine, getPixInfo,
     getDeliveryFee, getDeliveryNote, formatMoney, formatPhoneBR,
     buildWhatsAppMessage, syncFromStorage,
     saveLastOrder, loadLastOrder, restoreLastOrder,

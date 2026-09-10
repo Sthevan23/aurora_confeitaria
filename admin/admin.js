@@ -3756,6 +3756,8 @@ function initSettings() {
   document.getElementById('set-banner').value = s.banner || '';
   document.getElementById('set-sobre-image').value = s.sobreImage || '';
   document.getElementById('set-whatsapp').value = s.whatsapp || '';
+  document.getElementById('set-pix-key').value = s.pixKey || '';
+  document.getElementById('set-pix-name').value = s.pixName || '';
   document.getElementById('set-email').value = s.email || '';
   document.getElementById('set-instagram').value = s.instagram || '';
   document.getElementById('set-instagram-user').value = s.instagramUser || '';
@@ -3804,6 +3806,8 @@ function initSettings() {
       banner: document.getElementById('set-banner').value.trim(),
       sobreImage: document.getElementById('set-sobre-image').value.trim(),
       whatsapp: document.getElementById('set-whatsapp').value.trim(),
+      pixKey: document.getElementById('set-pix-key').value.trim(),
+      pixName: document.getElementById('set-pix-name').value.trim(),
       email: document.getElementById('set-email').value.trim(),
       instagram: document.getElementById('set-instagram').value.trim(),
       instagramUser: document.getElementById('set-instagram-user').value.trim(),

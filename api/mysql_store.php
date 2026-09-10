@@ -302,6 +302,8 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     aurora_protect_product_photos($pdo);
   }
 
+  aurora_ensure_store_settings_columns($pdo);
+
   $settingsRow = $pdo->query('SELECT * FROM settings WHERE id = 1 LIMIT 1')->fetch();
   if (!$settingsRow) {
     return null;
@@ -443,6 +445,8 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     'banner' => $settingsRow['banner'] ?? '',
     'sobreImage' => $settingsRow['sobre_image'] ?? '',
     'whatsapp' => $settingsRow['whatsapp'] ?? '',
+    'pixKey' => $settingsRow['pix_key'] ?? '',
+    'pixName' => $settingsRow['pix_name'] ?? '',
     'instagram' => $settingsRow['instagram'] ?? '',
     'instagramUser' => $settingsRow['instagram_user'] ?? '',
     'facebook' => $settingsRow['facebook'] ?? '',
@@ -911,6 +915,8 @@ function aurora_ensure_store_settings_columns(PDO $pdo): void {
   aurora_ensure_column($pdo, 'settings', 'open_time', "VARCHAR(5) NOT NULL DEFAULT '10:00'");
   aurora_ensure_column($pdo, 'settings', 'close_time', "VARCHAR(5) NOT NULL DEFAULT '22:00'");
   aurora_ensure_column($pdo, 'settings', 'open_days', "VARCHAR(30) NOT NULL DEFAULT '0,1,2,3,4,5,6'");
+  aurora_ensure_column($pdo, 'settings', 'pix_key', "VARCHAR(120) NULL DEFAULT NULL");
+  aurora_ensure_column($pdo, 'settings', 'pix_name', "VARCHAR(120) NULL DEFAULT NULL");
 }
 
 function aurora_save_settings_only(PDO $pdo, array $settings): void {
@@ -928,6 +934,8 @@ function aurora_save_settings_only(PDO $pdo, array $settings): void {
     'banner' => $row['banner'] ?? '',
     'sobreImage' => $row['sobre_image'] ?? '',
     'whatsapp' => $row['whatsapp'] ?? '',
+    'pixKey' => $row['pix_key'] ?? '',
+    'pixName' => $row['pix_name'] ?? '',
     'instagram' => $row['instagram'] ?? '',
     'instagramUser' => $row['instagram_user'] ?? '',
     'facebook' => $row['facebook'] ?? '',
@@ -956,17 +964,21 @@ function aurora_save_settings_only(PDO $pdo, array $settings): void {
   $deliveryNote = trim((string) ($s['deliveryNote'] ?? 'Bairros mais afastados: consultar'));
   if ($deliveryNote === '') $deliveryNote = 'Bairros mais afastados: consultar';
 
+  $pixKey = trim((string) ($s['pixKey'] ?? ''));
+  $pixName = trim((string) ($s['pixName'] ?? ''));
+
   $stmt = $pdo->prepare(
     'INSERT INTO settings (
-      id, name, tagline, logo, banner, sobre_image, whatsapp, instagram, instagram_user,
+      id, name, tagline, logo, banner, sobre_image, whatsapp, pix_key, pix_name, instagram, instagram_user,
       facebook, email, address, hours, followers, posts, map_embed, hero_badge, hero_story,
       sobre_text1, sobre_text2, delivery_fee, delivery_note, store_status, open_time, close_time, open_days, data_version
     ) VALUES (
-      1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
     ON DUPLICATE KEY UPDATE
       name=VALUES(name), tagline=VALUES(tagline), logo=VALUES(logo), banner=VALUES(banner),
-      sobre_image=VALUES(sobre_image), whatsapp=VALUES(whatsapp), instagram=VALUES(instagram),
+      sobre_image=VALUES(sobre_image), whatsapp=VALUES(whatsapp), pix_key=VALUES(pix_key), pix_name=VALUES(pix_name),
+      instagram=VALUES(instagram),
       instagram_user=VALUES(instagram_user), facebook=VALUES(facebook), email=VALUES(email),
       address=VALUES(address), hours=VALUES(hours), followers=VALUES(followers), posts=VALUES(posts),
       map_embed=VALUES(map_embed), hero_badge=VALUES(hero_badge), hero_story=VALUES(hero_story),
@@ -982,6 +994,8 @@ function aurora_save_settings_only(PDO $pdo, array $settings): void {
     $s['banner'] ?? '',
     $s['sobreImage'] ?? '',
     $s['whatsapp'] ?? '',
+    $pixKey !== '' ? $pixKey : null,
+    $pixName !== '' ? $pixName : null,
     $s['instagram'] ?? '',
     $s['instagramUser'] ?? '',
     $s['facebook'] ?? '',

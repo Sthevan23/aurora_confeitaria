@@ -53,6 +53,8 @@ const Storage = (() => {
         banner: '',
         sobreImage: '',
         whatsapp: '',
+        pixKey: '',
+        pixName: '',
         instagram: '',
         instagramUser: '',
         facebook: '',

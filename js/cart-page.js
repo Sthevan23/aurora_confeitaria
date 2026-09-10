@@ -170,8 +170,43 @@
   function syncPaymentExtras(pay) {
     const note = document.getElementById('cart-page-payment-card-note');
     if (note) note.hidden = pay !== 'cartao';
+
+    const pixWrap = document.getElementById('cart-page-pix-wrap');
+    if (pixWrap) {
+      pixWrap.hidden = pay !== 'pix';
+      if (pay === 'pix') {
+        const pix = Cart.getPixInfo?.() || { key: '35987216486', name: 'Clara / Aurora Confeitaria' };
+        const nameEl = document.getElementById('cart-page-pix-name');
+        const keyEl = document.getElementById('cart-page-pix-key');
+        if (nameEl) nameEl.textContent = pix.name;
+        if (keyEl) keyEl.textContent = pix.key;
+      }
+    }
+
     const changeWrap = document.getElementById('cart-page-change-wrap');
     if (changeWrap) changeWrap.hidden = pay !== 'dinheiro';
+    if (pay !== 'dinheiro') {
+      const need = document.getElementById('cart-page-need-change');
+      const amountWrap = document.getElementById('cart-page-change-amount-wrap');
+      if (need) need.checked = false;
+      if (amountWrap) amountWrap.hidden = true;
+    } else {
+      syncChangeAmountVisibility();
+    }
+  }
+
+  function syncChangeAmountVisibility() {
+    const need = document.getElementById('cart-page-need-change');
+    const amountWrap = document.getElementById('cart-page-change-amount-wrap');
+    if (!amountWrap) return;
+    amountWrap.hidden = !need?.checked;
+  }
+
+  function readChangeForCheckout() {
+    const need = document.getElementById('cart-page-need-change');
+    if (!need?.checked) return '';
+    const amount = document.getElementById('cart-page-change')?.value.trim() || '';
+    return amount || 'preciso';
   }
 
   function renderBadge() {
@@ -587,8 +622,6 @@
     const phoneInput = document.getElementById('cart-page-phone');
     const addressEl = document.getElementById('cart-page-address');
     const scheduleEl = document.getElementById('cart-page-schedule');
-    const changeEl = document.getElementById('cart-page-change');
-
     const nomeParts = splitFullName(nameEl?.value || '');
     const nome = nomeParts.nome;
     const sobrenome = nomeParts.sobrenome;
@@ -596,7 +629,7 @@
     if (phoneInput) phoneInput.value = formatPhoneBR(phoneInput.value);
     const phone = onlyDigits(phoneInput?.value || '');
     const schedule = scheduleEl?.value.trim() || '';
-    const changeFor = changeEl?.value.trim() || '';
+    const changeFor = readChangeForCheckout();
     const fulfillment = Cart.setFulfillment(
       document.querySelector('input[name="cart-page-fulfillment"]:checked')?.value || Cart.getFulfillment()
     );
@@ -645,7 +678,9 @@
       fulfillment === 'entrega' && address ? `Endereço: ${address}` : '',
       schedule ? `Horário: ${schedule}` : '',
       `Pagamento: ${Cart.paymentWhatsAppLine(payment).replace(/\n/g, ' — ')}`,
-      payment === 'dinheiro' && changeFor ? `Troco para: ${changeFor}` : '',
+      payment === 'dinheiro' && changeFor
+        ? (changeFor === 'preciso' ? 'Preciso de troco' : `Preciso de troco para: ${changeFor}`)
+        : '',
       snapshot.map((i) => {
         const flavorBit = i.flavor ? ` (${i.flavor})` : '';
         const notesBit = i.notes ? ` [${i.notes}]` : '';
@@ -776,6 +811,18 @@
           syncPaymentExtras(el.value);
         }
       });
+    });
+
+    document.getElementById('cart-page-need-change')?.addEventListener('change', syncChangeAmountVisibility);
+    document.getElementById('cart-page-pix-copy')?.addEventListener('click', async () => {
+      const key = document.getElementById('cart-page-pix-key')?.textContent?.trim() || '';
+      if (!key || key === '—') return;
+      try {
+        await navigator.clipboard.writeText(key);
+        showFeedback('Chave Pix copiada');
+      } catch {
+        showFeedback('Não foi possível copiar. Selecione a chave manualmente.');
+      }
     });
 
     ['cart-page-fullname', 'cart-page-phone', 'cart-page-address', 'cart-page-schedule', 'cart-page-change'].forEach((id) => {
