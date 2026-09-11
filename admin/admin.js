@@ -3748,16 +3748,60 @@ async function setStoreStatusQuick(status) {
   );
 }
 
+function defaultPixFromSettings(s = {}) {
+  const key = String(s.pixKey || '').trim() || '46852227000166';
+  const name = String(s.pixName || 'Clara / Aurora Confeitaria').trim() || 'Clara / Aurora Confeitaria';
+  return { key, name };
+}
+
+function updatePixSettingsPreview() {
+  const el = document.getElementById('pix-settings-preview');
+  if (!el) return;
+  const key = document.getElementById('set-pix-key')?.value.trim() || '';
+  const name = document.getElementById('set-pix-name')?.value.trim() || '';
+  const shown = defaultPixFromSettings({ pixKey: key, pixName: name, whatsapp: document.getElementById('set-whatsapp')?.value });
+  el.innerHTML = `<strong>Como o cliente vê no carrinho</strong>${escapeHtml(shown.name)}<br>${escapeHtml(shown.key)}`;
+}
+
+async function savePixSettingsOnly() {
+  const keyEl = document.getElementById('set-pix-key');
+  const nameEl = document.getElementById('set-pix-name');
+  const pixKey = (keyEl?.value || '').trim();
+  const pixName = (nameEl?.value || '').trim();
+  if (!pixKey) {
+    showToast('Informe a chave Pix.', 'error');
+    keyEl?.focus();
+    return;
+  }
+  const payload = {
+    ...Storage.getSettings(),
+    pixKey,
+    pixName: pixName || 'Clara / Aurora Confeitaria',
+  };
+  Storage.saveSettings(payload);
+  const result = typeof Storage.saveSettingsAsync === 'function'
+    ? await Storage.saveSettingsAsync(payload)
+    : { ok: true };
+  if (!result?.ok) {
+    showToast(result?.error || 'Não sincronizou na nuvem. Tente de novo.', 'error');
+    return;
+  }
+  if (nameEl && !nameEl.value.trim()) nameEl.value = payload.pixName;
+  updatePixSettingsPreview();
+  showToast('Pix atualizado no site!', 'success');
+}
+
 function initSettings() {
   const s = Storage.getSettings();
+  const pixDefaults = defaultPixFromSettings(s);
 
   document.getElementById('set-name').value = s.name || '';
   document.getElementById('set-tagline').value = s.tagline || '';
   document.getElementById('set-banner').value = s.banner || '';
   document.getElementById('set-sobre-image').value = s.sobreImage || '';
   document.getElementById('set-whatsapp').value = s.whatsapp || '';
-  document.getElementById('set-pix-key').value = s.pixKey || '';
-  document.getElementById('set-pix-name').value = s.pixName || '';
+  document.getElementById('set-pix-key').value = s.pixKey || pixDefaults.key;
+  document.getElementById('set-pix-name').value = s.pixName || pixDefaults.name;
   document.getElementById('set-email').value = s.email || '';
   document.getElementById('set-instagram').value = s.instagram || '';
   document.getElementById('set-instagram-user').value = s.instagramUser || '';
@@ -3794,11 +3838,26 @@ function initSettings() {
   bindImageUpload('set-banner-file', 'set-banner');
   bindImageUpload('set-sobre-file', 'set-sobre-image');
 
+  ['set-pix-key', 'set-pix-name', 'set-whatsapp'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', updatePixSettingsPreview);
+  });
+  updatePixSettingsPreview();
+
+  document.getElementById('pix-settings-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await savePixSettingsOnly();
+  });
+
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const feeRaw = String(document.getElementById('set-delivery-fee').value || '').replace(',', '.');
     let deliveryFee = Number(feeRaw);
     if (!Number.isFinite(deliveryFee) || deliveryFee < 0) deliveryFee = 7;
+
+    const pixKey = document.getElementById('set-pix-key').value.trim()
+      || defaultPixFromSettings(Storage.getSettings()).key;
+    const pixName = document.getElementById('set-pix-name').value.trim()
+      || 'Clara / Aurora Confeitaria';
 
     const payload = {
       name: document.getElementById('set-name').value.trim(),
@@ -3806,8 +3865,8 @@ function initSettings() {
       banner: document.getElementById('set-banner').value.trim(),
       sobreImage: document.getElementById('set-sobre-image').value.trim(),
       whatsapp: document.getElementById('set-whatsapp').value.trim(),
-      pixKey: document.getElementById('set-pix-key').value.trim(),
-      pixName: document.getElementById('set-pix-name').value.trim(),
+      pixKey,
+      pixName,
       email: document.getElementById('set-email').value.trim(),
       instagram: document.getElementById('set-instagram').value.trim(),
       instagramUser: document.getElementById('set-instagram-user').value.trim(),
@@ -3837,6 +3896,7 @@ function initSettings() {
     }
     showToast('Site atualizado!', 'success');
     updateStoreStatusPreview();
+    updatePixSettingsPreview();
   });
 
   document.getElementById('password-form').addEventListener('submit', (e) => {

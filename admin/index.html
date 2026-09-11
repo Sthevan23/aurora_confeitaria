@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=80">
+  <link rel="stylesheet" href="admin.css?v=81">
   <style id="analytics-critical-css">
     /* Fallback layout — garante grid mesmo com cache antigo do CSS */
     #page-analises .analytics-stack { display: flex; flex-direction: column; gap: 20px; }
@@ -696,6 +696,30 @@
         </div>
       </div>
 
+      <div class="card pix-settings-card">
+        <div class="card__header">
+          <h3>Chave Pix do site</h3>
+          <span class="card__subtitle">Aparece no carrinho quando o cliente escolhe Pix</span>
+        </div>
+        <form id="pix-settings-form" class="settings-form">
+          <p class="pix-settings-hint">
+            Troque aqui a chave a qualquer momento. Depois de salvar, o checkout e a mensagem do WhatsApp usam o novo Pix.
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="set-pix-key">Chave Pix</label>
+              <input type="text" id="set-pix-key" placeholder="46852227000166" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="set-pix-name">Nome no Pix</label>
+              <input type="text" id="set-pix-name" placeholder="Clara / Aurora Confeitaria" autocomplete="off">
+            </div>
+          </div>
+          <p class="pix-settings-preview" id="pix-settings-preview" aria-live="polite"></p>
+          <button type="submit" class="btn btn--primary"><i class="fas fa-save"></i> Salvar Pix no site</button>
+        </form>
+      </div>
+
       <div class="card">
         <div class="card__header"><h3>Configurações da Confeitaria</h3></div>
         <form id="settings-form" class="settings-form">
@@ -727,16 +751,6 @@
             <div class="form-group">
               <label for="set-email">E-mail</label>
               <input type="email" id="set-email">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="set-pix-key">Chave Pix</label>
-              <input type="text" id="set-pix-key" placeholder="Telefone, CPF, e-mail ou chave aleatória">
-            </div>
-            <div class="form-group">
-              <label for="set-pix-name">Nome no Pix</label>
-              <input type="text" id="set-pix-name" placeholder="Clara / Aurora Confeitaria">
             </div>
           </div>
           <div class="form-row">
@@ -846,10 +860,10 @@
   <div class="toast-admin" id="toast-admin"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="../js/default-data.js?v=24"></script>
+  <script src="../js/default-data.js?v=25"></script>
   <script src="../js/product-photos.js?v=2"></script>
-  <script src="../js/storage.js?v=74"></script>
-  <script src="admin.js?v=66"></script>
+  <script src="../js/storage.js?v=75"></script>
+  <script src="admin.js?v=68"></script>
 </body>
 </html>
 

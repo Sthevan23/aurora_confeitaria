@@ -7,7 +7,7 @@ const AURORA_DEFAULT_DATA = {
     "banner": "products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg",
     "sobreImage": "products/clara-aurora-historia.jpg",
     "whatsapp": "5535987216486",
-    "pixKey": "35987216486",
+    "pixKey": "46852227000166",
     "pixName": "Clara / Aurora Confeitaria",
     "instagram": "https://www.instagram.com/a.aurora.confeitaria",
     "instagramUser": "@a.aurora.confeitaria",

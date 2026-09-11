@@ -917,6 +917,21 @@ function aurora_ensure_store_settings_columns(PDO $pdo): void {
   aurora_ensure_column($pdo, 'settings', 'open_days', "VARCHAR(30) NOT NULL DEFAULT '0,1,2,3,4,5,6'");
   aurora_ensure_column($pdo, 'settings', 'pix_key', "VARCHAR(120) NULL DEFAULT NULL");
   aurora_ensure_column($pdo, 'settings', 'pix_name', "VARCHAR(120) NULL DEFAULT NULL");
+
+  // Se a chave Pix ainda não foi salva no painel, usa o CNPJ da Aurora
+  try {
+    if (aurora_table_exists($pdo, 'settings')) {
+      $pdo->exec(
+        "UPDATE settings
+         SET pix_key = '46852227000166',
+             pix_name = COALESCE(NULLIF(TRIM(pix_name), ''), 'Clara / Aurora Confeitaria')
+         WHERE id = 1
+           AND (pix_key IS NULL OR TRIM(pix_key) = '')"
+      );
+    }
+  } catch (Throwable $e) {
+    // ignora — coluna pode não existir em installs antigos
+  }
 }
 
 function aurora_save_settings_only(PDO $pdo, array $settings): void {

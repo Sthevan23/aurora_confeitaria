@@ -434,11 +434,7 @@ window.AuroraCart = (() => {
   function getPixInfo() {
     const s = typeof Storage !== 'undefined' ? (Storage.getSettings?.() || {}) : {};
     let key = String(s.pixKey || '').trim();
-    if (!key) {
-      let wa = String(s.whatsapp || '5535987216486').replace(/\D/g, '') || '5535987216486';
-      if (wa.startsWith('55') && wa.length >= 12) wa = wa.slice(2);
-      key = wa;
-    }
+    if (!key) key = '46852227000166';
     const name = String(s.pixName || 'Clara / Aurora Confeitaria').trim() || 'Clara / Aurora Confeitaria';
     return { key, name };
   }

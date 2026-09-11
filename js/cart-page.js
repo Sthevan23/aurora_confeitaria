@@ -175,7 +175,7 @@
     if (pixWrap) {
       pixWrap.hidden = pay !== 'pix';
       if (pay === 'pix') {
-        const pix = Cart.getPixInfo?.() || { key: '35987216486', name: 'Clara / Aurora Confeitaria' };
+        const pix = Cart.getPixInfo?.() || { key: '46852227000166', name: 'Clara / Aurora Confeitaria' };
         const nameEl = document.getElementById('cart-page-pix-name');
         const keyEl = document.getElementById('cart-page-pix-key');
         if (nameEl) nameEl.textContent = pix.name;

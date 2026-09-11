@@ -1720,6 +1720,35 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   font-size: 1rem;
   color: var(--marrom-escuro);
 }
+.pix-settings-card {
+  border: 1px solid rgba(46, 125, 50, 0.18);
+  background: linear-gradient(180deg, #f7fbf7 0%, #fff 55%);
+}
+.pix-settings-hint {
+  margin: 0 0 1rem;
+  color: var(--texto-suave, #5c534c);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.pix-settings-preview {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px dashed rgba(46, 125, 50, 0.35);
+  color: var(--marrom-escuro);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.pix-settings-preview strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #2e7d32;
+}
 .open-days-grid {
   display: flex;
   flex-wrap: wrap;
