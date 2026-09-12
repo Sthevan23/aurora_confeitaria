@@ -844,7 +844,7 @@ const Storage = (() => {
     return '';
   }
 
-  async function saveSettingsAsync(settingsPatch) {
+  async function saveSettingsAsync(settingsPatch, { pixPin = '' } = {}) {
     const data = getAll();
     data.settings = { ...data.settings, ...settingsPatch };
     setMemory(data);
@@ -857,16 +857,21 @@ const Storage = (() => {
 
     try {
       clearApiBreaker();
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Admin-Password': password,
+      };
+      if (pixPin) headers['X-Pix-Pin'] = String(pixPin);
+      const body = {
+        action: 'save_settings',
+        settings: data.settings,
+      };
+      if (pixPin) body.pixPin = String(pixPin);
+
       const res = await apiFetch(API, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Password': password,
-        },
-        body: JSON.stringify({
-          action: 'save_settings',
-          settings: data.settings,
-        }),
+        headers,
+        body: JSON.stringify(body),
       }, 15000, { force: true });
 
       let result = {};
@@ -886,6 +891,7 @@ const Storage = (() => {
       const msg = result.error
         || result.detail
         || (res.status === 401 ? 'Senha inválida. Faça login de novo.' : '')
+        || (res.status === 403 ? 'PIN inválido. Só a Clara pode alterar o Pix.' : '')
         || (res.status === 503 ? 'Servidor ocupado. Aguarde 1 minuto e tente de novo.' : '')
         || 'Não sincronizou com o servidor.';
 

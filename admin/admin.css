@@ -1749,6 +1749,24 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   text-transform: uppercase;
   color: #2e7d32;
 }
+.pix-pin-gate {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  max-width: 280px;
+}
+.pix-settings-card.is-unlocked .pix-pin-gate {
+  display: none;
+}
+.pix-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.pix-settings-fields[hidden],
+.pix-settings-preview[hidden] {
+  display: none !important;
+}
 .open-days-grid {
   display: flex;
   flex-wrap: wrap;

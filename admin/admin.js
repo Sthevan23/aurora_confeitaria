@@ -3754,16 +3754,79 @@ function defaultPixFromSettings(s = {}) {
   return { key, name };
 }
 
+const PIX_PIN = '1603';
+const PIX_UNLOCK_KEY = 'aurora_pix_unlocked';
+
+function isPixUnlocked() {
+  try {
+    return sessionStorage.getItem(PIX_UNLOCK_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setPixUnlocked(on) {
+  try {
+    if (on) sessionStorage.setItem(PIX_UNLOCK_KEY, '1');
+    else sessionStorage.removeItem(PIX_UNLOCK_KEY);
+  } catch { /* ignore */ }
+}
+
 function updatePixSettingsPreview() {
-  const el = document.getElementById('pix-settings-preview');
-  if (!el) return;
+  const unlocked = isPixUnlocked();
   const key = document.getElementById('set-pix-key')?.value.trim() || '';
   const name = document.getElementById('set-pix-name')?.value.trim() || '';
-  const shown = defaultPixFromSettings({ pixKey: key, pixName: name, whatsapp: document.getElementById('set-whatsapp')?.value });
-  el.innerHTML = `<strong>Como o cliente vê no carrinho</strong>${escapeHtml(shown.name)}<br>${escapeHtml(shown.key)}`;
+  const shown = defaultPixFromSettings({
+    pixKey: key,
+    pixName: name,
+    whatsapp: document.getElementById('set-whatsapp')?.value,
+  });
+  const html = `<strong>Como o cliente vê no carrinho</strong>${escapeHtml(shown.name)}<br>${escapeHtml(shown.key)}`;
+  const live = document.getElementById('pix-settings-preview');
+  const locked = document.getElementById('pix-settings-preview-locked');
+  if (live) live.innerHTML = html;
+  if (locked) {
+    locked.innerHTML = html;
+    locked.hidden = unlocked;
+  }
+}
+
+function setPixFieldsLocked(locked) {
+  const card = document.getElementById('pix-settings-card');
+  const fields = document.getElementById('pix-settings-fields');
+  const keyEl = document.getElementById('set-pix-key');
+  const nameEl = document.getElementById('set-pix-name');
+  const unlocked = !locked;
+  setPixUnlocked(unlocked);
+  card?.classList.toggle('is-unlocked', unlocked);
+  if (fields) fields.hidden = locked;
+  if (keyEl) keyEl.readOnly = locked;
+  if (nameEl) nameEl.readOnly = locked;
+  updatePixSettingsPreview();
+}
+
+function tryUnlockPix() {
+  const pinEl = document.getElementById('set-pix-pin');
+  const pin = String(pinEl?.value || '').trim();
+  if (pin !== PIX_PIN) {
+    showToast('PIN incorreto.', 'error');
+    pinEl?.focus();
+    pinEl?.select?.();
+    return false;
+  }
+  setPixFieldsLocked(false);
+  if (pinEl) pinEl.value = '';
+  showToast('Pix liberado. Pode alterar e salvar.', 'success');
+  document.getElementById('set-pix-key')?.focus();
+  return true;
 }
 
 async function savePixSettingsOnly() {
+  if (!isPixUnlocked()) {
+    showToast('Digite o PIN para liberar a troca do Pix.', 'error');
+    document.getElementById('set-pix-pin')?.focus();
+    return;
+  }
   const keyEl = document.getElementById('set-pix-key');
   const nameEl = document.getElementById('set-pix-name');
   const pixKey = (keyEl?.value || '').trim();
@@ -3780,7 +3843,7 @@ async function savePixSettingsOnly() {
   };
   Storage.saveSettings(payload);
   const result = typeof Storage.saveSettingsAsync === 'function'
-    ? await Storage.saveSettingsAsync(payload)
+    ? await Storage.saveSettingsAsync(payload, { pixPin: PIX_PIN })
     : { ok: true };
   if (!result?.ok) {
     showToast(result?.error || 'Não sincronizou na nuvem. Tente de novo.', 'error');
@@ -3788,6 +3851,7 @@ async function savePixSettingsOnly() {
   }
   if (nameEl && !nameEl.value.trim()) nameEl.value = payload.pixName;
   updatePixSettingsPreview();
+  setPixFieldsLocked(true);
   showToast('Pix atualizado no site!', 'success');
 }
 
@@ -3838,10 +3902,21 @@ function initSettings() {
   bindImageUpload('set-banner-file', 'set-banner');
   bindImageUpload('set-sobre-file', 'set-sobre-image');
 
-  ['set-pix-key', 'set-pix-name', 'set-whatsapp'].forEach((id) => {
+  ['set-pix-key', 'set-pix-name'].forEach((id) => {
     document.getElementById(id)?.addEventListener('input', updatePixSettingsPreview);
   });
-  updatePixSettingsPreview();
+  document.getElementById('pix-pin-unlock')?.addEventListener('click', () => tryUnlockPix());
+  document.getElementById('pix-pin-lock')?.addEventListener('click', () => {
+    setPixFieldsLocked(true);
+    showToast('Pix travado de novo.', 'success');
+  });
+  document.getElementById('set-pix-pin')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      tryUnlockPix();
+    }
+  });
+  setPixFieldsLocked(!isPixUnlocked());
 
   document.getElementById('pix-settings-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3854,19 +3929,16 @@ function initSettings() {
     let deliveryFee = Number(feeRaw);
     if (!Number.isFinite(deliveryFee) || deliveryFee < 0) deliveryFee = 7;
 
-    const pixKey = document.getElementById('set-pix-key').value.trim()
-      || defaultPixFromSettings(Storage.getSettings()).key;
-    const pixName = document.getElementById('set-pix-name').value.trim()
-      || 'Clara / Aurora Confeitaria';
-
+    // Pix só muda pelo formulário com PIN — não mexe aqui
+    const current = Storage.getSettings() || {};
     const payload = {
       name: document.getElementById('set-name').value.trim(),
       tagline: document.getElementById('set-tagline').value.trim(),
       banner: document.getElementById('set-banner').value.trim(),
       sobreImage: document.getElementById('set-sobre-image').value.trim(),
       whatsapp: document.getElementById('set-whatsapp').value.trim(),
-      pixKey,
-      pixName,
+      pixKey: current.pixKey || defaultPixFromSettings(current).key,
+      pixName: current.pixName || defaultPixFromSettings(current).name,
       email: document.getElementById('set-email').value.trim(),
       instagram: document.getElementById('set-instagram').value.trim(),
       instagramUser: document.getElementById('set-instagram-user').value.trim(),

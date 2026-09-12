@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=81">
+  <link rel="stylesheet" href="admin.css?v=82">
   <style id="analytics-critical-css">
     /* Fallback layout — garante grid mesmo com cache antigo do CSS */
     #page-analises .analytics-stack { display: flex; flex-direction: column; gap: 20px; }
@@ -696,27 +696,40 @@
         </div>
       </div>
 
-      <div class="card pix-settings-card">
+      <div class="card pix-settings-card" id="pix-settings-card">
         <div class="card__header">
           <h3>Chave Pix do site</h3>
-          <span class="card__subtitle">Aparece no carrinho quando o cliente escolhe Pix</span>
+          <span class="card__subtitle">Só a Clara altera — protegido por PIN</span>
         </div>
         <form id="pix-settings-form" class="settings-form">
           <p class="pix-settings-hint">
-            Troque aqui a chave a qualquer momento. Depois de salvar, o checkout e a mensagem do WhatsApp usam o novo Pix.
+            Digite o PIN para liberar a troca. Depois de salvar, o checkout e o WhatsApp usam o novo Pix.
           </p>
-          <div class="form-row">
+          <div class="pix-pin-gate" id="pix-pin-gate">
             <div class="form-group">
-              <label for="set-pix-key">Chave Pix</label>
-              <input type="text" id="set-pix-key" placeholder="46852227000166" autocomplete="off">
+              <label for="set-pix-pin">PIN de acesso</label>
+              <input type="password" id="set-pix-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off">
             </div>
-            <div class="form-group">
-              <label for="set-pix-name">Nome no Pix</label>
-              <input type="text" id="set-pix-name" placeholder="Clara / Aurora Confeitaria" autocomplete="off">
+            <button type="button" class="btn btn--secondary" id="pix-pin-unlock"><i class="fas fa-lock-open"></i> Desbloquear Pix</button>
+          </div>
+          <div class="pix-settings-fields" id="pix-settings-fields" hidden>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="set-pix-key">Chave Pix</label>
+                <input type="text" id="set-pix-key" placeholder="46852227000166" autocomplete="off" readonly>
+              </div>
+              <div class="form-group">
+                <label for="set-pix-name">Nome no Pix</label>
+                <input type="text" id="set-pix-name" placeholder="Clara / Aurora Confeitaria" autocomplete="off" readonly>
+              </div>
+            </div>
+            <p class="pix-settings-preview" id="pix-settings-preview" aria-live="polite"></p>
+            <div class="pix-settings-actions">
+              <button type="submit" class="btn btn--primary"><i class="fas fa-save"></i> Salvar Pix no site</button>
+              <button type="button" class="btn btn--secondary" id="pix-pin-lock"><i class="fas fa-lock"></i> Travar de novo</button>
             </div>
           </div>
-          <p class="pix-settings-preview" id="pix-settings-preview" aria-live="polite"></p>
-          <button type="submit" class="btn btn--primary"><i class="fas fa-save"></i> Salvar Pix no site</button>
+          <p class="pix-settings-preview" id="pix-settings-preview-locked" aria-live="polite"></p>
         </form>
       </div>
 
@@ -862,8 +875,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="../js/default-data.js?v=25"></script>
   <script src="../js/product-photos.js?v=2"></script>
-  <script src="../js/storage.js?v=75"></script>
-  <script src="admin.js?v=68"></script>
+  <script src="../js/storage.js?v=76"></script>
+  <script src="admin.js?v=69"></script>
 </body>
 </html>
 

@@ -396,6 +396,37 @@ if ($method === 'POST') {
     if (!is_array($settings)) {
       json_out(['error' => 'Configurações inválidas'], 400);
     }
+
+    // Troca de Pix exige o PIN da Clara (1603)
+    try {
+      aurora_ensure_store_settings_columns($pdo);
+      $cur = $pdo->query('SELECT pix_key, pix_name FROM settings WHERE id = 1 LIMIT 1')->fetch(PDO::FETCH_ASSOC) ?: [];
+      $curKey = trim((string) ($cur['pix_key'] ?? ''));
+      $curName = trim((string) ($cur['pix_name'] ?? ''));
+      $wantsPix = array_key_exists('pixKey', $settings) || array_key_exists('pixName', $settings);
+      if ($wantsPix) {
+        $newKey = array_key_exists('pixKey', $settings) ? trim((string) $settings['pixKey']) : $curKey;
+        $newName = array_key_exists('pixName', $settings) ? trim((string) $settings['pixName']) : $curName;
+        if ($newKey !== $curKey || $newName !== $curName) {
+          $pixPin = trim((string) (
+            $body['pixPin']
+            ?? $settings['pixPin']
+            ?? ($_SERVER['HTTP_X_PIX_PIN'] ?? '')
+          ));
+          unset($settings['pixPin']);
+          if ($pixPin === '' || !hash_equals('1603', $pixPin)) {
+            json_out(['error' => 'PIN inválido. Só a Clara pode alterar o Pix.'], 403);
+          }
+        }
+      }
+    } catch (Throwable $e) {
+      // se falhar a checagem de PIN, não deixa alterar Pix
+      if (array_key_exists('pixKey', $settings) || array_key_exists('pixName', $settings)) {
+        unset($settings['pixKey'], $settings['pixName'], $settings['pixPin']);
+      }
+    }
+    unset($settings['pixPin']);
+
     try {
       aurora_save_settings_only($pdo, $settings);
       $catalog = false;
