@@ -216,9 +216,11 @@
   }
 
   function fillScheduleOptions() {
-    const sel = document.getElementById('cart-page-schedule');
-    if (!sel) return;
-    const current = sel.value;
+    const wrap = document.getElementById('cart-page-schedule-wrap');
+    const slotsEl = document.getElementById('cart-page-schedule-slots');
+    const hidden = document.getElementById('cart-page-schedule');
+    if (!slotsEl || !hidden) return;
+
     const s = Storage.getSettings?.() || {};
     const openMin = (() => {
       const m = String(s.openTime || '10:00').match(/^(\d{1,2}):(\d{2})$/);
@@ -228,22 +230,42 @@
       const m = String(s.closeTime || '22:00').match(/^(\d{1,2}):(\d{2})$/);
       return m ? Number(m[1]) * 60 + Number(m[2]) : 22 * 60;
     })();
-    const fmt = (mins) => `${Math.floor(mins / 60)}h`;
-    const options = ['O mais breve possível'];
+    const fmt = (mins) => {
+      const h = Math.floor(mins / 60);
+      return `${h}h`;
+    };
     const start = Math.ceil(openMin / 60) * 60;
     const end = closeMin > openMin ? closeMin : openMin + 8 * 60;
+    const hours = [];
     for (let t = start; t + 60 <= end; t += 60) {
-      options.push(`Hoje — ${fmt(t)} às ${fmt(t + 60)}`);
-    }
-    options.push('Amanhã — o mais breve possível');
-    for (let t = start; t + 60 <= end; t += 60) {
-      options.push(`Amanhã — ${fmt(t)} às ${fmt(t + 60)}`);
+      hours.push({
+        label: `${fmt(t)} – ${fmt(t + 60)}`,
+        today: `Hoje — ${fmt(t)} às ${fmt(t + 60)}`,
+        tomorrow: `Amanhã — ${fmt(t)} às ${fmt(t + 60)}`,
+      });
     }
 
-    sel.innerHTML = `<option value="">Selecione o horário…</option>${
-      options.map((opt) => `<option value="${opt.replace(/"/g, '&quot;')}">${opt}</option>`).join('')
-    }`;
-    if (current && options.includes(current)) sel.value = current;
+    const current = hidden.value;
+    let day = wrap?.dataset.day || 'hoje';
+    if (current.startsWith('Amanhã')) day = 'amanha';
+    else if (current.startsWith('Hoje') || current === 'O mais breve possível') day = 'hoje';
+    wrap.dataset.day = day;
+    wrap.querySelectorAll('.cart-schedule__day').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.day === day);
+    });
+
+    const asapValue = day === 'hoje' ? 'O mais breve possível' : 'Amanhã — o mais breve possível';
+    const chips = [
+      { value: asapValue, label: 'Quanto antes', wide: true },
+      ...hours.map((h) => ({
+        value: day === 'hoje' ? h.today : h.tomorrow,
+        label: h.label,
+      })),
+    ];
+
+    slotsEl.innerHTML = chips.map((chip) => `
+      <button type="button" class="cart-schedule__slot${chip.wide ? ' cart-schedule__slot--wide' : ''}${chip.value === current ? ' is-selected' : ''}" data-value="${chip.value.replace(/"/g, '&quot;')}">${chip.label}</button>
+    `).join('');
   }
 
   function syncPaymentExtras(pay) {
@@ -738,7 +760,9 @@
       return focusInvalid(addressEl, 'Informe o endereço completo para entrega.');
     }
     if (!schedule) {
-      return focusInvalid(scheduleEl, 'Escolha o horário preferido.');
+      const wrap = document.getElementById('cart-page-schedule-wrap');
+      wrap?.classList.add('is-invalid');
+      return focusInvalid(wrap || scheduleEl, 'Escolha o horário preferido.');
     }
 
     const payment = Cart.setPayment(
@@ -906,7 +930,33 @@
       }
     });
 
-    ['cart-page-fullname', 'cart-page-phone', 'cart-page-address', 'cart-page-schedule', 'cart-page-change'].forEach((id) => {
+    document.getElementById('cart-page-schedule-wrap')?.addEventListener('click', (e) => {
+      const wrap = document.getElementById('cart-page-schedule-wrap');
+      const hidden = document.getElementById('cart-page-schedule');
+      const dayBtn = e.target.closest('.cart-schedule__day');
+      if (dayBtn && wrap) {
+        wrap.dataset.day = dayBtn.dataset.day;
+        const hour = String(hidden?.value || '').match(/(\d{1,2}h às \d{1,2}h)/);
+        if (hidden && hour) {
+          hidden.value = (dayBtn.dataset.day === 'hoje' ? 'Hoje — ' : 'Amanhã — ') + hour[1];
+        } else if (hidden && /mais breve/i.test(hidden.value || '')) {
+          hidden.value = dayBtn.dataset.day === 'hoje'
+            ? 'O mais breve possível'
+            : 'Amanhã — o mais breve possível';
+        }
+        fillScheduleOptions();
+        wrap.classList.remove('is-invalid');
+        return;
+      }
+      const slot = e.target.closest('.cart-schedule__slot');
+      if (slot && hidden) {
+        hidden.value = slot.getAttribute('data-value') || '';
+        fillScheduleOptions();
+        wrap?.classList.remove('is-invalid');
+      }
+    });
+
+    ['cart-page-fullname', 'cart-page-phone', 'cart-page-address', 'cart-page-change'].forEach((id) => {
       const el = document.getElementById(id);
       el?.addEventListener('change', () => {
         el.closest('.order-field')?.classList.remove('is-invalid');

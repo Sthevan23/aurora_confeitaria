@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
-  <link rel="stylesheet" href="style.css?v=70">
+  <link rel="stylesheet" href="style.css?v=71">
 </head>
 <body class="cart-page">
   <header class="header header--solid" id="header">
@@ -142,12 +142,15 @@
               <p class="cart-address__hint">Informe rua, número e bairro para a entrega.</p>
             </div>
 
-            <label class="order-field" for="cart-page-schedule">
-              Horário preferido *
-              <select id="cart-page-schedule">
-                <option value="">Selecione o horário…</option>
-              </select>
-            </label>
+            <div class="cart-schedule" id="cart-page-schedule-wrap">
+              <p class="cart-checkout__label">Horário preferido *</p>
+              <div class="cart-schedule__days" role="tablist" aria-label="Dia">
+                <button type="button" class="cart-schedule__day is-active" data-day="hoje">Hoje</button>
+                <button type="button" class="cart-schedule__day" data-day="amanha">Amanhã</button>
+              </div>
+              <div class="cart-schedule__slots" id="cart-page-schedule-slots" role="listbox" aria-label="Horários"></div>
+              <input type="hidden" id="cart-page-schedule" value="">
+            </div>
             <p class="cart-address__hint" id="cart-page-schedule-hint">Escolha quando prefere retirar ou receber.</p>
 
             <div class="cart-payment cart-payment--checkout">
@@ -233,6 +236,6 @@
   <script src="js/storage.js?v=76"></script>
   <script src="js/analytics.js?v=1"></script>
   <script src="js/cart-shared.js?v=18"></script>
-  <script src="js/cart-page.js?v=30"></script>
+  <script src="js/cart-page.js?v=31"></script>
 </body>
 </html>
