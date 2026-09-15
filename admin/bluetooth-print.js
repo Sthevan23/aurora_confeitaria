@@ -141,7 +141,7 @@
     return out;
   }
 
-  function buildReceipt(order, opts = {}) {
+  function receiptText(order, opts = {}) {
     const width = 32;
     const dash = '-'.repeat(width);
     const lines = [];
@@ -192,17 +192,15 @@
     }
 
     push('Obrigada!');
-    push('');
-    push('');
-    push('');
+    return lines.join('\n');
+  }
 
+  function buildReceipt(order, opts = {}) {
     const enc = new TextEncoder();
     const parts = [];
-    // Init + code page PC437
     parts.push(new Uint8Array([0x1b, 0x40]));
     parts.push(new Uint8Array([0x1b, 0x74, 0x00]));
-    parts.push(enc.encode(lines.join('\n') + '\n'));
-    // Cut (parcial) se a impressora aceitar
+    parts.push(enc.encode(receiptText(order, opts) + '\n\n\n'));
     parts.push(new Uint8Array([0x1d, 0x56, 0x01]));
 
     let total = 0;
@@ -214,6 +212,26 @@
       offset += p.length;
     });
     return out;
+  }
+
+  function printViaPhone(order, opts = {}) {
+    const text = receiptText(order, opts);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Pedido ${String(order.number || '')}</title>
+<style>
+  @page { size: 58mm auto; margin: 4mm; }
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap; margin: 0; }
+</style></head><body>${text.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</body></html>`;
+    const w = window.open('', 'aurora-print', 'width=420,height=640');
+    if (!w) throw new Error('O Chrome bloqueou a janela de impressao. Permita pop-up neste site.');
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => {
+      w.print();
+    }, 250);
+    if (order.id) markPrinted(order.id);
+    return true;
   }
 
   async function findWriteCharacteristic(server) {
@@ -306,6 +324,31 @@
     } finally {
       connecting = false;
     }
+  }
+
+  async function tryReconnect() {
+    if (isConnected()) return true;
+    if (!supported() || !navigator.bluetooth?.getDevices) return false;
+    try {
+      const devices = await navigator.bluetooth.getDevices();
+      for (const d of devices) {
+        try {
+          device = d;
+          device.addEventListener('gattserverdisconnected', () => {
+            characteristic = null;
+            notifyStatus();
+            setTimeout(() => { tryReconnect(); }, 2500);
+          });
+          const server = await d.gatt.connect();
+          characteristic = await findWriteCharacteristic(server);
+          if (characteristic) {
+            notifyStatus();
+            return true;
+          }
+        } catch { /* tenta o próximo */ }
+      }
+    } catch { /* ignore */ }
+    return false;
   }
 
   async function connectUsb() {
@@ -404,14 +447,24 @@
 
   async function printOrder(order, opts = {}) {
     if (!order) throw new Error('Pedido invalido.');
-    const bytes = buildReceipt(order, opts);
-    await writeBytes(bytes);
-    if (order.id) markPrinted(order.id);
+    if (opts.forcePhone) {
+      printViaPhone(order, opts);
+      return true;
+    }
+    if (!isConnected()) await tryReconnect();
+    if (isConnected()) {
+      const bytes = buildReceipt(order, opts);
+      await writeBytes(bytes);
+      if (order.id) markPrinted(order.id);
+      return true;
+    }
+    printViaPhone(order, opts);
     return true;
   }
 
   async function printNewOrders(orders, opts = {}) {
     if (!getAutoPrint()) return { printed: 0, skipped: true };
+    if (!isConnected()) await tryReconnect();
     if (!isConnected() && !(await ensureConnected())) {
       return { printed: 0, disconnected: true };
     }
@@ -490,5 +543,7 @@
     onStatus,
     notifyStatus,
     friendlyConnectError,
+    printViaPhone,
+    tryReconnect,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

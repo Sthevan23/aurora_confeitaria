@@ -316,7 +316,7 @@ function updatePrinterUi(info) {
   }
   if (btnConnect) btnConnect.hidden = !!info.connected;
   if (btnDisconnect) btnDisconnect.hidden = !info.connected;
-  if (btnTest) btnTest.hidden = !info.connected;
+  if (btnTest) btnTest.hidden = false;
   if (auto) auto.checked = info.auto !== false;
 }
 
@@ -394,10 +394,29 @@ function initPrinter() {
     );
   });
 
-  // Busca pedidos novos em silêncio enquanto o painel estiver aberto
+  AuroraPrint.tryReconnect?.().then((ok) => {
+    updatePrinterUi(AuroraPrint.notifyStatus());
+    if (ok) maybeAutoPrintNewOrders();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) AuroraPrint.tryReconnect?.().then(() => updatePrinterUi(AuroraPrint.notifyStatus()));
+  });
+
   setInterval(() => {
     if (document.hidden) return;
-    if (!AuroraPrint.isConnected() || !AuroraPrint.getAutoPrint()) return;
+    if (AuroraPrint.isConnected()) return;
+    AuroraPrint.tryReconnect?.().then((ok) => {
+      if (ok) {
+        updatePrinterUi(AuroraPrint.notifyStatus());
+        maybeAutoPrintNewOrders();
+      }
+    });
+  }, 8000);
+
+  setInterval(() => {
+    if (document.hidden) return;
+    if (!AuroraPrint.getAutoPrint()) return;
     refreshOrdersFromCloud({ quiet: true });
   }, 45000);
 }
