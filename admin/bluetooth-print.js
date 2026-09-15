@@ -8,12 +8,18 @@
   const STORAGE_PRINTED = 'aurora_bt_printed_ids';
   const STORAGE_SEEDED = 'aurora_bt_print_seeded';
 
-  // UUIDs comuns em impressoras térmicas Bluetooth genéricas
+  // UUIDs comuns em impressoras térmicas Bluetooth genéricas (BLE)
   const SERVICE_UUIDS = [
     '000018f0-0000-1000-8000-00805f9b34fb',
     '0000ff00-0000-1000-8000-00805f9b34fb',
     '0000ffe0-0000-1000-8000-00805f9b34fb',
     '0000ae30-0000-1000-8000-00805f9b34fb',
+    '0000fff0-0000-1000-8000-00805f9b34fb',
+    '0000ff10-0000-1000-8000-00805f9b34fb',
+    '0000ffe5-0000-1000-8000-00805f9b34fb',
+    '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+    '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+    'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
   ];
   const CHAR_UUIDS = [
     '00002af1-0000-1000-8000-00805f9b34fb',
@@ -21,7 +27,12 @@
     '0000ffe1-0000-1000-8000-00805f9b34fb',
     '0000ae01-0000-1000-8000-00805f9b34fb',
     '0000ae02-0000-1000-8000-00805f9b34fb',
+    '0000fff1-0000-1000-8000-00805f9b34fb',
+    '0000fff2-0000-1000-8000-00805f9b34fb',
+    '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+    '49535343-8841-43f4-a8d4-ecbe34729bb3',
   ];
+  const RAWBT_STORE = 'https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter';
 
   let device = null;
   let characteristic = null;
@@ -35,15 +46,27 @@
     return typeof navigator !== 'undefined' && !!navigator.serial;
   }
 
+  function isAndroid() {
+    return /Android/i.test(navigator.userAgent || '');
+  }
+
+  function isPhoneName(name) {
+    return /moto|galaxy|redmi|xiaomi|iphone|pixel|samsung|poco|oppo|vivo|realme|oneplus|nokia/i.test(String(name || ''));
+  }
+
   function friendlyConnectError(err) {
     const raw = String(err?.message || err || '');
     const name = String(err?.name || '');
-    if (name === 'NotFoundError') return 'Nenhuma impressora selecionada.';
+    if (/celular|moto g|não a impressora/i.test(raw)) return raw;
+    if (name === 'NotFoundError') return 'Nenhuma impressora selecionada. Não escolha o celular (moto). Se a lista só mostrar “desconhecido”, use o app RawBT.';
     if (name === 'NotAllowedError' || /permission/i.test(raw)) {
       return 'Permissão de Bluetooth negada. Tente de novo e aceite no Chrome.';
     }
     if (/globally disabled/i.test(raw) || /Web Bluetooth API/i.test(raw)) {
       return 'O Chrome deste computador bloqueou o Bluetooth do site. No celular Android (Chrome) funciona direto. Neste PC: chrome://flags → busque Web Bluetooth → Enable → reinicie o Chrome. Ou use a impressora USB GoldenSky.';
+    }
+    if (name === 'NetworkError' || /gatt|unsupported|not supported|DOMException/i.test(raw)) {
+      return 'Essa impressora não entra pelo Chrome (Bluetooth antigo). No Android: Configurações → Bluetooth (não “Impressoras”), emparelhe a impressora pequena, instale o app RawBT e toque Imprimir no Android.';
     }
     if (!window.isSecureContext) {
       return 'Abra o painel em https://auroraconfeitaria.com.br/admin (Bluetooth só funciona em site seguro).';
@@ -51,7 +74,7 @@
     if (/iPhone|iPad/i.test(navigator.userAgent || '')) {
       return 'iPhone não imprime Bluetooth pelo site. Use Chrome no Android ou a impressora USB no computador.';
     }
-    return raw || 'Não conectou. Use Chrome, ligue o Bluetooth e tente de novo.';
+    return raw || 'Não conectou. Não escolha o moto. Ligue a impressora pequena e tente de novo, ou use o RawBT.';
   }
 
   function getAutoPrint() {
@@ -214,6 +237,29 @@
     return out;
   }
 
+  function bytesToBase64(bytes) {
+    let bin = '';
+    const step = 0x8000;
+    for (let i = 0; i < bytes.length; i += step) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+    }
+    return btoa(bin);
+  }
+
+  function printViaRawBt(order, opts = {}) {
+    if (!order) throw new Error('Pedido invalido.');
+    const bytes = buildReceipt(order, opts);
+    const href = 'rawbt:base64,' + bytesToBase64(bytes);
+    const a = document.createElement('a');
+    a.href = href;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    if (order.id) markPrinted(order.id);
+    return true;
+  }
+
   function printViaPhone(order, opts = {}) {
     const text = receiptText(order, opts);
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -304,6 +350,12 @@
         acceptAllDevices: true,
         optionalServices: SERVICE_UUIDS,
       });
+      if (isPhoneName(device.name)) {
+        const picked = device.name;
+        try { device.gatt?.disconnect(); } catch { /* ignore */ }
+        device = null;
+        throw new Error('Você escolheu o celular (' + picked + '), não a impressora. Cancele o moto. Se a impressora aparecer como “desconhecido”, escolha essa. Se não conectar, use Imprimir no Android (app RawBT).');
+      }
       device.addEventListener('gattserverdisconnected', () => {
         characteristic = null;
         notifyStatus();
@@ -312,10 +364,16 @@
         localStorage.setItem(STORAGE_DEVICE, device.id || '');
       } catch { /* ignore */ }
 
-      const server = await device.gatt.connect();
+      let server;
+      try {
+        server = await device.gatt.connect();
+      } catch (err) {
+        throw new Error(friendlyConnectError(err));
+      }
+      await new Promise((r) => setTimeout(r, 400));
       characteristic = await findWriteCharacteristic(server);
       if (!characteristic) {
-        throw new Error('Impressora conectada, mas sem canal de impressao. Tente a outra impressora Bluetooth.');
+        throw new Error('Essa impressora não fala com o Chrome. Emparelhe ela em Configurações → Bluetooth e use Imprimir no Android (app RawBT).');
       }
       notifyStatus();
       return true;
@@ -447,6 +505,10 @@
 
   async function printOrder(order, opts = {}) {
     if (!order) throw new Error('Pedido invalido.');
+    if (opts.forceRawBt) {
+      printViaRawBt(order, opts);
+      return true;
+    }
     if (opts.forcePhone) {
       printViaPhone(order, opts);
       return true;
@@ -458,8 +520,7 @@
       if (order.id) markPrinted(order.id);
       return true;
     }
-    printViaPhone(order, opts);
-    return true;
+    throw new Error('Impressora ainda não conectada. Não use “Todas as impressoras”. Toque Conectar e escolha a impressora (não o moto). Se ela não entrar, use Imprimir no Android.');
   }
 
   async function printNewOrders(orders, opts = {}) {
@@ -545,5 +606,8 @@
     friendlyConnectError,
     printViaPhone,
     tryReconnect,
+    isAndroid,
+    printViaRawBt,
+    rawBtStoreUrl: RAWBT_STORE,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

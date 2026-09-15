@@ -1787,6 +1787,7 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   line-height: 1.45;
 }
 .printer-steps li { margin: 0.25rem 0; }
+.printer-steps a { color: #1565c0; font-weight: 600; }
 .printer-card__auto {
   margin: 0;
   width: 100%;

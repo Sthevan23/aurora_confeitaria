@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=85">
+  <link rel="stylesheet" href="admin.css?v=86">
   <style id="analytics-critical-css">
     /* Fallback layout — garante grid mesmo com cache antigo do CSS */
     #page-analises .analytics-stack { display: flex; flex-direction: column; gap: 20px; }
@@ -196,13 +196,15 @@
           <span class="card__subtitle" id="printer-status-label">Aguardando Bluetooth</span>
         </div>
         <ol class="printer-steps">
-          <li>Ligue a impressora <strong>menor</strong> (botão Power).</li>
-          <li>Ligue o Bluetooth do celular e emparelhe a impressora nas configurações do Android, se pedir.</li>
-          <li>Abra este painel no <strong>Chrome do celular</strong>.</li>
-          <li>Toque <strong>Conectar</strong> só na primeira vez. Depois, com a impressora ligada e o painel aberto, os pedidos novos saem sozinhos.</li>
+          <li>Ligue a impressora <strong>menor</strong> (botão Power até o LED acender).</li>
+          <li>No Android, abra <strong>Configurações → Bluetooth</strong>. Não use “Todas as impressoras” — essa tela não acha a térmica.</li>
+          <li>Emparelhe o aparelho chamado Printer, MTP, POS ou parecido.</li>
+          <li>Volte aqui no Chrome e toque <strong>Conectar</strong>. <strong>Não escolha o moto</strong> (é o celular). Se só aparecer “desconhecido”, escolha esse.</li>
+          <li>Se o Chrome não conectar, instale o <a href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noopener">RawBT</a> e toque <strong>Imprimir no Android</strong>.</li>
         </ol>
         <div class="printer-card__actions">
           <button type="button" class="btn btn--primary" id="btn-printer-connect"><i class="fas fa-bluetooth"></i> Conectar</button>
+          <button type="button" class="btn btn--secondary" id="btn-printer-rawbt"><i class="fas fa-mobile-screen"></i> Imprimir no Android</button>
           <button type="button" class="btn btn--secondary" id="btn-printer-test"><i class="fas fa-receipt"></i> Teste de impressão</button>
           <button type="button" class="btn btn--secondary" id="btn-printer-disconnect" hidden><i class="fas fa-unlink"></i> Desconectar</button>
           <button type="button" class="btn btn--secondary" id="btn-printer-usb"><i class="fas fa-usb"></i> USB (computador)</button>
@@ -895,8 +897,8 @@
   <script src="../js/default-data.js?v=25"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=76"></script>
-  <script src="bluetooth-print.js?v=3"></script>
-  <script src="admin.js?v=72"></script>
+  <script src="bluetooth-print.js?v=4"></script>
+  <script src="admin.js?v=73"></script>
 </body>
 </html>
 

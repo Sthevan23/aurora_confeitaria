@@ -292,13 +292,22 @@ async function printOrderTicket(orderId) {
   }
   try {
     if (!AuroraPrint.isConnected()) {
-      await AuroraPrint.connect();
-      updatePrinterUi(AuroraPrint.notifyStatus());
+      try {
+        await AuroraPrint.connect();
+        updatePrinterUi(AuroraPrint.notifyStatus());
+      } catch (err) {
+        if (AuroraPrint.isAndroid?.()) {
+          AuroraPrint.printViaRawBt(order, { storeName: printerStoreName() });
+          showToast('Abrindo o RawBT. Se não abrir, instale o app e emparelhe a impressora no Bluetooth.', 'success');
+          return;
+        }
+        throw err;
+      }
     }
     await AuroraPrint.printOrder(order, { storeName: printerStoreName() });
     showToast('Pedido enviado para a impressora!', 'success');
   } catch (err) {
-    showToast(err?.message || 'Falha ao imprimir. Conecte a impressora no Chrome.', 'error');
+    showToast(err?.message || 'Falha ao imprimir. Conecte a impressora no Chrome ou use Imprimir no Android.', 'error');
   }
 }
 
@@ -357,6 +366,25 @@ function initPrinter() {
         return;
       }
       showToast(err?.message || 'Não conectou a USB. Use Chrome no computador.', 'error');
+    }
+  });
+
+  document.getElementById('btn-printer-rawbt')?.addEventListener('click', () => {
+    try {
+      AuroraPrint.printViaRawBt({
+        id: 'test-' + Date.now(),
+        number: 'TESTE',
+        date: new Date().toISOString(),
+        clientName: 'Teste Aurora',
+        clientWhatsapp: '',
+        items: [{ name: 'Impressao OK', qty: 1, price: 0 }],
+        total: 0,
+        notes: 'RawBT Android',
+        status: 'novo',
+      }, { storeName: printerStoreName() });
+      showToast('Se o app não abrir, instale o RawBT e emparelhe a impressora em Configurações → Bluetooth (não em Impressoras).', 'success');
+    } catch (err) {
+      showToast(err?.message || 'Não abriu o RawBT.', 'error');
     }
   });
 
