@@ -454,42 +454,21 @@
     const discountRow = document.getElementById('cart-page-discount-row');
     const couponLabel = document.getElementById('cart-page-coupon-label');
     const feeRow = document.getElementById('cart-page-fee-row');
-    const feeNote = document.getElementById('cart-page-fee-note');
     const deliveryLabel = document.getElementById('cart-page-delivery-label');
+
+    const subtotalRow = document.getElementById('cart-page-subtotal-row');
+    if (subtotalRow) subtotalRow.hidden = !(disc > 0 || mode === 'entrega');
 
     if (discountRow) discountRow.hidden = !(disc > 0);
     if (couponLabel) couponLabel.textContent = Cart.getCoupon()?.code ? `(${Cart.getCoupon().code})` : '';
 
     if (feeRow) feeRow.hidden = mode !== 'entrega';
-    if (feeNote) {
-      if (mode === 'entrega') {
-        feeNote.hidden = false;
-        feeNote.textContent = `Entrega: ${Cart.formatMoney(fee)} no centro · ${Cart.getDeliveryNote()}`;
-      } else {
-        feeNote.hidden = true;
-      }
-    }
-    const pickupNote = document.getElementById('cart-page-pickup-note');
-    if (pickupNote) {
-      if (mode === 'retirada') {
-        pickupNote.hidden = false;
-        pickupNote.textContent = `Retirada em ${pickupAddressText()}`;
-      } else {
-        pickupNote.hidden = true;
-      }
-    }
-    if (deliveryLabel) deliveryLabel.textContent = `${Cart.formatMoney(fee)} no centro`;
+    if (deliveryLabel) deliveryLabel.textContent = Cart.formatMoney(fee);
 
     const addressWrap = document.getElementById('cart-page-address-wrap');
     if (addressWrap) addressWrap.hidden = mode !== 'entrega';
     const deliveryInfo = document.getElementById('cart-page-delivery-info');
     if (deliveryInfo) deliveryInfo.hidden = mode !== 'entrega';
-    const scheduleHint = document.getElementById('cart-page-schedule-hint');
-    if (scheduleHint) {
-      scheduleHint.textContent = mode === 'entrega'
-        ? 'Escolha quando prefere receber a entrega.'
-        : 'Escolha quando prefere retirar no local.';
-    }
 
     // Cupom: mostra se existir cupom ativo no admin
     const couponBox = document.getElementById('cart-page-coupon');
@@ -503,6 +482,7 @@
       input.value = applied?.code || '';
     }
     if (removeBtn) removeBtn.hidden = !applied;
+    if (applied && couponBox) couponBox.open = true;
 
     scheduleLoyaltyRefresh();
   }
@@ -531,11 +511,11 @@
     if (fill) fill.style.width = `${pct}%`;
     if (msg) {
       if (loyalty.eligible) {
-        msg.textContent = `Brinde liberado: ${loyalty.gift || '1 brinde surpresa da Aurora'}!`;
-      } else if (loyalty.total === 0) {
-        msg.textContent = `A cada ${goal} pedidos finalizados neste WhatsApp, você ganha um brinde.`;
+        msg.hidden = false;
+        msg.textContent = `Brinde liberado!`;
       } else {
-        msg.textContent = `${loyalty.total} pedido${loyalty.total === 1 ? '' : 's'} finalizado${loyalty.total === 1 ? '' : 's'} · faltam ${loyalty.remaining} para o brinde.`;
+        msg.hidden = true;
+        msg.textContent = '';
       }
     }
   }
