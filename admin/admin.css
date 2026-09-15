@@ -1884,11 +1884,13 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   position: fixed;
   bottom: 28px;
   right: 28px;
+  max-width: min(420px, calc(100vw - 32px));
   background: var(--marrom-escuro);
   color: var(--branco);
   padding: 14px 24px;
   border-radius: var(--radius);
   font-size: 0.9rem;
+  line-height: 1.4;
   z-index: 9999;
   transform: translateX(120%);
   transition: transform 0.4s ease;
@@ -2174,15 +2176,21 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 }
 
 .order-editor__section {
-  margin: 1rem 0;
-  padding-top: 0.75rem;
-  border-top: 1px solid #eee;
+  margin: 0 0 1rem;
+  padding: 1rem 1rem 1.05rem;
+  border: 1px solid #f0e6ea;
+  border-radius: 14px;
+  background: #fffdfc;
+}
+
+.order-editor__section--first {
+  background: #fff;
 }
 
 .order-editor__section h4 {
-  margin: 0 0 0.75rem;
-  font-size: 0.98rem;
-  color: #333;
+  margin: 0 0 0.85rem;
+  font-size: 0.95rem;
+  color: var(--marrom-escuro);
 }
 
 .order-editor__section h4 i {
@@ -2206,9 +2214,9 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 }
 
 .order-editor__item {
-  padding: 0.75rem 0.85rem;
-  border: 1px solid #eee;
-  border-radius: 10px;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid #f0e6ea;
+  border-radius: 12px;
   background: #fff;
 }
 
@@ -2217,6 +2225,59 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.55rem;
+}
+
+.order-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.order-editor__chip {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: #fff1f4;
+  color: #c2185b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.order-editor__item-price {
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--marrom-escuro);
+}
+
+.order-notes-grid {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.order-notes-grid > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: #faf7f5;
+}
+
+.order-notes-grid dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a7468;
+}
+
+.order-notes-grid dd {
+  margin: 0;
+  white-space: pre-line;
+  color: var(--marrom-escuro);
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
 .order-editor__item-actions {

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="admin.css?v=83">
+  <link rel="stylesheet" href="admin.css?v=84">
   <style id="analytics-critical-css">
     /* Fallback layout — garante grid mesmo com cache antigo do CSS */
     #page-analises .analytics-stack { display: flex; flex-direction: column; gap: 20px; }
@@ -192,15 +192,16 @@
 
       <div class="card printer-card" id="printer-card">
         <div class="card__header">
-          <h3><i class="fas fa-print"></i> Impressora Bluetooth</h3>
+          <h3><i class="fas fa-print"></i> Impressora</h3>
           <span class="card__subtitle" id="printer-status-label">Impressora desconectada</span>
         </div>
         <p class="fin-note" style="margin-top:0">
-          Use a impressora <strong>menor</strong> (Mobile Printer). Abra o painel no <strong>Chrome</strong> do celular ou PC, ligue o Bluetooth e conecte uma vez.
-          Pedidos novos imprimem sozinhos enquanto o painel estiver aberto.
+          A impressora <strong>menor</strong> (Bluetooth) funciona melhor no <strong>Chrome do celular Android</strong>.
+          Neste computador o Chrome costuma bloquear o Bluetooth — use a <strong>GoldenSky no cabo USB</strong>.
         </p>
         <div class="printer-card__actions">
-          <button type="button" class="btn btn--primary" id="btn-printer-connect"><i class="fas fa-bluetooth"></i> Conectar impressora</button>
+          <button type="button" class="btn btn--primary" id="btn-printer-connect"><i class="fas fa-bluetooth"></i> Conectar Bluetooth</button>
+          <button type="button" class="btn btn--secondary" id="btn-printer-usb"><i class="fas fa-usb"></i> Conectar USB</button>
           <button type="button" class="btn btn--secondary" id="btn-printer-disconnect" hidden><i class="fas fa-unlink"></i> Desconectar</button>
           <button type="button" class="btn btn--secondary" id="btn-printer-test" hidden><i class="fas fa-receipt"></i> Teste de impressão</button>
           <label class="checkbox-label printer-card__auto">
@@ -892,8 +893,8 @@
   <script src="../js/default-data.js?v=25"></script>
   <script src="../js/product-photos.js?v=2"></script>
   <script src="../js/storage.js?v=76"></script>
-  <script src="bluetooth-print.js?v=1"></script>
-  <script src="admin.js?v=70"></script>
+  <script src="bluetooth-print.js?v=2"></script>
+  <script src="admin.js?v=71"></script>
 </body>
 </html>
 

@@ -338,7 +338,25 @@ function initPrinter() {
         showToast('Nenhuma impressora selecionada.', 'error');
         return;
       }
-      showToast(err?.message || 'Não conectou. Use Chrome e ligue o Bluetooth.', 'error');
+      showToast(
+        AuroraPrint.friendlyConnectError?.(err) || err?.message || 'Não conectou. Use Chrome no celular ou USB no PC.',
+        'error',
+      );
+    }
+  });
+
+  document.getElementById('btn-printer-usb')?.addEventListener('click', async () => {
+    try {
+      await AuroraPrint.connectUsb();
+      updatePrinterUi(AuroraPrint.notifyStatus());
+      showToast('Impressora USB conectada!', 'success');
+      await maybeAutoPrintNewOrders();
+    } catch (err) {
+      if (err?.name === 'NotFoundError') {
+        showToast('Nenhuma impressora USB selecionada.', 'error');
+        return;
+      }
+      showToast(err?.message || 'Não conectou a USB. Use Chrome no computador.', 'error');
     }
   });
 
@@ -824,17 +842,91 @@ function productPriceForOrder(product, flavor = '') {
   return Number(Storage.productDisplayPrice(product)) || Number(product.price) || 0;
 }
 
+function parseOrderNotes(raw) {
+  const extra = [];
+  const out = {
+    mode: '',
+    address: '',
+    schedule: '',
+    payment: '',
+    change: '',
+    extra: '',
+  };
+  String(raw || '').split(/\s*\|\s*/).forEach((part) => {
+    const p = part.trim();
+    if (!p) return;
+    if (/^(entrega|retirada)$/i.test(p)) {
+      out.mode = /^entrega$/i.test(p) ? 'Entrega' : 'Retirada';
+      return;
+    }
+    const addr = p.match(/^endere[cç]o:\s*(.+)$/i);
+    if (addr) { out.address = addr[1].trim(); return; }
+    const when = p.match(/^hor[aá]rio:\s*(.+)$/i);
+    if (when) { out.schedule = when[1].trim(); return; }
+    const pay = p.match(/^pagamento:\s*(.+)$/i);
+    if (pay) { out.payment = pay[1].replace(/\s+—\s+/g, '\n').trim(); return; }
+    if (/preciso de troco/i.test(p)) { out.change = p; return; }
+    if (/^\d+\s*x\s+/i.test(p)) return;
+    extra.push(p);
+  });
+  out.extra = extra.join('\n');
+  return out;
+}
+
+function composeOrderNotes(form) {
+  const mode = form.querySelector('#edit-order-mode')?.value || '';
+  const address = form.querySelector('#edit-order-address')?.value.trim() || '';
+  const schedule = form.querySelector('#edit-order-schedule')?.value.trim() || '';
+  const payment = form.querySelector('#edit-order-payment')?.value.trim() || '';
+  const change = form.querySelector('#edit-order-change')?.value.trim() || '';
+  const extra = form.querySelector('#edit-order-notes')?.value.trim() || '';
+  const parts = [];
+  if (mode) parts.push(mode);
+  if (mode === 'Entrega' && address) parts.push(`Endereço: ${address}`);
+  if (schedule) parts.push(`Horário: ${schedule}`);
+  if (payment) parts.push(`Pagamento: ${payment.replace(/\n/g, ' — ')}`);
+  if (change) parts.push(change);
+  if (extra) parts.push(extra);
+  return parts.join(' | ');
+}
+
+function orderNotesHtml(notes) {
+  const parsed = parseOrderNotes(notes);
+  const rows = [];
+  if (parsed.mode) rows.push(['Forma', parsed.mode]);
+  if (parsed.address) rows.push(['Endereço', parsed.address]);
+  if (parsed.schedule) rows.push(['Horário', parsed.schedule]);
+  if (parsed.payment) rows.push(['Pagamento', parsed.payment]);
+  if (parsed.change) rows.push(['Troco', parsed.change]);
+  if (parsed.extra) rows.push(['Obs.', parsed.extra]);
+  if (!rows.length && notes) rows.push(['Observações', String(notes)]);
+  if (!rows.length) return '';
+  return `
+    <div class="order-detail__notes">
+      <h4><i class="fas fa-sticky-note"></i> Detalhes do pedido</h4>
+      <dl class="order-notes-grid">
+        ${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}
+      </dl>
+    </div>
+  `;
+}
+
 function renderOrderEditorItems(container, items, onChange) {
   if (!items.length) {
     container.innerHTML = '<p class="order-editor__empty">Nenhum item no pedido</p>';
     return;
   }
   container.innerHTML = items.map((item, idx) => {
-    const flavor = item.flavor ? ` · ${escapeHtml(item.flavor)}` : '';
+    const flavor = item.flavor || item.detail || '';
+    const size = item.size ? `<span class="order-editor__chip">${escapeHtml(item.size)}</span>` : '';
+    const flavorChip = flavor ? `<span class="order-editor__chip">${escapeHtml(flavor)}</span>` : '';
     return `
       <div class="order-editor__item" data-idx="${idx}">
         <div class="order-editor__item-main">
-          <strong>${escapeHtml(item.name)}${flavor}</strong>
+          <div>
+            <strong>${escapeHtml(item.name)}</strong>
+            <div class="order-editor__chips">${size}${flavorChip}</div>
+          </div>
           <span class="order-editor__item-price">${Storage.formatCurrency((Number(item.price) || 0) * (Number(item.qty) || 1))}</span>
         </div>
         <div class="order-editor__item-actions">
@@ -902,28 +994,32 @@ function editOrder(id) {
   const products = Storage.getProducts();
   const extras = resolveOrderExtras(order);
   const editItems = (order.items || []).map((item) => ({ ...item }));
+  const parsed = parseOrderNotes(order.notes);
 
   openModal(`Editar pedido — ${order.number}`, `
     <form id="edit-order-form" class="order-editor">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Nome do cliente *</label>
-          <input type="text" id="edit-order-client-name" value="${escapeHtml(order.clientName || '')}" required>
+      <div class="order-editor__section order-editor__section--first">
+        <h4><i class="fas fa-user"></i> Cliente</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome do cliente *</label>
+            <input type="text" id="edit-order-client-name" value="${escapeHtml(order.clientName || '')}" required>
+          </div>
+          <div class="form-group">
+            <label>WhatsApp *</label>
+            <input type="tel" id="edit-order-client-whatsapp" value="${escapeHtml(formatWhatsappDisplay(order.clientWhatsapp) || order.clientWhatsapp || '')}" required>
+          </div>
         </div>
         <div class="form-group">
-          <label>WhatsApp *</label>
-          <input type="tel" id="edit-order-client-whatsapp" value="${escapeHtml(order.clientWhatsapp || '')}" required>
+          <label>Status</label>
+          <select id="edit-order-status">
+            <option value="novo" ${order.status === 'novo' ? 'selected' : ''}>Novo</option>
+            <option value="preparo" ${order.status === 'preparo' ? 'selected' : ''}>Em Preparo</option>
+            <option value="entrega" ${order.status === 'entrega' ? 'selected' : ''}>Saiu para Entrega</option>
+            <option value="finalizado" ${order.status === 'finalizado' ? 'selected' : ''}>Finalizado</option>
+            <option value="cancelado" ${order.status === 'cancelado' ? 'selected' : ''}>Cancelado</option>
+          </select>
         </div>
-      </div>
-      <div class="form-group">
-        <label>Status</label>
-        <select id="edit-order-status">
-          <option value="novo" ${order.status === 'novo' ? 'selected' : ''}>Novo</option>
-          <option value="preparo" ${order.status === 'preparo' ? 'selected' : ''}>Em Preparo</option>
-          <option value="entrega" ${order.status === 'entrega' ? 'selected' : ''}>Saiu para Entrega</option>
-          <option value="finalizado" ${order.status === 'finalizado' ? 'selected' : ''}>Finalizado</option>
-          <option value="cancelado" ${order.status === 'cancelado' ? 'selected' : ''}>Cancelado</option>
-        </select>
       </div>
 
       <div class="order-editor__section">
@@ -937,6 +1033,37 @@ function editOrder(id) {
           <input type="text" id="edit-order-flavor" placeholder="Sabor (opcional)" maxlength="80">
           <input type="number" id="edit-order-add-qty" value="1" min="1" max="99">
           <button type="button" class="btn btn--secondary btn--sm" id="edit-order-add-btn"><i class="fas fa-plus"></i> Adicionar</button>
+        </div>
+      </div>
+
+      <div class="order-editor__section">
+        <h4><i class="fas fa-truck"></i> Entrega e pagamento</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Como recebe</label>
+            <select id="edit-order-mode">
+              <option value="Retirada" ${parsed.mode !== 'Entrega' ? 'selected' : ''}>Retirada</option>
+              <option value="Entrega" ${parsed.mode === 'Entrega' ? 'selected' : ''}>Entrega</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Horário preferido</label>
+            <input type="text" id="edit-order-schedule" value="${escapeHtml(parsed.schedule)}" placeholder="Hoje — 14h às 15h">
+          </div>
+        </div>
+        <div class="form-group" id="edit-order-address-wrap" ${parsed.mode === 'Entrega' ? '' : 'hidden'}>
+          <label>Endereço</label>
+          <textarea id="edit-order-address" rows="2" placeholder="Rua, número, bairro…">${escapeHtml(parsed.address)}</textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pagamento</label>
+            <input type="text" id="edit-order-payment" value="${escapeHtml(parsed.payment.replace(/\n/g, ' — '))}" placeholder="Pix, Dinheiro ou Cartão">
+          </div>
+          <div class="form-group">
+            <label>Troco</label>
+            <input type="text" id="edit-order-change" value="${escapeHtml(parsed.change)}" placeholder="Ex: preciso de troco para 100">
+          </div>
         </div>
       </div>
 
@@ -966,7 +1093,7 @@ function editOrder(id) {
 
       <div class="form-group">
         <label>Observações internas</label>
-        <textarea id="edit-order-notes" rows="3" placeholder="Entrega, pagamento, endereço…">${escapeHtml(order.notes || '')}</textarea>
+        <textarea id="edit-order-notes" rows="2" placeholder="Anotação extra, se precisar…">${escapeHtml(parsed.extra)}</textarea>
       </div>
 
       <div class="modal__actions">
@@ -987,6 +1114,14 @@ function editOrder(id) {
   };
 
   refreshEditor();
+
+  const syncAddressWrap = () => {
+    const wrap = document.getElementById('edit-order-address-wrap');
+    const mode = document.getElementById('edit-order-mode')?.value;
+    if (wrap) wrap.hidden = mode !== 'Entrega';
+  };
+  document.getElementById('edit-order-mode')?.addEventListener('change', syncAddressWrap);
+  syncAddressWrap();
 
   waiveCheck?.addEventListener('change', () => {
     if (feeInput) {
@@ -1072,7 +1207,7 @@ function editOrder(id) {
       deliveryFee: totals.waiveDelivery ? 0 : totals.deliveryFee,
       discount: totals.discount,
       waiveDelivery: totals.waiveDelivery,
-      notes: document.getElementById('edit-order-notes').value.trim(),
+      notes: composeOrderNotes(form),
     };
 
     const btn = form.querySelector('[type="submit"]');
@@ -1262,9 +1397,7 @@ function viewOrder(id) {
   const extras = resolveOrderExtras(order);
   const showDiscount = extras.discount > 0;
   const showFee = extras.waiveDelivery || extras.deliveryFee > 0;
-  const notesLine = order.notes
-    ? `<div class="order-detail__notes"><h4><i class="fas fa-sticky-note"></i> Observações</h4><p>${escapeHtml(order.notes)}</p></div>`
-    : '';
+  const notesLine = orderNotesHtml(order.notes);
 
   openModal('Pedido ' + order.number, `
     <div class="order-detail">
@@ -4207,7 +4340,8 @@ function showToast(message, type = '') {
   const toast = document.getElementById('toast-admin');
   toast.textContent = message;
   toast.className = 'toast-admin show' + (type ? ' ' + type : '');
-  setTimeout(() => toast.classList.remove('show'), 3000);
+  const ms = String(message || '').length > 80 ? 8000 : 3200;
+  setTimeout(() => toast.classList.remove('show'), ms);
 }
 
 // Expor funções globais para onclick inline

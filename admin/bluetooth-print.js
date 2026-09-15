@@ -31,6 +31,29 @@
     return typeof navigator !== 'undefined' && !!navigator.bluetooth;
   }
 
+  function serialSupported() {
+    return typeof navigator !== 'undefined' && !!navigator.serial;
+  }
+
+  function friendlyConnectError(err) {
+    const raw = String(err?.message || err || '');
+    const name = String(err?.name || '');
+    if (name === 'NotFoundError') return 'Nenhuma impressora selecionada.';
+    if (name === 'NotAllowedError' || /permission/i.test(raw)) {
+      return 'Permissão de Bluetooth negada. Tente de novo e aceite no Chrome.';
+    }
+    if (/globally disabled/i.test(raw) || /Web Bluetooth API/i.test(raw)) {
+      return 'O Chrome deste computador bloqueou o Bluetooth do site. No celular Android (Chrome) funciona direto. Neste PC: chrome://flags → busque Web Bluetooth → Enable → reinicie o Chrome. Ou use a impressora USB GoldenSky.';
+    }
+    if (!window.isSecureContext) {
+      return 'Abra o painel em https://auroraconfeitaria.com.br/admin (Bluetooth só funciona em site seguro).';
+    }
+    if (/iPhone|iPad/i.test(navigator.userAgent || '')) {
+      return 'iPhone não imprime Bluetooth pelo site. Use Chrome no Android ou a impressora USB no computador.';
+    }
+    return raw || 'Não conectou. Use Chrome, ligue o Bluetooth e tente de novo.';
+  }
+
   function getAutoPrint() {
     try {
       return localStorage.getItem(STORAGE_AUTO) !== '0';
@@ -226,21 +249,35 @@
     return null;
   }
 
+  let serialPort = null;
+  let serialWriter = null;
+
   function statusLabel() {
-    if (!supported()) return 'Bluetooth nao disponivel neste navegador';
+    if (serialPort && serialWriter) {
+      return 'Conectada via USB (GoldenSky)';
+    }
     if (characteristic && device?.gatt?.connected) {
       return 'Conectada: ' + (device.name || 'Mobile Printer');
+    }
+    if (!supported() && !serialSupported()) {
+      return 'Use Chrome no celular (Bluetooth) ou no PC (USB)';
+    }
+    if (!supported()) {
+      return 'Bluetooth bloqueado neste Chrome — use USB ou o celular';
     }
     return 'Impressora desconectada';
   }
 
   function isConnected() {
-    return !!(characteristic && device?.gatt?.connected);
+    return !!(
+      (characteristic && device?.gatt?.connected)
+      || (serialPort && serialWriter)
+    );
   }
 
   async function connect() {
     if (!supported()) {
-      throw new Error('Use Chrome ou Edge no celular/PC (HTTPS). iPhone nao imprime por Bluetooth no site.');
+      throw new Error(friendlyConnectError(new Error('Web Bluetooth API globally disabled.')));
     }
     if (connecting) return;
     connecting = true;
@@ -264,6 +301,48 @@
       }
       notifyStatus();
       return true;
+    } catch (err) {
+      throw new Error(friendlyConnectError(err));
+    } finally {
+      connecting = false;
+    }
+  }
+
+  async function connectUsb() {
+    if (!serialSupported()) {
+      throw new Error('USB só funciona no Chrome/Edge do computador. Abra o painel no PC e conecte o cabo da GoldenSky.');
+    }
+    if (connecting) return;
+    connecting = true;
+    try {
+      serialPort = await navigator.serial.requestPort();
+      const bauds = [9600, 115200, 19200];
+      let opened = false;
+      let lastErr = null;
+      for (const baud of bauds) {
+        try {
+          await serialPort.open({ baudRate: baud });
+          opened = true;
+          break;
+        } catch (err) {
+          lastErr = err;
+          try { await serialPort.close(); } catch { /* ignore */ }
+        }
+      }
+      if (!opened) {
+        throw lastErr || new Error('Não abriu a porta USB.');
+      }
+      serialWriter = serialPort.writable.getWriter();
+      serialPort.addEventListener('disconnect', () => {
+        serialWriter = null;
+        serialPort = null;
+        notifyStatus();
+      });
+      notifyStatus();
+      return true;
+    } catch (err) {
+      if (err?.name === 'NotFoundError') throw new Error('Nenhuma impressora USB selecionada.');
+      throw new Error(err?.message || 'Não conectou a impressora USB.');
     } finally {
       connecting = false;
     }
@@ -271,6 +350,18 @@
 
   async function ensureConnected() {
     if (isConnected()) return true;
+    if (serialPort && !serialWriter) {
+      try {
+        if (!serialPort.readable && !serialPort.writable) {
+          await serialPort.open({ baudRate: 9600 });
+        }
+        serialWriter = serialPort.writable.getWriter();
+        if (serialWriter) {
+          notifyStatus();
+          return true;
+        }
+      } catch { /* precisa pedir de novo */ }
+    }
     if (device?.gatt) {
       try {
         const server = await device.gatt.connect();
@@ -286,8 +377,18 @@
 
   async function writeBytes(bytes) {
     if (!(await ensureConnected())) {
-      throw new Error('Conecte a impressora Bluetooth primeiro.');
+      throw new Error('Conecte a impressora primeiro (Bluetooth no celular ou USB no PC).');
     }
+
+    if (serialWriter) {
+      const chunkSize = 128;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        await serialWriter.write(bytes.slice(i, i + chunkSize));
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      return;
+    }
+
     const chunkSize = 100;
     for (let i = 0; i < bytes.length; i += chunkSize) {
       const chunk = bytes.slice(i, i + chunkSize);
@@ -339,8 +440,16 @@
     try {
       device?.gatt?.disconnect();
     } catch { /* ignore */ }
+    try {
+      serialWriter?.releaseLock();
+    } catch { /* ignore */ }
+    try {
+      serialPort?.close();
+    } catch { /* ignore */ }
     device = null;
     characteristic = null;
+    serialPort = null;
+    serialWriter = null;
     notifyStatus();
   }
 
@@ -365,7 +474,9 @@
 
   global.AuroraPrint = {
     supported,
+    serialSupported,
     connect,
+    connectUsb,
     disconnect,
     isConnected,
     statusLabel,
@@ -378,5 +489,6 @@
     wasPrinted,
     onStatus,
     notifyStatus,
+    friendlyConnectError,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
