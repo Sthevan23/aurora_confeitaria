@@ -102,6 +102,85 @@
     }
   }
 
+  function waOrderMessage({ fullName, phone, fulfillment, loyalty, address, payment, schedule, changeFor }) {
+    const sep = '=======================';
+    const s = typeof Storage !== 'undefined' ? (Storage.getSettings?.() || {}) : {};
+    const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
+    const list = Cart.getItems();
+    const sub = Cart.subtotal();
+    const live = Cart.getCoupon?.();
+    const disc = Cart.discount?.() || 0;
+    const mode = fulfillment === 'entrega' ? 'entrega' : 'retirada';
+    const fee = mode === 'entrega' ? (Cart.getDeliveryFee?.() || 0) : 0;
+    const total = Math.max(0, sub - disc + fee);
+    const pay = payment || Cart.getPayment();
+    const when = String(schedule || '').trim();
+    const change = String(changeFor || '').trim();
+
+    const itemLines = list.map((item) => {
+      const qty = Number(item.qty) || 1;
+      const unit = Number(item.price) || 0;
+      const flavor = item.flavor ? ` (${item.flavor})` : '';
+      const notes = item.notes ? `\nObs: ${item.notes}` : '';
+      return `${qty}x ${item.name}${flavor}\n${Cart.formatMoney(unit * qty)}${notes}`;
+    }).join('\n\n');
+
+    const parts = [
+      `*Novo Pedido — ${storeName}*`,
+      sep,
+      `*Cliente*\n${fullName}\n${Cart.formatPhoneBR(phone)}`,
+      sep,
+      `*Itens*\n${itemLines}`,
+    ];
+
+    if (live && disc > 0) {
+      parts.push(sep, `*Cupom ${live.code}*\nDesconto: − ${Cart.formatMoney(disc)}\nSubtotal: ${Cart.formatMoney(sub)}`);
+    }
+
+    let payText = `*Pagamento*\n${Cart.paymentWhatsAppLine(pay)}`;
+    if (pay === 'dinheiro' && change) {
+      payText += change === 'preciso'
+        ? `\nTroco: preciso de troco`
+        : `\nTroco: preciso de troco para ${change}`;
+    }
+
+    parts.push(sep, `*Total:* ${Cart.formatMoney(total)}`, sep, payText);
+
+    if (loyalty && loyalty.eligible) {
+      const gift = loyalty.gift || '1 brinde surpresa da Aurora';
+      parts.push(
+        sep,
+        `*Fidelidade Aurora*\nCliente completou ${loyalty.total || loyalty.goal} pedidos e ganhou: *${gift}*\n(Favor confirmar o brinde neste atendimento)`
+      );
+    } else if (loyalty && loyalty.total > 0) {
+      parts.push(
+        sep,
+        `*Fidelidade*\n${loyalty.progress}/${loyalty.goal} pedidos finalizados` +
+          (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde` : '')
+      );
+    }
+
+    if (when) parts.push(sep, `*Horário preferido*\n${when}`);
+
+    const note = Cart.getDeliveryNote?.() || '';
+    const addr = String(address || '').trim();
+    if (mode === 'entrega') {
+      parts.push(
+        sep,
+        `*Entrega*\nTaxa região central: ${Cart.formatMoney(fee)}\n${note}\n` +
+          (addr ? `Endereço: ${addr}` : 'Endereço: (informar no WhatsApp)')
+      );
+    } else {
+      parts.push(
+        sep,
+        `*Retirada no local*\nEndereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
+      );
+    }
+
+    parts.push(sep, 'Aguardo confirmação 😊');
+    return parts.join('\n\n');
+  }
+
   function clearFieldErrors() {
     document.querySelectorAll('.order-field.is-invalid, .is-invalid').forEach((el) => {
       el.classList.remove('is-invalid');
@@ -724,7 +803,7 @@
 
     window.AuroraAnalytics?.orderCreated({ total: payable, items: snapshot.length });
 
-    let message = Cart.buildWhatsAppMessage({
+    let message = waOrderMessage({
       fullName,
       phone,
       fulfillment,
