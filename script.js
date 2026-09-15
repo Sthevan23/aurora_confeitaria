@@ -245,14 +245,14 @@ function fulfillmentWhatsAppBlock(mode, address = '') {
   const addr = String(address || '').trim();
   if (mode === 'entrega') {
     return (
-      `FORMA: Entrega\n` +
+      `*Entrega*\n` +
       `Taxa região central: ${fee}\n` +
       `${note}\n` +
-      (addr ? `Endereço: ${addr}` : '(Informar endereço no WhatsApp)')
+      (addr ? `Endereço: ${addr}` : 'Endereço: (informar no WhatsApp)')
     );
   }
   return (
-    `FORMA: Retirada no local\n` +
+    `*Retirada no local*\n` +
     `Endereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
   );
 }
@@ -654,6 +654,7 @@ function buildOrderWhatsAppMessage({ product, fullName, phone, flavor, unit }) {
 function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty, address, payment }) {
   const s = Storage.getSettings();
   const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
+  const sep = '=======================';
   const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
   const coupon = appliedCoupon ? resolveLiveCoupon(appliedCoupon) : null;
   const discount = coupon ? Storage.calcCouponDiscount(coupon, subtotal) : 0;
@@ -663,75 +664,55 @@ function buildCartWhatsAppMessage({ fullName, phone, items, fulfillment, loyalty
   const pay = payment || (Cart?.getPayment?.() || 'pix');
   const payLabel = Cart?.paymentLabel?.(pay)
     || (pay === 'dinheiro' ? 'Dinheiro' : pay === 'cartao' ? 'Link para cartão de crédito (repasse da taxa)' : 'Pix');
-  const payNote = pay === 'cartao' ? 'Obs.: taxa do cartão repassada ao cliente.\n' : '';
+  const payNote = pay === 'cartao' ? '\nObs.: taxa do cartão repassada ao cliente.' : '';
   const lines = items.map((item) => {
     const qty = Number(item.qty) || 1;
     const unit = Number(item.price) || 0;
     const sub = unit * qty;
-    const size = item.size || 'A combinar';
-    const flavorLine = item.flavor || 'Não se aplica';
-    const imageUrl = getPublicAssetUrl(item.image);
-    const imageBlock = imageUrl ? `\n  Foto: ${imageUrl}` : '';
-    const notesBlock = item.notes ? `\n  Obs: ${item.notes}` : '';
-    return (
-      `* ITEM: ${item.name}\n` +
-      `  Qtd: ${qty}\n` +
-      `  Tamanho/modelo: ${size}\n` +
-      `  Sabor: ${flavorLine}\n` +
-      `  Valor unit.: ${unit > 0 ? Storage.formatCurrency(unit) : 'Consultar'}\n` +
-      `  Subtotal: ${sub > 0 ? Storage.formatCurrency(sub) : 'Consultar'}` +
-      `${notesBlock}` +
-      `${imageBlock}\n` +
-      `--------------------------------`
+    const flavor = item.flavor ? ` (${item.flavor})` : '';
+    const notes = item.notes ? `\nObs: ${item.notes}` : '';
+    return `${qty}x ${item.name}${flavor}\n${sub > 0 ? Storage.formatCurrency(sub) : 'Consultar'}${notes}`;
+  }).join('\n\n');
+
+  const parts = [
+    `*Novo Pedido — ${storeName}*`,
+    sep,
+    `*Cliente*\n${fullName}\n${formatPhoneBR(phone)}`,
+    sep,
+    `*Itens*\n${lines}`,
+  ];
+
+  if (coupon && discount > 0) {
+    parts.push(
+      sep,
+      `*Cupom ${coupon.code}*\nDesconto: − ${Storage.formatCurrency(discount)}\nSubtotal: ${Storage.formatCurrency(subtotal)}`
     );
-  }).join('\n');
-
-  const couponBlock = coupon && discount > 0
-    ? (
-      `CUPOM: ${coupon.code}\n` +
-      `Desconto: − ${Storage.formatCurrency(discount)}\n` +
-      `Subtotal: ${Storage.formatCurrency(subtotal)}\n`
-    )
-    : '';
-
-  const feeBlock = mode === 'entrega'
-    ? `Taxa de entrega (centro): ${Storage.formatCurrency(fee)}\n`
-    : '';
-
-  let loyaltyBlock = '';
-  if (loyalty && loyalty.eligible) {
-    const gift = loyalty.gift || '1 brinde surpresa da Aurora';
-    loyaltyBlock =
-      `FIDELIDADE AURORA\n` +
-      `Cliente completou ${loyalty.total || loyalty.goal} pedidos e ganhou: ${gift}\n` +
-      `(Favor confirmar o brinde neste atendimento)\n` +
-      `--------------------------------\n`;
-  } else if (loyalty && loyalty.total > 0) {
-    loyaltyBlock =
-      `Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos finalizados` +
-      (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde\n` : '\n') +
-      `--------------------------------\n`;
   }
 
-  return (
-    `PEDIDO RECEBIDO - ${storeName}\n\n` +
-    `CLIENTE:\n` +
-    `Nome: ${fullName}\n` +
-    `Telefone: ${formatPhoneBR(phone)}\n\n` +
-    `ITENS DO PEDIDO (${items.length}):\n\n` +
-    `${lines}\n` +
-    `${couponBlock}` +
-    `${feeBlock}` +
-    `TOTAL A PAGAR: ${Storage.formatCurrency(total)}\n` +
-    `PAGAMENTO: ${payLabel}\n` +
-    `${payNote}` +
-    `--------------------------------\n` +
-    `${loyaltyBlock}` +
-    `${fulfillmentWhatsAppBlock(mode, address)}\n` +
-    `--------------------------------\n\n` +
-    `Aguardo confirmação de disponibilidade e pagamento.\n\n` +
-    `Obrigado!`
+  parts.push(
+    sep,
+    `*Total:* ${Storage.formatCurrency(total)}`,
+    sep,
+    `*Pagamento*\n${payLabel}${payNote}`,
   );
+
+  if (loyalty && loyalty.eligible) {
+    const gift = loyalty.gift || '1 brinde surpresa da Aurora';
+    parts.push(
+      sep,
+      `*Fidelidade Aurora*\nCliente completou ${loyalty.total || loyalty.goal} pedidos e ganhou: *${gift}*\n(Favor confirmar o brinde neste atendimento)`
+    );
+  } else if (loyalty && loyalty.total > 0) {
+    parts.push(
+      sep,
+      `*Fidelidade*\n${loyalty.progress}/${loyalty.goal} pedidos finalizados` +
+        (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde` : '')
+    );
+  }
+
+  parts.push(sep, fulfillmentWhatsAppBlock(mode, address), sep, 'Aguardo confirmação 😊');
+
+  return parts.join('\n\n');
 }
 
 function getProducts() {

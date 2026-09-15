@@ -457,14 +457,14 @@ window.AuroraCart = (() => {
     const addr = String(address || '').trim();
     if (mode === 'entrega') {
       return (
-        `FORMA: Entrega\n` +
+        `*Entrega*\n` +
         `Taxa região central: ${fee}\n` +
         `${note}\n` +
-        (addr ? `Endereço: ${addr}` : '(Informar endereço no WhatsApp)')
+        (addr ? `Endereço: ${addr}` : 'Endereço: (informar no WhatsApp)')
       );
     }
     return (
-      `FORMA: Retirada no local\n` +
+      `*Retirada no local*\n` +
       `Endereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
     );
   }
@@ -472,6 +472,7 @@ window.AuroraCart = (() => {
   function buildWhatsAppMessage({ fullName, phone, fulfillment, loyalty, address, payment, schedule, changeFor }) {
     const s = typeof Storage !== 'undefined' ? Storage.getSettings() : {};
     const storeName = (s.name || 'Aurora Confeitaria Artesanal').toUpperCase();
+    const sep = '=======================';
     repairItemPrices();
     const list = getItems();
     const sub = subtotal();
@@ -491,47 +492,60 @@ window.AuroraCart = (() => {
       const unit = Number(item.price) || 0;
       const lineTotal = unit * qty;
       const flavor = item.flavor ? ` (${item.flavor})` : '';
-      const notes = item.notes ? `\n   Obs: ${item.notes}` : '';
-      return `${qty}x ${item.name}${flavor}\n   ${formatMoney(lineTotal)}${notes}`;
+      const notes = item.notes ? `\nObs: ${item.notes}` : '';
+      return `${qty}x ${item.name}${flavor}\n${formatMoney(lineTotal)}${notes}`;
     }).join('\n\n');
 
-    const couponBlock = live && disc > 0
-      ? `\nCupom ${live.code}: − ${formatMoney(disc)}\nSubtotal: ${formatMoney(sub)}\n`
-      : '';
+    const parts = [
+      `*Novo Pedido — ${storeName}*`,
+      sep,
+      `*Cliente*\n${fullName}\n${formatPhoneBR(phone)}`,
+      sep,
+      `*Itens*\n${lines}`,
+    ];
 
-    let loyaltyBlock = '';
+    if (live && disc > 0) {
+      parts.push(
+        sep,
+        `*Cupom ${live.code}*\nDesconto: − ${formatMoney(disc)}\nSubtotal: ${formatMoney(sub)}`
+      );
+    }
+
+    let payText = `*Pagamento*\n${paymentWhatsAppLine(pay)}`;
+    if (pay === 'dinheiro' && change) {
+      payText += change === 'preciso'
+        ? `\nTroco: preciso de troco`
+        : `\nTroco: preciso de troco para ${change}`;
+    }
+
+    parts.push(
+      sep,
+      `*Total:* ${formatMoney(total)}`,
+      sep,
+      payText,
+    );
+
     if (loyalty && loyalty.eligible) {
       const gift = loyalty.gift || '1 brinde surpresa da Aurora';
-      loyaltyBlock =
-        `\n🎁 *Fidelidade Aurora*\n` +
-        `Cliente completou ${loyalty.total || loyalty.goal} pedidos e ganhou: *${gift}*\n` +
-        `(Favor confirmar o brinde neste atendimento)\n`;
+      parts.push(
+        sep,
+        `*Fidelidade Aurora*\nCliente completou ${loyalty.total || loyalty.goal} pedidos e ganhou: *${gift}*\n(Favor confirmar o brinde neste atendimento)`
+      );
     } else if (loyalty && loyalty.total > 0) {
-      loyaltyBlock =
-        `\n⭐ Fidelidade: ${loyalty.progress}/${loyalty.goal} pedidos finalizados` +
-        (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde\n` : '\n');
+      parts.push(
+        sep,
+        `*Fidelidade*\n${loyalty.progress}/${loyalty.goal} pedidos finalizados` +
+          (loyalty.remaining ? ` — faltam ${loyalty.remaining} para o brinde` : '')
+      );
     }
 
-    const scheduleBlock = when ? `\n*Horário preferido:* ${when}` : '';
-    let changeBlock = '';
-    if (pay === 'dinheiro' && change) {
-      changeBlock = change === 'preciso'
-        ? `\n*Troco:* preciso de troco`
-        : `\n*Troco:* preciso de troco para ${change}`;
+    if (when) {
+      parts.push(sep, `*Horário preferido*\n${when}`);
     }
 
-    return (
-      `*Novo Pedido — ${storeName}*\n\n` +
-      `*Cliente:*\n${fullName}\n${formatPhoneBR(phone)}\n\n` +
-      `*Itens:*\n${lines}\n` +
-      `${couponBlock}\n` +
-      `*Total:* ${formatMoney(total)}\n` +
-      `*Pagamento:* ${paymentWhatsAppLine(pay)}${changeBlock}\n` +
-      `${loyaltyBlock}` +
-      `${scheduleBlock}\n` +
-      `${fulfillmentBlock(mode, address)}\n\n` +
-      `Aguardo confirmação 😊`
-    );
+    parts.push(sep, fulfillmentBlock(mode, address), sep, 'Aguardo confirmação 😊');
+
+    return parts.join('\n\n');
   }
 
   function syncFromStorage() {
