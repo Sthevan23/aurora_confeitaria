@@ -132,15 +132,17 @@
 
   function foldText(str) {
     return String(str || '')
+      .replace(/[—–−]/g, '-')
+      .replace(/[“”«»]/g, '"')
+      .replace(/['']/g, "'")
+      .replace(/…/g, '...')
+      .replace(/×/g, 'x')
+      .replace(/\u00a0/g, ' ')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^\x20-\x7E\n]/g, '?');
-  }
-
-  function line(text = '', width = 32) {
-    const t = foldText(text);
-    if (t.length <= width) return t;
-    return t.slice(0, width);
+      .replace(/[^\x20-\x7E\n]/g, ' ')
+      .replace(/[ \t]+/g, ' ')
+      .trim();
   }
 
   function money(n) {
@@ -152,7 +154,18 @@
     const words = foldText(text).split(/\s+/).filter(Boolean);
     const out = [];
     let cur = '';
+    const flush = () => {
+      if (cur) {
+        out.push(cur);
+        cur = '';
+      }
+    };
     for (const w of words) {
+      if (w.length > width) {
+        flush();
+        for (let i = 0; i < w.length; i += width) out.push(w.slice(i, i + width));
+        continue;
+      }
       if (!cur) cur = w;
       else if ((cur + ' ' + w).length <= width) cur += ' ' + w;
       else {
@@ -160,7 +173,71 @@
         cur = w;
       }
     }
-    if (cur) out.push(cur);
+    flush();
+    return out;
+  }
+
+  function center(text, width) {
+    const t = foldText(text);
+    if (!t) return '';
+    if (t.length >= width) return t.slice(0, width);
+    return ' '.repeat(Math.floor((width - t.length) / 2)) + t;
+  }
+
+  function padRow(left, right, width) {
+    const L = foldText(left);
+    const R = foldText(right);
+    if (!L) return R ? ' '.repeat(Math.max(0, width - R.length)) + R : '';
+    if (L.length + 1 + R.length <= width) {
+      return L + ' '.repeat(width - L.length - R.length) + R;
+    }
+    return null;
+  }
+
+  function pushWrapped(lines, text, width) {
+    wrapLines(text, width).forEach((row) => lines.push(row));
+  }
+
+  function pushSection(lines, label, value, width) {
+    const v = String(value || '').trim();
+    if (!v) return;
+    lines.push(label);
+    v.split(/\r?\n/).forEach((part) => pushWrapped(lines, part, width));
+    lines.push('');
+  }
+
+  function parseTicketNotes(raw) {
+    const out = {
+      mode: '',
+      address: '',
+      schedule: '',
+      payment: '',
+      change: '',
+      extra: '',
+    };
+    const extra = [];
+    String(raw || '')
+      .replace(/={3,}/g, '|')
+      .replace(/\r?\n+/g, ' | ')
+      .split(/\s*\|\s*/)
+      .forEach((part) => {
+        const p = part.replace(/\*/g, '').trim();
+        if (!p) return;
+        if (/^(entrega|retirada)$/i.test(p)) {
+          out.mode = /^entrega$/i.test(p) ? 'ENTREGA' : 'RETIRADA';
+          return;
+        }
+        const addr = p.match(/^endere[cç]o:\s*(.+)$/i);
+        if (addr) { out.address = addr[1].trim(); return; }
+        const when = p.match(/^hor[aá]rio(?:\s+preferido)?:\s*(.+)$/i);
+        if (when) { out.schedule = when[1].trim(); return; }
+        const pay = p.match(/^pagamento:\s*(.+)$/i);
+        if (pay) { out.payment = pay[1].replace(/\s+[—–]\s+/g, '\n').trim(); return; }
+        if (/preciso de troco|troco para/i.test(p)) { out.change = p; return; }
+        if (/^\d+\s*x\s+/i.test(p)) return;
+        extra.push(p);
+      });
+    out.extra = extra.join('\n');
     return out;
   }
 
@@ -168,62 +245,83 @@
     const width = 32;
     const dash = '-'.repeat(width);
     const lines = [];
-    const push = (t) => lines.push(line(t, width));
+    const notes = parseTicketNotes(order.notes);
+    const deliveryFee = Number(order.deliveryFee);
+    const discount = Number(order.discount);
 
-    push(opts.storeName || 'AURORA CONFEITARIA');
-    push('Pedido na impressora');
-    push(dash);
-    push('Pedido: ' + (order.number || order.id || ''));
+    lines.push(center(opts.storeName || 'AURORA CONFEITARIA', width));
+    lines.push(center('Pedido ' + (order.number || order.id || ''), width));
     if (order.date) {
       try {
         const d = new Date(order.date);
-        push(
-          d.toLocaleString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-        );
+        lines.push(center(d.toLocaleString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }), width));
       } catch { /* ignore */ }
     }
-    push(dash);
-    wrapLines('Cliente: ' + (order.clientName || '—'), width).forEach(push);
-    if (order.clientWhatsapp) {
-      wrapLines('WhatsApp: ' + String(order.clientWhatsapp).replace(/\D/g, ''), width).forEach(push);
+    lines.push(dash);
+    if (notes.mode) {
+      lines.push(center(notes.mode, width));
+      lines.push('');
     }
-    push(dash);
 
-    (order.items || []).forEach((item) => {
+    pushSection(lines, 'Cliente', order.clientName || '-', width);
+    if (order.clientWhatsapp) {
+      const phone = String(order.clientWhatsapp).replace(/\D/g, '');
+      pushSection(lines, 'WhatsApp', phone, width);
+    }
+    pushSection(lines, 'Endereco', notes.address || order.address, width);
+    pushSection(lines, 'Horario', notes.schedule, width);
+    pushSection(lines, 'Pagamento', [notes.payment, notes.change].filter(Boolean).join('\n'), width);
+
+    lines.push(dash);
+    (order.items || []).forEach((item, idx) => {
+      if (idx) lines.push('');
       const qty = Number(item.qty) || 1;
       const name = item.name || 'Item';
-      const detail = item.detail || item.flavor || '';
-      wrapLines(`${qty}x ${name}`, width).forEach(push);
-      if (detail) wrapLines('  ' + detail, width).forEach(push);
-      push('  ' + money((Number(item.price) || 0) * qty));
+      const detail = [item.detail, item.flavor, item.notes].filter(Boolean).join(' / ');
+      const price = money((Number(item.price) || 0) * qty);
+      const left = `${qty}x ${name}`;
+      const aligned = padRow(left, price, width);
+      if (aligned) lines.push(aligned);
+      else {
+        pushWrapped(lines, left, width);
+        lines.push(padRow('', price, width) || price);
+      }
+      if (detail) wrapLines(detail, width - 2).forEach((row) => lines.push('  ' + row));
     });
 
-    push(dash);
-    push('TOTAL: ' + money(order.total));
-    push(dash);
+    lines.push(dash);
+    if (Number.isFinite(discount) && discount > 0) {
+      lines.push(padRow('Desconto', '- ' + money(discount), width) || ('Desconto ' + money(discount)));
+    }
+    if (Number.isFinite(deliveryFee) && deliveryFee > 0) {
+      lines.push(padRow('Entrega', money(deliveryFee), width) || ('Entrega ' + money(deliveryFee)));
+    }
+    lines.push(padRow('TOTAL', money(order.total), width) || ('TOTAL ' + money(order.total)));
+    lines.push(dash);
 
-    if (order.notes) {
-      push('Obs:');
-      wrapLines(String(order.notes).replace(/\s*\|\s*/g, ' | '), width).forEach(push);
-      push(dash);
+    if (notes.extra) {
+      pushSection(lines, 'Obs', notes.extra, width);
+      lines.push(dash);
     }
 
-    push('Obrigada!');
+    lines.push(center('Obrigada!', width));
     return lines.join('\n');
   }
 
   function buildReceipt(order, opts = {}) {
     const enc = new TextEncoder();
+    const body = receiptText(order, opts).replace(/\n/g, '\r\n');
     const parts = [];
     parts.push(new Uint8Array([0x1b, 0x40]));
     parts.push(new Uint8Array([0x1b, 0x74, 0x00]));
-    parts.push(enc.encode(receiptText(order, opts) + '\n\n\n'));
+    parts.push(new Uint8Array([0x1b, 0x33, 0x22]));
+    parts.push(enc.encode(body + '\r\n\r\n\r\n'));
     parts.push(new Uint8Array([0x1d, 0x56, 0x01]));
 
     let total = 0;
