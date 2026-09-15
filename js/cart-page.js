@@ -381,6 +381,8 @@
 
     const addressWrap = document.getElementById('cart-page-address-wrap');
     if (addressWrap) addressWrap.hidden = mode !== 'entrega';
+    const deliveryInfo = document.getElementById('cart-page-delivery-info');
+    if (deliveryInfo) deliveryInfo.hidden = mode !== 'entrega';
     const scheduleHint = document.getElementById('cart-page-schedule-hint');
     if (scheduleHint) {
       scheduleHint.textContent = mode === 'entrega'

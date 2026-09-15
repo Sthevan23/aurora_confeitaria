@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
-  <link rel="stylesheet" href="style.css?v=69">
+  <link rel="stylesheet" href="style.css?v=70">
 </head>
 <body class="cart-page">
   <header class="header header--solid" id="header">
@@ -117,6 +117,19 @@
               </label>
             </div>
 
+            <aside class="cart-delivery-info" id="cart-page-delivery-info" hidden>
+              <div class="cart-delivery-info__badge">Importante</div>
+              <div class="cart-delivery-info__icon" aria-hidden="true">
+                <i class="fa-solid fa-motorcycle"></i>
+              </div>
+              <p class="cart-delivery-info__eyebrow">Informações de entrega</p>
+              <h3 class="cart-delivery-info__title">Tempo estimado: 40 a 70 min</h3>
+              <p class="cart-delivery-info__text">
+                Em dias mais movimentados, a entrega pode levar de <strong>70 a 120 minutos</strong>.
+                A gente avisa no WhatsApp se houver qualquer atraso — seu doce chega com carinho.
+              </p>
+            </aside>
+
             <p class="cart-checkout__label cart-checkout__label--spaced">Seus dados</p>
             <label class="order-field">Nome completo *<input type="text" id="cart-page-fullname" placeholder="Nome e sobrenome" autocomplete="name"></label>
             <label class="order-field">WhatsApp *<input type="tel" id="cart-page-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" maxlength="15"></label>
@@ -219,6 +232,6 @@
   <script src="js/storage.js?v=76"></script>
   <script src="js/analytics.js?v=1"></script>
   <script src="js/cart-shared.js?v=16"></script>
-  <script src="js/cart-page.js?v=28"></script>
+  <script src="js/cart-page.js?v=29"></script>
 </body>
 </html>
