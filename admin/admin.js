@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAllAdminPages();
   initFinanceiro();
   initSettings();
+  initPrinter();
   initStockPage();
   initCoupons();
   initModals();
@@ -228,9 +229,9 @@ function navigateTo(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-async function refreshOrdersFromCloud() {
+async function refreshOrdersFromCloud({ quiet = false } = {}) {
   const btn = document.getElementById('btn-refresh-orders');
-  if (btn) {
+  if (btn && !quiet) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando…';
   }
@@ -240,16 +241,147 @@ async function refreshOrdersFromCloud() {
     renderOrders();
     renderDashboard();
     updateSyncBadge();
-    if (ok) showToast('Pedidos atualizados da nuvem.', 'success');
-    else showToast('Não deu para buscar na nuvem. Tente de novo.', 'error');
+    if (!quiet) {
+      if (ok) showToast('Pedidos atualizados da nuvem.', 'success');
+      else showToast('Não deu para buscar na nuvem. Tente de novo.', 'error');
+    }
+    await maybeAutoPrintNewOrders();
   } catch {
-    showToast('Falha ao atualizar pedidos.', 'error');
+    if (!quiet) showToast('Falha ao atualizar pedidos.', 'error');
   } finally {
-    if (btn) {
+    if (btn && !quiet) {
       btn.disabled = false;
       btn.innerHTML = '<i class="fas fa-sync"></i> Atualizar pedidos';
     }
   }
+}
+
+function printerStoreName() {
+  return Storage.getSettings()?.name || 'Aurora Confeitaria';
+}
+
+async function maybeAutoPrintNewOrders() {
+  if (!window.AuroraPrint) return;
+  try {
+    AuroraPrint.seedPrintedFromOrders(Storage.getOrders());
+    const result = await AuroraPrint.printNewOrders(Storage.getOrders(), {
+      storeName: printerStoreName(),
+    });
+    if (result?.printed > 0) {
+      showToast(
+        result.printed === 1
+          ? 'Pedido novo impresso!'
+          : `${result.printed} pedidos novos impressos!`,
+        'success',
+      );
+    }
+  } catch (err) {
+    console.warn('[Aurora] Auto-print', err);
+  }
+}
+
+async function printOrderTicket(orderId) {
+  if (!window.AuroraPrint) {
+    showToast('Módulo de impressão não carregou. Atualize a página.', 'error');
+    return;
+  }
+  const order = Storage.getOrders().find((o) => o.id === orderId);
+  if (!order) {
+    showToast('Pedido não encontrado.', 'error');
+    return;
+  }
+  try {
+    if (!AuroraPrint.isConnected()) {
+      await AuroraPrint.connect();
+      updatePrinterUi(AuroraPrint.notifyStatus());
+    }
+    await AuroraPrint.printOrder(order, { storeName: printerStoreName() });
+    showToast('Pedido enviado para a impressora!', 'success');
+  } catch (err) {
+    showToast(err?.message || 'Falha ao imprimir. Conecte a impressora no Chrome.', 'error');
+  }
+}
+
+function updatePrinterUi(info) {
+  const label = document.getElementById('printer-status-label');
+  const btnConnect = document.getElementById('btn-printer-connect');
+  const btnDisconnect = document.getElementById('btn-printer-disconnect');
+  const btnTest = document.getElementById('btn-printer-test');
+  const auto = document.getElementById('printer-auto-print');
+  if (!info && window.AuroraPrint) info = AuroraPrint.notifyStatus();
+  if (!info) return;
+  if (label) {
+    label.textContent = info.label;
+    label.classList.toggle('is-connected', !!info.connected);
+  }
+  if (btnConnect) btnConnect.hidden = !!info.connected;
+  if (btnDisconnect) btnDisconnect.hidden = !info.connected;
+  if (btnTest) btnTest.hidden = !info.connected;
+  if (auto) auto.checked = info.auto !== false;
+}
+
+function initPrinter() {
+  if (!window.AuroraPrint) return;
+
+  AuroraPrint.seedPrintedFromOrders(Storage.getOrders());
+  AuroraPrint.onStatus(updatePrinterUi);
+  updatePrinterUi(AuroraPrint.notifyStatus());
+
+  document.getElementById('btn-printer-connect')?.addEventListener('click', async () => {
+    try {
+      await AuroraPrint.connect();
+      updatePrinterUi(AuroraPrint.notifyStatus());
+      showToast('Impressora conectada!', 'success');
+      await maybeAutoPrintNewOrders();
+    } catch (err) {
+      if (err?.name === 'NotFoundError') {
+        showToast('Nenhuma impressora selecionada.', 'error');
+        return;
+      }
+      showToast(err?.message || 'Não conectou. Use Chrome e ligue o Bluetooth.', 'error');
+    }
+  });
+
+  document.getElementById('btn-printer-disconnect')?.addEventListener('click', () => {
+    AuroraPrint.disconnect();
+    updatePrinterUi(AuroraPrint.notifyStatus());
+    showToast('Impressora desconectada.', 'success');
+  });
+
+  document.getElementById('btn-printer-test')?.addEventListener('click', async () => {
+    try {
+      await AuroraPrint.printOrder({
+        id: 'test-' + Date.now(),
+        number: 'TESTE',
+        date: new Date().toISOString(),
+        clientName: 'Teste Aurora',
+        clientWhatsapp: '',
+        items: [{ name: 'Impressao OK', qty: 1, price: 0 }],
+        total: 0,
+        notes: 'Impressora Bluetooth conectada',
+        status: 'novo',
+      }, { storeName: printerStoreName() });
+      showToast('Teste enviado!', 'success');
+    } catch (err) {
+      showToast(err?.message || 'Falha no teste de impressão.', 'error');
+    }
+  });
+
+  document.getElementById('printer-auto-print')?.addEventListener('change', (e) => {
+    AuroraPrint.setAutoPrint(!!e.target.checked);
+    updatePrinterUi(AuroraPrint.notifyStatus());
+    showToast(
+      e.target.checked ? 'Impressão automática ligada.' : 'Impressão automática desligada.',
+      'success',
+    );
+  });
+
+  // Busca pedidos novos em silêncio enquanto o painel estiver aberto
+  setInterval(() => {
+    if (document.hidden) return;
+    if (!AuroraPrint.isConnected() || !AuroraPrint.getAutoPrint()) return;
+    refreshOrdersFromCloud({ quiet: true });
+  }, 45000);
 }
 
 function initLogout() {
@@ -1169,6 +1301,9 @@ function viewOrder(id) {
         <button type="button" class="btn btn--primary" onclick="openEditOrder('${order.id}')">
           <i class="fas fa-edit"></i> Editar pedido
         </button>
+        <button type="button" class="btn btn--secondary" onclick="printOrderTicket('${order.id}')">
+          <i class="fas fa-print"></i> Imprimir
+        </button>
         <button type="button" class="btn btn--secondary" onclick="openEditOrderStatus('${order.id}')">
           <i class="fas fa-exchange-alt"></i> Alterar status
         </button>
@@ -1630,7 +1765,7 @@ function openNewOrderModal() {
     const total = tempItems.reduce((s, i) => s + i.price * i.qty, 0);
 
     const orders = Storage.getOrders();
-    orders.push({
+    const newOrder = {
       id: Storage.generateId('o'),
       number: Storage.generateOrderNumber(),
       clientId: client.id,
@@ -1640,7 +1775,8 @@ function openNewOrderModal() {
       total,
       status: 'novo',
       date: new Date().toISOString()
-    });
+    };
+    orders.push(newOrder);
 
     const btn = document.querySelector('#new-order-form [type="submit"]');
     const prev = btn?.innerHTML || '';
@@ -1660,6 +1796,13 @@ function openNewOrderModal() {
       renderClients();
       renderDashboard();
       showToast('Pedido criado com sucesso!', 'success');
+      if (window.AuroraPrint?.isConnected?.() && AuroraPrint.getAutoPrint()) {
+        try {
+          await AuroraPrint.printOrder(newOrder, { storeName: printerStoreName() });
+        } catch (err) {
+          console.warn('[Aurora] Print novo pedido admin', err);
+        }
+      }
     } catch {
       showToast('Erro ao criar pedido.', 'error');
     } finally {
@@ -4081,6 +4224,7 @@ window.editOrder = editOrder;
 window.openEditOrder = openEditOrder;
 window.openEditOrderStatus = openEditOrderStatus;
 window.viewOrder = viewOrder;
+window.printOrderTicket = printOrderTicket;
 window.deleteOrder = deleteOrder;
 window.closeModal = closeModal;
 window.saveProductStock = saveProductStock;

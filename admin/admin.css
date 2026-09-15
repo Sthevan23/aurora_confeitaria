@@ -1767,6 +1767,26 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 .pix-settings-preview[hidden] {
   display: none !important;
 }
+.printer-card {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+  background: linear-gradient(180deg, #f5faff 0%, #fff 60%);
+}
+.printer-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0 1.1rem 1.1rem;
+}
+.printer-card__auto {
+  margin: 0;
+  width: 100%;
+}
+#printer-status-label.is-connected {
+  color: #1565c0;
+  font-weight: 600;
+}
 .open-days-grid {
   display: flex;
   flex-wrap: wrap;
