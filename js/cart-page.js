@@ -215,11 +215,68 @@
     );
   }
 
+  function injectScheduleCss() {
+    if (document.getElementById('aurora-schedule-css')) return;
+    const style = document.createElement('style');
+    style.id = 'aurora-schedule-css';
+    style.textContent = `
+      .cart-schedule{display:grid;gap:.65rem}
+      .cart-schedule__days{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;padding:.28rem;border-radius:999px;background:#fff1f4}
+      .cart-schedule__day{border:0;border-radius:999px;padding:.55rem .75rem;background:transparent;color:#7a5638;font:inherit;font-weight:700;cursor:pointer}
+      .cart-schedule__day.is-active{background:#fff;color:#3d2610;box-shadow:0 4px 14px rgba(88,56,24,.08)}
+      .cart-schedule__slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.45rem}
+      .cart-schedule__slot{border:1px solid rgba(88,56,24,.12);border-radius:12px;padding:.55rem .3rem;background:#fff;color:#3d2610;font:inherit;font-size:.82rem;font-weight:600;cursor:pointer}
+      .cart-schedule__slot.is-selected{border-color:#fc7890;background:#fff1f4;color:#e85a76}
+      .cart-schedule__slot--wide{grid-column:1/-1}
+      @media(max-width:420px){.cart-schedule__slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function ensureScheduleMarkup() {
+    document.getElementById('cart-page-schedule-hint')?.setAttribute('hidden', '');
+    injectScheduleCss();
+
+    let wrap = document.getElementById('cart-page-schedule-wrap');
+    if (wrap && !document.getElementById('cart-page-schedule-slots')) {
+      const slots = document.createElement('div');
+      slots.id = 'cart-page-schedule-slots';
+      slots.className = 'cart-schedule__slots';
+      wrap.appendChild(slots);
+    }
+    if (wrap) return wrap;
+
+    const sel = document.getElementById('cart-page-schedule');
+    if (!sel) return null;
+
+    const current = sel.value || '';
+    sel.removeAttribute('id');
+    wrap = document.createElement('div');
+    wrap.className = 'cart-schedule';
+    wrap.id = 'cart-page-schedule-wrap';
+    wrap.innerHTML =
+      '<p class="cart-checkout__label">Horário *</p>' +
+      '<div class="cart-schedule__days" role="tablist">' +
+      '<button type="button" class="cart-schedule__day is-active" data-day="hoje">Hoje</button>' +
+      '<button type="button" class="cart-schedule__day" data-day="amanha">Amanhã</button>' +
+      '</div>' +
+      '<div class="cart-schedule__slots" id="cart-page-schedule-slots"></div>';
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.id = 'cart-page-schedule';
+    hidden.value = current;
+    wrap.appendChild(hidden);
+
+    const field = sel.closest('label.order-field') || sel;
+    field.replaceWith(wrap);
+    return wrap;
+  }
+
   function fillScheduleOptions() {
-    const wrap = document.getElementById('cart-page-schedule-wrap');
+    const wrap = ensureScheduleMarkup();
     const slotsEl = document.getElementById('cart-page-schedule-slots');
     const hidden = document.getElementById('cart-page-schedule');
-    if (!slotsEl || !hidden) return;
+    if (!wrap || !slotsEl || !hidden) return;
 
     const s = Storage.getSettings?.() || {};
     const openMin = (() => {
