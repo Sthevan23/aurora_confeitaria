@@ -1,14 +1,15 @@
 ---
-description: Commit and push to main automatically after implementing changes
+description: Commit and push every change to main without asking
 alwaysApply: true
 ---
 
-# Git automático
+# Git automático — todos os commits
 
-Depois de implementar ou corrigir algo neste projeto:
+O Sthevan autorizou **todos** os commits e pushes. Vale para qualquer ajuste, correção ou feature.
 
-- Faça `git commit` e `git push origin main` na hora, no repo `aurora_confeitaria_restore`.
-- Não pergunte se pode commitar ou enviar. O Sthevan já autorizou commits automáticos.
+- Sempre faça `git commit` e `git push origin main` no repo `C:\Users\Administrador\Desktop\aurora_confeitaria_restore`.
+- Nunca pergunte se pode commitar, enviar, ou se “quer que eu faça o git”.
+- Não espere o usuário dizer “faz o git”.
 - Mensagem curta em português, focada no porquê.
 - Não commite `.env`, senhas ou arquivos de credencial.
 - Não use `--no-verify`, force push, amend de commit já enviado, nem altere o git config.
