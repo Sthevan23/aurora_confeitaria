@@ -532,14 +532,17 @@ function displayPrice(product, flavor) {
 }
 
 function resolveProductPrice(product, flavor) {
+  if (typeof Storage !== 'undefined' && typeof Storage.productUnitPrice === 'function') {
+    return Number(Storage.productUnitPrice(product, flavor)) || 0;
+  }
   const base = typeof Storage !== 'undefined' && Storage.productDisplayPrice
     ? Number(Storage.productDisplayPrice(product)) || 0
     : Number(product?.price) || 0;
 
   if (flavor && product?.flavorPrices && product.flavorPrices[flavor] != null) {
     const flavorPrice = Number(product.flavorPrices[flavor]);
-    // 0 no admin = “sem preço próprio” → usa o valor do produto
     if (Number.isFinite(flavorPrice) && flavorPrice > 0) {
+      if (base > 0 && flavorPrice < base && !product.priceFrom) return base + flavorPrice;
       if (
         product.promoActive &&
         product.promoPrice != null &&
@@ -1245,10 +1248,16 @@ function productLightboxDescription(product) {
 
 function buildFlavorOptionsHtml(product, flavors, unitIdx, current) {
   return flavors.map((f) => {
+    const listed = Number(product?.flavorPrices?.[f]);
+    const extra = Number.isFinite(listed) && listed > 0
+      && typeof Storage !== 'undefined'
+      && Storage.isFlavorExtra?.(product, f, listed, Number(Storage.productDisplayPrice?.(product)) || Number(product?.price) || 0);
     const price = resolveProductPrice(product, f);
-    const priceHtml = Number.isFinite(price) && price > 0
-      ? `<span class="flavor-option-card__price">${Storage.formatCurrency(price)}</span>`
-      : '';
+    const priceHtml = extra
+      ? `<span class="flavor-option-card__price">+ ${Storage.formatCurrency(listed)}</span>`
+      : (Number.isFinite(price) && price > 0
+        ? `<span class="flavor-option-card__price">${Storage.formatCurrency(price)}</span>`
+        : '');
     const active = current === f;
     const safe = String(f).replace(/"/g, '&quot;');
     const label = String(f).replace(/</g, '&lt;');

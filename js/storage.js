@@ -1454,6 +1454,49 @@ const Storage = (() => {
     return list;
   }
 
+  function flavorMap(product) {
+    const map = product?.flavorPrices;
+    return map && typeof map === 'object' ? map : {};
+  }
+
+  function flavorExtraMap(product) {
+    const map = product?.flavorExtras;
+    return map && typeof map === 'object' ? map : {};
+  }
+
+  function isFlavorExtra(product, flavor, flavorPrice, base) {
+    const extras = flavorExtraMap(product);
+    if (extras[flavor] === true || extras[flavor] === 1 || extras[flavor] === '1') return true;
+    if (extras[flavor] === false || extras[flavor] === 0 || extras[flavor] === '0') return false;
+    if (product?.priceFrom) return false;
+    const fp = Number(flavorPrice);
+    const b = Number(base);
+    return fp > 0 && b > 0 && fp < b;
+  }
+
+  function productUnitPrice(product, flavor) {
+    if (!product) return 0;
+    const base = Number(productDisplayPrice(product)) || 0;
+    const name = String(flavor || '').trim();
+    if (!name) return base;
+    const map = flavorMap(product);
+    if (map[name] == null) return base;
+    const flavorPrice = Number(map[name]);
+    if (!(Number.isFinite(flavorPrice) && flavorPrice > 0)) return base;
+    if (isFlavorExtra(product, name, flavorPrice, base)) {
+      return base + flavorPrice;
+    }
+    if (
+      product.promoActive &&
+      product.promoPrice != null &&
+      Number(product.price) > 0 &&
+      flavorPrice === Number(product.price)
+    ) {
+      return Number(product.promoPrice);
+    }
+    return flavorPrice;
+  }
+
   function getDashboardStats() {
     const orders = getOrders();
     const finished = orders.filter((o) => o.status === 'finalizado');
@@ -1819,7 +1862,7 @@ const Storage = (() => {
     getReviews, getFaq, getGallery,
     login, loginAsync, updatePassword,
     generateId, generateOrderNumber,
-    getCategoryName, formatCurrency, productDisplayPrice,
+    getCategoryName, formatCurrency, productDisplayPrice, productUnitPrice, isFlavorExtra,
     getDashboardStats, getMonthlyRevenue,
     getFinishedOrdersByPeriod, getProductSalesBreakdown, getSalesPeriodStats,
     initCloud, pullFull, pullPublic, pushToCloud, saveAsync,

@@ -881,6 +881,9 @@ function calcOrderTotal(subtotal, deliveryFee, discount, waiveDelivery) {
 
 function productPriceForOrder(product, flavor = '') {
   if (!product) return 0;
+  if (typeof Storage.productUnitPrice === 'function') {
+    return Number(Storage.productUnitPrice(product, flavor)) || 0;
+  }
   const map = product.flavorPrices;
   if (flavor && map && map[flavor] != null) {
     const fp = Number(map[flavor]);
@@ -2723,34 +2726,43 @@ function formatFlavorsForEditor(product) {
   const prices = product?.flavorPrices && typeof product.flavorPrices === 'object'
     ? product.flavorPrices
     : {};
+  const extras = product?.flavorExtras && typeof product.flavorExtras === 'object'
+    ? product.flavorExtras
+    : {};
   if (!flavors.length) return '';
   return flavors.map((f) => {
     const price = prices[f];
-    return price != null && price !== '' && Number(price) > 0 ? `${f} = ${price}` : f;
+    if (price == null || price === '' || !(Number(price) > 0)) return f;
+    const extra = extras[f] === true || extras[f] === 1 || extras[f] === '1'
+      || (Number(price) > 0 && Number(product?.price) > 0 && Number(price) < Number(product.price) && !product?.priceFrom);
+    return extra ? `${f} = +${price}` : `${f} = ${price}`;
   }).join('\n');
 }
 
 function parseFlavorsFromEditor(raw) {
   const flavors = [];
   const flavorPrices = {};
+  const flavorExtras = {};
   String(raw || '')
     .split(/\n|,/)
     .map((line) => line.trim())
     .filter(Boolean)
     .forEach((line) => {
-      const match = line.match(/^(.+?)\s*[=:]\s*R?\$?\s*([\d]+(?:[.,]\d+)?)\s*$/i);
+      const match = line.match(/^(.+?)\s*[=:]\s*(\+)?\s*R?\$?\s*([\d]+(?:[.,]\d+)?)\s*$/i);
       if (match) {
         const name = match[1].trim();
-        const price = parseFloat(match[2].replace(',', '.'));
+        const price = parseFloat(match[3].replace(',', '.'));
         if (!name) return;
         flavors.push(name);
-        // 0 = sem preço próprio (usa o preço do produto)
-        if (Number.isFinite(price) && price > 0) flavorPrices[name] = price;
+        if (Number.isFinite(price) && price > 0) {
+          flavorPrices[name] = price;
+          if (match[2] === '+') flavorExtras[name] = true;
+        }
         return;
       }
       flavors.push(line);
     });
-  return { flavors, flavorPrices };
+  return { flavors, flavorPrices, flavorExtras };
 }
 
 function openProductModal(product = null) {
@@ -2803,8 +2815,8 @@ function openProductModal(product = null) {
       </div>
       <div class="form-group">
         <label>Sabores e preços (um por linha)</label>
-        <textarea id="prod-flavors" rows="5" placeholder="Ninho com Nutella = 28&#10;Ferrero = 34">${formatFlavorsForEditor(product)}</textarea>
-        <small style="display:block;margin-top:6px;color:var(--texto-claro)">Formato: <strong>Nome do sabor = preço</strong>. No pedido do WhatsApp aparece o sabor escolhido e o valor.</small>
+        <textarea id="prod-flavors" rows="5" placeholder="Doce de leite&#10;Nutella Pura = +8&#10;Ninho com Nutella = 28">${formatFlavorsForEditor(product)}</textarea>
+        <small style="display:block;margin-top:6px;color:var(--texto-claro)">Preço do sabor: <strong>Ninho = 28</strong> (substitui o valor). Adicional: <strong>Nutella Pura = +8</strong> (soma no preço da porção).</small>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -2950,6 +2962,7 @@ function openProductModal(product = null) {
         size: formatProductSize(document.getElementById('prod-size').value),
         flavors: parsedFlavors.flavors,
         flavorPrices: parsedFlavors.flavorPrices,
+        flavorExtras: parsedFlavors.flavorExtras,
         active: document.getElementById('prod-active').checked,
         available: document.getElementById('prod-available').checked,
         stock: (() => {

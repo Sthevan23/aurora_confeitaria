@@ -26,23 +26,18 @@ window.AuroraCart = (() => {
   }
 
   function resolveItemPrice(item) {
+    if (typeof Storage !== 'undefined') {
+      const products = Storage.getProducts?.() || [];
+      const product = products.find((p) => String(p.id) === String(item?.productId || ''))
+        || products.find((p) => String(p.name || '').trim().toLowerCase() === String(item?.name || '').trim().toLowerCase());
+      if (product && typeof Storage.productUnitPrice === 'function') {
+        const unit = Number(Storage.productUnitPrice(product, item?.flavor || ''));
+        if (unit > 0) return unit;
+      }
+    }
     const stored = Number(item?.price);
     if (Number.isFinite(stored) && stored > 0) return stored;
-    if (typeof Storage === 'undefined') return 0;
-    const products = Storage.getProducts?.() || [];
-    const product = products.find((p) => String(p.id) === String(item?.productId || ''))
-      || products.find((p) => String(p.name || '').trim().toLowerCase() === String(item?.name || '').trim().toLowerCase());
-    if (!product) return 0;
-    const flavor = String(item?.flavor || '').trim();
-    const map = product.flavorPrices;
-    if (flavor && map && map[flavor] != null) {
-      const fp = Number(map[flavor]);
-      if (Number.isFinite(fp) && fp > 0) return fp;
-    }
-    if (typeof Storage.productDisplayPrice === 'function') {
-      return Number(Storage.productDisplayPrice(product)) || 0;
-    }
-    return Number(product.price) || 0;
+    return 0;
   }
 
   function repairItemPrices() {
