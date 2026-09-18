@@ -1,0 +1,15 @@
+---
+description: Commit and push to main automatically after implementing changes
+alwaysApply: true
+---
+
+# Git automático
+
+Depois de implementar ou corrigir algo neste projeto:
+
+- Faça `git commit` e `git push origin main` na hora, no repo `aurora_confeitaria_restore`.
+- Não pergunte se pode commitar ou enviar. O Sthevan já autorizou commits automáticos.
+- Mensagem curta em português, focada no porquê.
+- Não commite `.env`, senhas ou arquivos de credencial.
+- Não use `--no-verify`, force push, amend de commit já enviado, nem altere o git config.
+---
