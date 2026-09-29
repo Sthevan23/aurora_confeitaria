@@ -1148,7 +1148,7 @@ function aurora_normalize_product_input(array $p): array {
   foreach (($p['flavorPrices'] ?? []) as $flavor => $price) {
     $flavor = trim((string) $flavor);
     if ($flavor === '') continue;
-    $flavorPrices[$flavor] = (float) $price;
+    $flavorPrices[$flavor] = aurora_parse_money($price);
   }
 
   $img = trim((string) ($p['image'] ?? ''));
@@ -1162,14 +1162,14 @@ function aurora_normalize_product_input(array $p): array {
 
   $promoPrice = null;
   if (!empty($p['promoActive']) && isset($p['promoPrice']) && $p['promoPrice'] !== null && $p['promoPrice'] !== '') {
-    $promoPrice = (float) $p['promoPrice'];
+    $promoPrice = aurora_parse_money($p['promoPrice']);
   }
 
   $out = [
     'id' => $pid,
     'name' => trim((string) ($p['name'] ?? '')),
     'description' => (string) ($p['description'] ?? ''),
-    'price' => (float) ($p['price'] ?? 0),
+    'price' => aurora_parse_money($p['price'] ?? 0),
     'priceFrom' => !empty($p['priceFrom']),
     'categoryId' => trim((string) ($p['categoryId'] ?? '')),
     'image' => $img,

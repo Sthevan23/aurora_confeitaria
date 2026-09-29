@@ -984,7 +984,7 @@ function renderOrderEditorItems(container, items, onChange) {
             <input type="number" min="1" max="99" value="${Number(item.qty) || 1}" data-item-qty="${idx}">
           </label>
           <label class="order-editor__unit">Unit.
-            <input type="number" min="0" step="0.01" value="${Number(item.price) || 0}" data-item-price="${idx}">
+            <input type="text" inputmode="decimal" min="0" value="${escapeHtml(formatMoneyInput(Number(item.price) || 0))}" data-item-price="${idx}">
           </label>
           <button type="button" class="btn--icon delete" data-item-remove="${idx}" title="Remover item"><i class="fas fa-trash"></i></button>
         </div>
@@ -1002,7 +1002,7 @@ function renderOrderEditorItems(container, items, onChange) {
   container.querySelectorAll('[data-item-price]').forEach((input) => {
     input.addEventListener('change', () => {
       const idx = Number(input.dataset.itemPrice);
-      items[idx].price = Math.max(0, parseFloat(String(input.value).replace(',', '.')) || 0);
+      items[idx].price = Math.max(0, parseMoneyBR(input.value, 0));
       onChange();
     });
   });
@@ -1018,8 +1018,8 @@ function renderOrderEditorItems(container, items, onChange) {
 function updateOrderEditorTotals(root, items, extras) {
   const subtotal = orderItemsSubtotal(items);
   const waive = root.querySelector('#edit-order-waive-delivery')?.checked || false;
-  const deliveryFee = waive ? 0 : Math.max(0, parseFloat(root.querySelector('#edit-order-delivery-fee')?.value) || 0);
-  const discount = Math.max(0, parseFloat(root.querySelector('#edit-order-discount')?.value) || 0);
+  const deliveryFee = waive ? 0 : Math.max(0, parseMoneyBR(root.querySelector('#edit-order-delivery-fee')?.value, 0));
+  const discount = Math.max(0, parseMoneyBR(root.querySelector('#edit-order-discount')?.value, 0));
   const total = calcOrderTotal(subtotal, deliveryFee, discount, waive);
 
   const subEl = root.querySelector('#edit-order-subtotal');
@@ -1126,11 +1126,11 @@ function editOrder(id) {
         <div class="form-row">
           <div class="form-group">
             <label>Taxa motoboy (R$)</label>
-            <input type="number" id="edit-order-delivery-fee" min="0" step="0.01" value="${extras.waiveDelivery ? 0 : extras.deliveryFee}">
+            <input type="text" id="edit-order-delivery-fee" inputmode="decimal" value="${escapeHtml(formatMoneyInput(extras.waiveDelivery ? 0 : extras.deliveryFee))}">
           </div>
           <div class="form-group">
             <label>Desconto (R$)</label>
-            <input type="number" id="edit-order-discount" min="0" step="0.01" value="${extras.discount}">
+            <input type="text" id="edit-order-discount" inputmode="decimal" value="${escapeHtml(formatMoneyInput(extras.discount))}">
           </div>
         </div>
         <div class="order-editor__totals">
@@ -2721,6 +2721,26 @@ function formatSizeLabel(raw) {
   return value;
 }
 
+function parseMoneyBR(raw, fallback = 0) {
+  const s = String(raw ?? '').trim();
+  if (s === '') return fallback;
+  let t = s.replace(/R\$\s?/i, '').replace(/\s/g, '');
+  if (t.includes(',')) {
+    t = t.replace(/\./g, '').replace(',', '.');
+  }
+  const n = Number(t);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.round(n * 100) / 100;
+}
+
+function formatMoneyInput(value) {
+  if (value == null || value === '') return '';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  if (Math.abs(n % 1) < 0.00001) return String(Math.round(n));
+  return n.toFixed(2).replace('.', ',');
+}
+
 function formatFlavorsForEditor(product) {
   const flavors = Array.isArray(product?.flavors) ? product.flavors : [];
   const prices = product?.flavorPrices && typeof product.flavorPrices === 'object'
@@ -2735,7 +2755,7 @@ function formatFlavorsForEditor(product) {
     if (price == null || price === '' || !(Number(price) > 0)) return f;
     const extra = extras[f] === true || extras[f] === 1 || extras[f] === '1'
       || (Number(price) > 0 && Number(product?.price) > 0 && Number(price) < Number(product.price) && !product?.priceFrom);
-    return extra ? `${f} = +${price}` : `${f} = ${price}`;
+    return extra ? `${f} = +${formatMoneyInput(price)}` : `${f} = ${formatMoneyInput(price)}`;
   }).join('\n');
 }
 
@@ -2785,7 +2805,8 @@ function openProductModal(product = null) {
       <div class="form-row">
         <div class="form-group">
           <label>Preço (R$) — 0 = Consultar</label>
-          <input type="number" id="prod-price" step="0.01" min="0" value="${product?.price ?? ''}" required>
+          <input type="text" id="prod-price" inputmode="decimal" placeholder="Ex: 3,50" value="${escapeHtml(formatMoneyInput(product?.price ?? ''))}" required autocomplete="off">
+          <small style="display:block;margin-top:6px;color:var(--texto-claro)">Pode usar centavos, com vírgula: <strong>3,50</strong></small>
         </div>
         <div class="form-group">
           <label>Categoria</label>
@@ -2806,7 +2827,7 @@ function openProductModal(product = null) {
       <div class="form-row">
         <div class="form-group">
           <label>Preço promocional (R$)</label>
-          <input type="number" id="prod-promo-price" step="0.01" min="0" value="${product?.promoPrice ?? ''}">
+          <input type="text" id="prod-promo-price" inputmode="decimal" placeholder="Ex: 3,50" value="${escapeHtml(formatMoneyInput(product?.promoPrice ?? ''))}" autocomplete="off">
         </div>
         <div class="form-group">
           <label>Texto da promoção</label>
@@ -2816,7 +2837,7 @@ function openProductModal(product = null) {
       <div class="form-group">
         <label>Sabores e preços (um por linha)</label>
         <textarea id="prod-flavors" rows="5" placeholder="Doce de leite&#10;Nutella Pura = +8&#10;Ninho com Nutella = 28">${formatFlavorsForEditor(product)}</textarea>
-        <small style="display:block;margin-top:6px;color:var(--texto-claro)">Preço do sabor: <strong>Ninho = 28</strong> (substitui o valor). Adicional: <strong>Nutella Pura = +8</strong> (soma no preço da porção).</small>
+        <small style="display:block;margin-top:6px;color:var(--texto-claro)">Preço do sabor: <strong>Ninho = 3,50</strong> (substitui o valor). Adicional: <strong>Nutella Pura = +8,50</strong> (soma no preço da porção).</small>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -2943,7 +2964,7 @@ function openProductModal(product = null) {
       const data = {
         name,
         description: document.getElementById('prod-desc').value.trim(),
-        price: parseFloat(document.getElementById('prod-price').value) || 0,
+        price: parseMoneyBR(document.getElementById('prod-price').value, 0),
         priceFrom: document.getElementById('prod-price-from').checked,
         categoryId: document.getElementById('prod-category').value,
         image: imageValue || 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg',
@@ -2953,7 +2974,7 @@ function openProductModal(product = null) {
         promoPrice: (() => {
           const on = document.getElementById('prod-promo').checked;
           if (!on) return null;
-          const raw = promoPriceRaw === '' ? null : parseFloat(promoPriceRaw);
+          const raw = promoPriceRaw === '' ? null : parseMoneyBR(promoPriceRaw, NaN);
           return Number.isFinite(raw) ? raw : null;
         })(),
         promoLabel: document.getElementById('prod-promo').checked
@@ -3363,13 +3384,13 @@ function openCouponModal(coupon = null) {
         </div>
         <div class="form-group">
           <label>Valor *</label>
-          <input type="number" id="coupon-value" required min="0" step="0.01" value="${coupon?.value ?? ''}" placeholder="10">
+          <input type="text" id="coupon-value" required inputmode="decimal" value="${escapeHtml(formatMoneyInput(coupon?.value ?? ''))}" placeholder="10 ou 3,50">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Pedido mínimo (R$)</label>
-          <input type="number" id="coupon-min" min="0" step="0.01" value="${coupon?.minOrder ?? 0}" placeholder="0">
+          <input type="text" id="coupon-min" inputmode="decimal" value="${escapeHtml(formatMoneyInput(coupon?.minOrder ?? 0))}" placeholder="0">
         </div>
         <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:0.35rem">
           <label style="display:flex;gap:0.5rem;align-items:center;cursor:pointer">
@@ -3389,8 +3410,8 @@ function openCouponModal(coupon = null) {
     e.preventDefault();
     const code = document.getElementById('coupon-code').value.trim().toUpperCase();
     const type = document.getElementById('coupon-type').value === 'fixed' ? 'fixed' : 'percent';
-    const value = parseFloat(document.getElementById('coupon-value').value);
-    const minOrder = parseFloat(document.getElementById('coupon-min').value) || 0;
+    const value = parseMoneyBR(document.getElementById('coupon-value').value, NaN);
+    const minOrder = parseMoneyBR(document.getElementById('coupon-min').value, 0);
     const label = document.getElementById('coupon-label').value.trim();
     const active = document.getElementById('coupon-active').checked;
 
@@ -4216,7 +4237,7 @@ function initSettings() {
     hoursInput.addEventListener('input', () => { hoursInput.dataset.manual = '1'; });
   }
   document.getElementById('set-delivery-fee').value =
-    s.deliveryFee != null && s.deliveryFee !== '' ? Number(s.deliveryFee) : 7;
+    s.deliveryFee != null && s.deliveryFee !== '' ? formatMoneyInput(Number(s.deliveryFee)) : '7';
   document.getElementById('set-delivery-note').value =
     s.deliveryNote || 'Bairros mais afastados: consultar';
   document.getElementById('set-sobre1').value = s.sobreText1 || '';
@@ -4261,8 +4282,8 @@ function initSettings() {
 
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const feeRaw = String(document.getElementById('set-delivery-fee').value || '').replace(',', '.');
-    let deliveryFee = Number(feeRaw);
+    const feeRaw = document.getElementById('set-delivery-fee').value;
+    let deliveryFee = parseMoneyBR(feeRaw, 7);
     if (!Number.isFinite(deliveryFee) || deliveryFee < 0) deliveryFee = 7;
 
     // Pix só muda pelo formulário com PIN — não mexe aqui

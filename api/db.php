@@ -35,9 +35,78 @@ function aurora_db(bool $ensureSchema = true): PDO {
     aurora_ensure_schema($pdo);
     aurora_fix_copo_felicidade_price($pdo);
   }
+  aurora_ensure_price_decimals($pdo);
   aurora_fix_store_address($pdo);
 
   return $pdo;
+}
+
+/**
+ * Aceita 3,50 ou 3.50 e grava com 2 casas.
+ */
+function aurora_parse_money($value): float {
+  if (is_int($value) || is_float($value)) {
+    return round((float) $value, 2);
+  }
+  $s = trim((string) $value);
+  if ($s === '') {
+    return 0.0;
+  }
+  $s = preg_replace('/[^\d,.\-]/', '', $s) ?? '';
+  if (str_contains($s, ',')) {
+    $s = str_replace('.', '', $s);
+    $s = str_replace(',', '.', $s);
+  }
+  return round((float) $s, 2);
+}
+
+/**
+ * Bancos antigos com preço INT arredondavam 3,50. Garante DECIMAL(10,2).
+ */
+function aurora_ensure_price_decimals(PDO $pdo): void {
+  static $done = false;
+  if ($done) {
+    return;
+  }
+  $done = true;
+
+  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_price_decimal_v1_' . md5(__DIR__);
+  if (is_file($flag)) {
+    return;
+  }
+
+  $specs = [
+    ['products', 'price', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00'],
+    ['products', 'promo_price', 'DECIMAL(10,2) DEFAULT NULL'],
+    ['product_flavor_prices', 'price', 'DECIMAL(10,2) NOT NULL'],
+    ['order_items', 'price', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00'],
+  ];
+
+  try {
+    foreach ($specs as [$table, $column, $definition]) {
+      $exists = $pdo->query(
+        "SELECT 1 FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = " . $pdo->quote($table) . " LIMIT 1"
+      )->fetchColumn();
+      if (!$exists) {
+        continue;
+      }
+      $col = $pdo->query('SHOW COLUMNS FROM `' . str_replace('`', '', $table) . '` LIKE ' . $pdo->quote($column))->fetch(PDO::FETCH_ASSOC);
+      if (!$col) {
+        continue;
+      }
+      $type = strtolower((string) ($col['Type'] ?? ''));
+      if (strpos($type, 'decimal') !== false) {
+        continue;
+      }
+      $pdo->exec(
+        'ALTER TABLE `' . str_replace('`', '', $table) . '` MODIFY `' . str_replace('`', '', $column) . '` ' . $definition
+      );
+    }
+    @file_put_contents($flag, (string) time());
+  } catch (Throwable $e) {
+    // ignore
+  }
 }
 
 /**
