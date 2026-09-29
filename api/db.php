@@ -148,7 +148,7 @@ function aurora_fix_copo_felicidade_price(PDO $pdo): void {
 }
 
 /**
- * Atualiza o endereço da loja para Alameda das Papoulas, 85.
+ * Atualiza o endereço da loja para Alameda dos Ypês, 346.
  * Roda 1x (flag nova) — MySQL + catalog.json / catalog.live.json.
  */
 function aurora_fix_store_address(PDO $pdo): void {
@@ -158,12 +158,12 @@ function aurora_fix_store_address(PDO $pdo): void {
   }
   $done = true;
 
-  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_fix_address_papoulas_v1_' . md5(__DIR__);
+  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_fix_address_ypes_v2_' . md5(__DIR__);
   if (is_file($flag)) {
     return;
   }
 
-  $new = 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
+  $new = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
 
   try {
     $exists = $pdo->query(
@@ -173,7 +173,14 @@ function aurora_fix_store_address(PDO $pdo): void {
     if ($exists) {
       $stmt = $pdo->prepare(
         "UPDATE `settings` SET `address` = ?
-         WHERE `id` = 1 AND `address` NOT LIKE '%Papoulas%'"
+         WHERE `id` = 1 AND (
+           `address` IS NULL
+           OR `address` = ''
+           OR `address` LIKE '%Papoulas%'
+           OR `address` LIKE '%Casimiro%'
+           OR `address` LIKE '%Alta Vista%'
+           OR (`address` NOT LIKE '%Ypês%' AND `address` NOT LIKE '%Ypes%')
+         )"
       );
       $stmt->execute([$new]);
     }
@@ -197,7 +204,7 @@ function aurora_fix_store_address(PDO $pdo): void {
     if (!is_string($raw) || $raw === '') {
       continue;
     }
-    if (stripos($raw, 'Papoulas') !== false) {
+    if (stripos($raw, 'Ypês') !== false || stripos($raw, 'Ypes') !== false) {
       continue;
     }
     if (!is_writable($path)) {
@@ -216,7 +223,7 @@ function aurora_fix_store_address(PDO $pdo): void {
     }
     @file_put_contents($path, $updated);
     $after = @file_get_contents($path);
-    if (!is_string($after) || stripos($after, 'Papoulas') === false) {
+    if (!is_string($after) || (stripos($after, 'Ypês') === false && stripos($after, 'Ypes') === false)) {
       $pending = true;
     }
   }

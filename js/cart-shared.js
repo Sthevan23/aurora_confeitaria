@@ -1,4 +1,4 @@
-/**
+﻿/**
  * cart-shared.js — estado do carrinho compartilhado (home + cart.html)
  * Persistência: localStorage (aurora_cart_v1 etc.)
  */
@@ -393,14 +393,14 @@ window.AuroraCart = (() => {
   }
 
   function getStoreAddress() {
-    const fallback = 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
+    const fallback = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
     if (typeof Storage === 'undefined') return fallback;
     return String(Storage.getSettings()?.address || '').trim() || fallback;
   }
 
   function getMapsQuery(address) {
     const raw = String(address || getStoreAddress()).trim();
-    return raw || 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
+    return raw || 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
   }
 
   function getMapsSearchUrl(address) {

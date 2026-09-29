@@ -1,4 +1,4 @@
-const AURORA_DEFAULT_DATA = {
+﻿const AURORA_DEFAULT_DATA = {
   "version": 16,
   "settings": {
     "name": "Aurora Confeitaria Artesanal",
@@ -13,7 +13,7 @@ const AURORA_DEFAULT_DATA = {
     "instagramUser": "@a.aurora.confeitaria",
     "facebook": "",
     "email": "contato@aurora.com",
-    "address": "Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000",
+    "address": "Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG",
     "hours": "Domingo a domingo · 10h às 22h",
     "storeStatus": "auto",
     "openTime": "10:00",

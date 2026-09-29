@@ -1,4 +1,4 @@
-/**
+﻿/**
  * cart-page.js — página exclusiva do carrinho (/cart.html ou /carrinho)
  */
 (function () {
@@ -215,7 +215,7 @@
     const s = Storage.getSettings?.() || {};
     return (
       s.address ||
-      'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000'
+      'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG'
     );
   }
 

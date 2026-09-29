@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Aurora Confeitaria — site público
  * Visual do site anterior + dados via Storage (mesmo padrão Gimarry/Hostinger)
  */
@@ -270,7 +270,7 @@ function getDeliveryNote() {
 
 function getStoreAddress() {
   if (typeof Cart !== 'undefined' && Cart.getStoreAddress) return Cart.getStoreAddress();
-  const fallback = 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
+  const fallback = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
   return String(Storage.getSettings()?.address || '').trim() || fallback;
 }
 
@@ -757,7 +757,7 @@ function applySettings() {
   const s = Storage.getSettings();
   const address =
     s.address ||
-    'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
+    'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
   const placeShort = 'Boa Esperança, MG';
   const ig = s.instagram || 'https://www.instagram.com/a.aurora.confeitaria';
   const igUser = s.instagramUser || '@a.aurora.confeitaria';
@@ -770,7 +770,7 @@ function applySettings() {
     .replace(/,\s*Brasil\s*$/i, '')
     .replace(/,\s*\d{5}-?\d{3}\s*$/i, '')
     .replace(/,\s*Boa Esperança.*/i, '')
-    .trim() || 'Alameda das Papoulas, 85';
+    .trim() || 'Alameda dos Ypês, 346 - Jardim das Acácias';
 
   const contactAddress = document.getElementById('contact-address');
   if (contactAddress) {
