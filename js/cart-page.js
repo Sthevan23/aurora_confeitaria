@@ -173,7 +173,11 @@
     } else {
       parts.push(
         sep,
-        `*Retirada no local*\nEndereço: ${pickupAddressText()}`
+        `*Retirada no local*\nEndereço: ${pickupAddressText()}\nRota: ${
+          typeof Cart.getMapsDirectionsUrl === 'function'
+            ? Cart.getMapsDirectionsUrl(pickupAddressText())
+            : 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(pickupAddressText())
+        }`
       );
     }
 
@@ -211,7 +215,7 @@
     const s = Storage.getSettings?.() || {};
     return (
       s.address ||
-      'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG'
+      'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000'
     );
   }
 
@@ -527,19 +531,41 @@
     const deliveryInfo = document.getElementById('cart-page-delivery-info');
     if (deliveryInfo) deliveryInfo.hidden = mode !== 'entrega';
 
+    const pickupWrap = document.getElementById('cart-page-pickup-wrap');
     const pickupNote = document.getElementById('cart-page-pickup-note');
+    const pickupIframe = document.getElementById('cart-page-pickup-iframe');
+    const pickupRoute = document.getElementById('cart-page-pickup-route');
+    if (pickupWrap) pickupWrap.hidden = mode !== 'retirada';
     if (pickupNote) {
       pickupNote.hidden = mode !== 'retirada';
       const full = typeof Cart.getStoreAddress === 'function'
         ? Cart.getStoreAddress()
-        : 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+        : pickupAddressText();
       const short = full
+        .replace(/,\s*Brazil\s*$/i, '')
         .replace(/,\s*Brasil\s*$/i, '')
         .replace(/,\s*\d{5}-?\d{3}\s*$/i, '')
         .replace(/,\s*Boa Esperança.*/i, '')
+        .replace(/\s+-\s+Boa Esperança.*/i, '')
         .trim() || full;
       pickupNote.innerHTML =
         `Retirada em <strong>${escapeHtml(short)}</strong> · Boa Esperança, MG`;
+    }
+    if (mode === 'retirada') {
+      const addr = typeof Cart.getStoreAddress === 'function'
+        ? Cart.getStoreAddress()
+        : pickupAddressText();
+      const embed = typeof Cart.getMapsEmbedUrl === 'function'
+        ? Cart.getMapsEmbedUrl(addr)
+        : 'https://maps.google.com/maps?q=' + encodeURIComponent(addr) + '&hl=pt-BR&z=16&output=embed';
+      const route = typeof Cart.getMapsDirectionsUrl === 'function'
+        ? Cart.getMapsDirectionsUrl(addr)
+        : 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(addr);
+      if (pickupIframe && pickupIframe.dataset.query !== addr) {
+        pickupIframe.dataset.query = addr;
+        pickupIframe.src = embed;
+      }
+      if (pickupRoute) pickupRoute.href = route;
     }
 
     // Cupom: mostra se existir cupom ativo no admin

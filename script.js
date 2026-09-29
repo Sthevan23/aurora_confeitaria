@@ -253,7 +253,8 @@ function fulfillmentWhatsAppBlock(mode, address = '') {
   }
   return (
     `*Retirada no local*\n` +
-    `Endereço: ${getStoreAddress()}`
+    `Endereço: ${getStoreAddress()}\n` +
+    `Rota: ${getMapsDirectionsUrl()}`
   );
 }
 
@@ -268,8 +269,17 @@ function getDeliveryNote() {
 }
 
 function getStoreAddress() {
-  const fallback = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+  if (typeof Cart !== 'undefined' && Cart.getStoreAddress) return Cart.getStoreAddress();
+  const fallback = 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
   return String(Storage.getSettings()?.address || '').trim() || fallback;
+}
+
+function getMapsDirectionsUrl(address) {
+  if (typeof Cart !== 'undefined' && Cart.getMapsDirectionsUrl) {
+    return Cart.getMapsDirectionsUrl(address);
+  }
+  const query = String(address || getStoreAddress()).trim();
+  return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(query);
 }
 
 function formatDeliveryFeeText() {
@@ -747,13 +757,11 @@ function applySettings() {
   const s = Storage.getSettings();
   const address =
     s.address ||
-    'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+    'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
   const placeShort = 'Boa Esperança, MG';
   const ig = s.instagram || 'https://www.instagram.com/a.aurora.confeitaria';
   const igUser = s.instagramUser || '@a.aurora.confeitaria';
-  const mapsUrl =
-    'https://www.google.com/maps/search/?api=1&query=' +
-    encodeURIComponent(address);
+  const mapsUrl = getMapsDirectionsUrl(address);
 
   document.getElementById('hero-place').textContent = placeShort;
   document.getElementById('footer-year').textContent = new Date().getFullYear();
@@ -762,7 +770,7 @@ function applySettings() {
     .replace(/,\s*Brasil\s*$/i, '')
     .replace(/,\s*\d{5}-?\d{3}\s*$/i, '')
     .replace(/,\s*Boa Esperança.*/i, '')
-    .trim() || 'Alameda dos Ypês, 346 - Jardim das Acácias';
+    .trim() || 'Alameda das Papoulas, 85';
 
   const contactAddress = document.getElementById('contact-address');
   if (contactAddress) {

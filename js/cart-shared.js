@@ -393,9 +393,30 @@ window.AuroraCart = (() => {
   }
 
   function getStoreAddress() {
-    const fallback = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+    const fallback = 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
     if (typeof Storage === 'undefined') return fallback;
     return String(Storage.getSettings()?.address || '').trim() || fallback;
+  }
+
+  function getMapsQuery(address) {
+    const raw = String(address || getStoreAddress()).trim();
+    return raw || 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000';
+  }
+
+  function getMapsSearchUrl(address) {
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(getMapsQuery(address));
+  }
+
+  function getMapsDirectionsUrl(address) {
+    return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(getMapsQuery(address));
+  }
+
+  function getMapsEmbedUrl(address) {
+    return (
+      'https://maps.google.com/maps?q=' +
+      encodeURIComponent(getMapsQuery(address)) +
+      '&hl=pt-BR&z=16&output=embed'
+    );
   }
 
   function formatMoney(value) {
@@ -466,7 +487,8 @@ window.AuroraCart = (() => {
     }
     return (
       `*Retirada no local*\n` +
-      `Endereço: ${getStoreAddress()}`
+      `Endereço: ${getStoreAddress()}\n` +
+      `Rota: ${getMapsDirectionsUrl()}`
     );
   }
 
@@ -571,7 +593,9 @@ window.AuroraCart = (() => {
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,
     getPayment, setPayment, paymentLabel, paymentWhatsAppLine, getPixInfo,
-    getDeliveryFee, getDeliveryNote, getStoreAddress, formatMoney, formatPhoneBR,
+    getDeliveryFee, getDeliveryNote, getStoreAddress,
+    getMapsSearchUrl, getMapsDirectionsUrl, getMapsEmbedUrl,
+    formatMoney, formatPhoneBR,
     buildWhatsAppMessage, syncFromStorage,
     saveLastOrder, loadLastOrder, restoreLastOrder,
   };

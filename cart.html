@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
-  <link rel="stylesheet" href="style.css?v=72">
+  <link rel="stylesheet" href="style.css?v=73">
 </head>
 <body class="cart-page">
   <header class="header header--solid" id="header">
@@ -111,9 +111,26 @@
                 </span>
               </label>
             </div>
-            <p class="cart-drawer__delivery cart-drawer__delivery--pickup" id="cart-page-pickup-note">
-              Retirada em <strong>Alameda dos Ypês, 346 - Jardim das Acácias</strong> · Boa Esperança, MG
-            </p>
+            <div class="cart-pickup" id="cart-page-pickup-wrap">
+              <p class="cart-pickup__addr" id="cart-page-pickup-note">
+                Retirada em <strong>Alameda das Papoulas, 85</strong> · Boa Esperança, MG
+              </p>
+              <div class="cart-pickup__frame">
+                <iframe
+                  id="cart-page-pickup-iframe"
+                  title="Mapa da retirada na Aurora Confeitaria"
+                  src="https://maps.google.com/maps?q=Alameda%20das%20Papoulas%2C%2085%2C%20Boa%20Esperan%C3%A7a%20-%20MG%2C%2037170-000&hl=pt-BR&z=16&output=embed"
+                  data-query="Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000"
+                  loading="lazy"
+                  referrerpolicy="no-referrer-when-downgrade"
+                  allowfullscreen
+                ></iframe>
+              </div>
+              <a class="cart-pickup__route" id="cart-page-pickup-route" href="https://www.google.com/maps/dir/?api=1&destination=Alameda%20das%20Papoulas%2C%2085%2C%20Boa%20Esperan%C3%A7a%20-%20MG%2C%2037170-000" target="_blank" rel="noopener">
+                <i class="fa-solid fa-diamond-turn-right" aria-hidden="true"></i>
+                Abrir rota no Google Maps
+              </a>
+            </div>
 
             <p class="cart-delivery-info cart-delivery-info--line" id="cart-page-delivery-info" hidden>
               Tempo de entrega: <strong>40 a 70 min</strong>.
@@ -203,11 +220,11 @@
 
   <div class="cart-feedback" id="cart-feedback" hidden aria-live="polite"></div>
 
-  <script src="js/default-data.js?v=26"></script>
+  <script src="js/default-data.js?v=27"></script>
   <script src="js/product-photos.js?v=3"></script>
   <script src="js/storage.js?v=77"></script>
   <script src="js/analytics.js?v=1"></script>
-  <script src="js/cart-shared.js?v=20"></script>
-  <script src="js/cart-page.js?v=34"></script>
+  <script src="js/cart-shared.js?v=21"></script>
+  <script src="js/cart-page.js?v=35"></script>
 </body>
 </html>

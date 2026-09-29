@@ -280,7 +280,7 @@ INSERT INTO `settings` (
   1,
   'Aurora Confeitaria Artesanal', 'Feito com amor', '', 'products/9dae6d0f-4354-459a-aa17-50081e3f0afb.jpg', 'products/clara-aurora-historia.jpg',
   '5535987216486', 'https://www.instagram.com/a.aurora.confeitaria', '@a.aurora.confeitaria', '',
-  'contato@aurora.com', 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG', 'Pedidos pelo WhatsApp', '', '',
+  'contato@aurora.com', 'Alameda das Papoulas, 85 - Boa Esperança, MG, 37170-000', 'Pedidos pelo WhatsApp', '', '',
   '', 'Confeitaria artesanal · Boa Esperança/MG', '[]',
   'A Aurora Confeitaria nasceu do sonho de transformar momentos simples em lembranças especiais. Cada receita é preparada artesanalmente, com ingredientes selecionados, muito carinho e a dedicação de quem acredita que um doce pode tornar o dia de alguém mais feliz.', 'Mais do que vender sobremesas, queremos criar experiências. Também acreditamos em fazer a diferença onde estamos — compartilhar o bem faz parte da nossa essência. Seja bem-vindo à Aurora Confeitaria.', 16
 );
