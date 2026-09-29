@@ -814,7 +814,9 @@ function applySettings() {
   if (heroHours) heroHours.textContent = hoursLabel;
   const heroDelivery = document.getElementById('hero-trust-delivery');
   if (heroDelivery) {
-    heroDelivery.textContent = `Entrega ${formatDeliveryFeeText()} no centro · Retirada no Jardim das Acácias`;
+    const street = addressShort.split(/\s+-\s+/)[0] || addressShort;
+    heroDelivery.textContent =
+      `Entrega ${formatDeliveryFeeText()} no centro · Retirada na ${street}`;
   }
 
   const feeLabel = formatDeliveryFeeText();
