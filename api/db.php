@@ -35,6 +35,7 @@ function aurora_db(bool $ensureSchema = true): PDO {
     aurora_ensure_schema($pdo);
     aurora_fix_copo_felicidade_price($pdo);
   }
+  aurora_fix_store_address($pdo);
 
   return $pdo;
 }
@@ -74,6 +75,87 @@ function aurora_fix_copo_felicidade_price(PDO $pdo): void {
     @file_put_contents($flag, (string) time());
   } catch (Throwable $e) {
     // ignore
+  }
+}
+
+/**
+ * Atualiza o endereço da loja (Alta Vista → Jardim das Acácias).
+ * Roda 1x (flag) — MySQL + catalog.json / catalog.live.json.
+ */
+function aurora_fix_store_address(PDO $pdo): void {
+  static $done = false;
+  if ($done) {
+    return;
+  }
+  $done = true;
+
+  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_fix_address_ypes_v1_' . md5(__DIR__);
+  if (is_file($flag)) {
+    return;
+  }
+
+  $new = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+  $old = 'Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG';
+
+  try {
+    $exists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'settings' LIMIT 1"
+    )->fetchColumn();
+    if ($exists) {
+      $stmt = $pdo->prepare(
+        "UPDATE `settings` SET `address` = ?
+         WHERE `id` = 1 AND (`address` LIKE '%Casimiro%' OR `address` LIKE '%Alta Vista%')"
+      );
+      $stmt->execute([$new]);
+    }
+  } catch (Throwable $e) {
+    // ignore
+  }
+
+  $root = dirname(__DIR__);
+  $files = [
+    $root . DIRECTORY_SEPARATOR . 'catalog.json',
+    $root . DIRECTORY_SEPARATOR . 'catalog.live.json',
+    $root . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'catalog.json',
+  ];
+  $pending = false;
+  foreach ($files as $path) {
+    if (!is_file($path)) {
+      continue;
+    }
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || $raw === '' || stripos($raw, 'Casimiro') === false) {
+      continue;
+    }
+    if (!is_writable($path)) {
+      $pending = true;
+      continue;
+    }
+    $updated = str_replace($old, $new, $raw);
+    if ($updated === $raw) {
+      $encoded = json_encode($new, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+      $patched = preg_replace(
+        '/"address"\s*:\s*"[^"]*Casimiro[^"]*"/u',
+        '"address": ' . $encoded,
+        $raw,
+        1
+      );
+      if (is_string($patched) && $patched !== '') {
+        $updated = $patched;
+      }
+    }
+    if ($updated !== $raw) {
+      @file_put_contents($path, $updated);
+    }
+    $after = @file_get_contents($path);
+    if (is_string($after) && stripos($after, 'Casimiro') !== false) {
+      $pending = true;
+    }
+  }
+
+  if (!$pending) {
+    @file_put_contents($flag, (string) time());
   }
 }
 

@@ -173,7 +173,7 @@
     } else {
       parts.push(
         sep,
-        `*Retirada no local*\nEndereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
+        `*Retirada no local*\nEndereço: ${pickupAddressText()}`
       );
     }
 
@@ -211,7 +211,7 @@
     const s = Storage.getSettings?.() || {};
     return (
       s.address ||
-      'Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG'
+      'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG'
     );
   }
 
@@ -526,6 +526,21 @@
     if (addressWrap) addressWrap.hidden = mode !== 'entrega';
     const deliveryInfo = document.getElementById('cart-page-delivery-info');
     if (deliveryInfo) deliveryInfo.hidden = mode !== 'entrega';
+
+    const pickupNote = document.getElementById('cart-page-pickup-note');
+    if (pickupNote) {
+      pickupNote.hidden = mode !== 'retirada';
+      const full = typeof Cart.getStoreAddress === 'function'
+        ? Cart.getStoreAddress()
+        : 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+      const short = full
+        .replace(/,\s*Brasil\s*$/i, '')
+        .replace(/,\s*\d{5}-?\d{3}\s*$/i, '')
+        .replace(/,\s*Boa Esperança.*/i, '')
+        .trim() || full;
+      pickupNote.innerHTML =
+        `Retirada em <strong>${escapeHtml(short)}</strong> · Boa Esperança, MG`;
+    }
 
     // Cupom: mostra se existir cupom ativo no admin
     const couponBox = document.getElementById('cart-page-coupon');

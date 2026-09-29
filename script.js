@@ -253,7 +253,7 @@ function fulfillmentWhatsAppBlock(mode, address = '') {
   }
   return (
     `*Retirada no local*\n` +
-    `Endereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
+    `Endereço: ${getStoreAddress()}`
   );
 }
 
@@ -265,6 +265,11 @@ function getDeliveryFee() {
 function getDeliveryNote() {
   const note = String(Storage.getSettings()?.deliveryNote || '').trim();
   return note || 'Bairros mais afastados: consultar';
+}
+
+function getStoreAddress() {
+  const fallback = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+  return String(Storage.getSettings()?.address || '').trim() || fallback;
 }
 
 function formatDeliveryFeeText() {
@@ -742,7 +747,7 @@ function applySettings() {
   const s = Storage.getSettings();
   const address =
     s.address ||
-    'Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG';
+    'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
   const placeShort = 'Boa Esperança, MG';
   const ig = s.instagram || 'https://www.instagram.com/a.aurora.confeitaria';
   const igUser = s.instagramUser || '@a.aurora.confeitaria';
@@ -757,7 +762,7 @@ function applySettings() {
     .replace(/,\s*Brasil\s*$/i, '')
     .replace(/,\s*\d{5}-?\d{3}\s*$/i, '')
     .replace(/,\s*Boa Esperança.*/i, '')
-    .trim() || 'Rua Casimiro Túlio Freire, 735 - Alta Vista';
+    .trim() || 'Alameda dos Ypês, 346 - Jardim das Acácias';
 
   const contactAddress = document.getElementById('contact-address');
   if (contactAddress) {
@@ -809,7 +814,7 @@ function applySettings() {
   if (heroHours) heroHours.textContent = hoursLabel;
   const heroDelivery = document.getElementById('hero-trust-delivery');
   if (heroDelivery) {
-    heroDelivery.textContent = `Entrega ${formatDeliveryFeeText()} no centro · Retirada no Alta Vista`;
+    heroDelivery.textContent = `Entrega ${formatDeliveryFeeText()} no centro · Retirada no Jardim das Acácias`;
   }
 
   const feeLabel = formatDeliveryFeeText();

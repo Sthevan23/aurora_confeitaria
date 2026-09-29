@@ -392,6 +392,12 @@ window.AuroraCart = (() => {
     return Storage.getSettings()?.deliveryNote || 'Bairros mais afastados: consultar';
   }
 
+  function getStoreAddress() {
+    const fallback = 'Alameda dos Ypês, 346 - Jardim das Acácias, Boa Esperança MG';
+    if (typeof Storage === 'undefined') return fallback;
+    return String(Storage.getSettings()?.address || '').trim() || fallback;
+  }
+
   function formatMoney(value) {
     if (typeof Storage !== 'undefined' && Storage.formatCurrency) {
       return Storage.formatCurrency(value);
@@ -460,7 +466,7 @@ window.AuroraCart = (() => {
     }
     return (
       `*Retirada no local*\n` +
-      `Endereço: Rua Casimiro Túlio Freire, 735 - Alta Vista, Boa Esperança MG`
+      `Endereço: ${getStoreAddress()}`
     );
   }
 
@@ -565,7 +571,7 @@ window.AuroraCart = (() => {
     getCoupon, setCoupon, refreshCoupon, resolveLiveCoupon,
     loadCustomer, saveCustomer, getFulfillment, setFulfillment,
     getPayment, setPayment, paymentLabel, paymentWhatsAppLine, getPixInfo,
-    getDeliveryFee, getDeliveryNote, formatMoney, formatPhoneBR,
+    getDeliveryFee, getDeliveryNote, getStoreAddress, formatMoney, formatPhoneBR,
     buildWhatsAppMessage, syncFromStorage,
     saveLastOrder, loadLastOrder, restoreLastOrder,
   };
