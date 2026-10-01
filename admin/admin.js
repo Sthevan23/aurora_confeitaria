@@ -3687,7 +3687,6 @@ function formatAnalyticsPage(page) {
   const map = {
     'index.html': 'Início (cardápio)',
     'cart.html': 'Carrinho',
-    'pipocas-gourmet.html': 'Pipocas gourmet',
   };
   return map[page] || page || '—';
 }
