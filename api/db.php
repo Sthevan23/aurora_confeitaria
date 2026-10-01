@@ -37,6 +37,7 @@ function aurora_db(bool $ensureSchema = true): PDO {
   }
   aurora_ensure_price_decimals($pdo);
   aurora_fix_store_address($pdo);
+  aurora_fix_bebidas_price_photo($pdo);
 
   return $pdo;
 }
@@ -231,6 +232,129 @@ function aurora_fix_store_address(PDO $pdo): void {
   if (!$pending) {
     @file_put_contents($flag, (string) time());
   }
+}
+
+/**
+ * BEBIDAS 200ML: refrigerante R$ 3,50 + foto nova.
+ * Roda 1x (flag) — MySQL + catalog JSON.
+ */
+function aurora_fix_bebidas_price_photo(PDO $pdo): void {
+  static $done = false;
+  if ($done) {
+    return;
+  }
+  $done = true;
+
+  $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'aurora_fix_bebidas_350_v1_' . md5(__DIR__);
+  if (is_file($flag)) {
+    return;
+  }
+
+  $pid = 'pmtyuaabqp3wfa';
+  $image = 'products/bebidas-200ml.jpg';
+  $flavor = 'Refrigerante 200ml sortido';
+  $price = 3.5;
+
+  try {
+    $exists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' LIMIT 1"
+    )->fetchColumn();
+    if ($exists) {
+      $stmt = $pdo->prepare(
+        "UPDATE `products`
+         SET `price` = ?, `price_from` = 1, `image` = ?,
+             `description` = 'Refrigerantes gelados 200ml. Escolha a opção no pedido.'
+         WHERE `id` = ?"
+      );
+      $stmt->execute([$price, $image, $pid]);
+
+      $fpExists = $pdo->query(
+        "SELECT 1 FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_flavor_prices' LIMIT 1"
+      )->fetchColumn();
+      if ($fpExists) {
+        $upd = $pdo->prepare(
+          "UPDATE `product_flavor_prices` SET `price` = ?
+           WHERE `product_id` = ? AND `flavor` LIKE 'Refrigerante%'"
+        );
+        $upd->execute([$price, $pid]);
+        if ($upd->rowCount() < 1) {
+          $ins = $pdo->prepare(
+            "INSERT INTO `product_flavor_prices` (`product_id`, `flavor`, `price`) VALUES (?, ?, ?)"
+          );
+          $ins->execute([$pid, $flavor, $price]);
+        }
+      }
+
+      $flavExists = $pdo->query(
+        "SELECT 1 FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_flavors' LIMIT 1"
+      )->fetchColumn();
+      if ($flavExists) {
+        $pdo->prepare("DELETE FROM `product_flavors` WHERE `product_id` = ? AND `flavor` = '50'")
+          ->execute([$pid]);
+      }
+    }
+  } catch (Throwable $e) {
+    // ignore
+  }
+
+  $root = dirname(__DIR__);
+  $files = [
+    $root . DIRECTORY_SEPARATOR . 'catalog.json',
+    $root . DIRECTORY_SEPARATOR . 'catalog.live.json',
+    $root . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'catalog.json',
+  ];
+  foreach ($files as $path) {
+    if (!is_file($path) || !is_writable($path)) {
+      continue;
+    }
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || $raw === '') {
+      continue;
+    }
+    $data = json_decode($raw, true);
+    if (!is_array($data) || empty($data['products']) || !is_array($data['products'])) {
+      continue;
+    }
+    $changed = false;
+    foreach ($data['products'] as &$p) {
+      if (!is_array($p)) continue;
+      if (($p['id'] ?? '') !== $pid && stripos((string) ($p['name'] ?? ''), 'BEBIDAS') === false) {
+        continue;
+      }
+      $flavors = [];
+      foreach (($p['flavors'] ?? []) as $f) {
+        $f = trim((string) $f);
+        if ($f === '' || $f === '50') continue;
+        $flavors[] = $f;
+      }
+      if (!in_array($flavor, $flavors, true)) {
+        array_unshift($flavors, $flavor);
+      }
+      $prices = is_array($p['flavorPrices'] ?? null) ? $p['flavorPrices'] : [];
+      $prices[$flavor] = $price;
+      $p['flavors'] = $flavors;
+      $p['flavorPrices'] = $prices;
+      $p['price'] = $price;
+      $p['priceFrom'] = true;
+      $p['image'] = $image;
+      $p['description'] = 'Refrigerantes gelados 200ml. Escolha a opção no pedido.';
+      $changed = true;
+    }
+    unset($p);
+    if (!$changed) {
+      continue;
+    }
+    $data['generatedAt'] = gmdate('c');
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (is_string($json) && $json !== '') {
+      @file_put_contents($path, $json);
+    }
+  }
+
+  @file_put_contents($flag, (string) time());
 }
 
 /**
