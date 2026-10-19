@@ -394,6 +394,19 @@ function aurora_ensure_schema(PDO $pdo): void {
       aurora_ensure_column($pdo, 'products', 'stock', "INT DEFAULT NULL COMMENT 'NULL = sem controle de estoque'");
     }
 
+    $flavorPricesExists = $pdo->query(
+      "SELECT 1 FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_flavor_prices' LIMIT 1"
+    )->fetchColumn();
+    if ($flavorPricesExists) {
+      aurora_ensure_column(
+        $pdo,
+        'product_flavor_prices',
+        'is_extra',
+        "TINYINT(1) NULL DEFAULT NULL COMMENT '1 soma no preco, 0 substitui, NULL legado'"
+      );
+    }
+
     $categoriesExists = $pdo->query(
       "SELECT 1 FROM information_schema.TABLES
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'categories' LIMIT 1"

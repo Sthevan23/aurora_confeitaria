@@ -1471,7 +1471,9 @@ const Storage = (() => {
     if (product?.priceFrom) return false;
     const fp = Number(flavorPrice);
     const b = Number(base);
-    return fp > 0 && b > 0 && fp < b;
+    // Sem marca salva: só um valor bem menor (até metade) conta como adicional.
+    // 36 num produto de 37,90 é o preço da opção, não "+ 36".
+    return fp > 0 && b > 0 && fp < b && fp <= b * 0.5;
   }
 
   function productUnitPrice(product, flavor) {

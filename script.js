@@ -557,7 +557,10 @@ function resolveProductPrice(product, flavor) {
   if (flavor && product?.flavorPrices && product.flavorPrices[flavor] != null) {
     const flavorPrice = Number(product.flavorPrices[flavor]);
     if (Number.isFinite(flavorPrice) && flavorPrice > 0) {
-      if (base > 0 && flavorPrice < base && !product.priceFrom) return base + flavorPrice;
+      const extra = typeof Storage !== 'undefined' && Storage.isFlavorExtra
+        ? Storage.isFlavorExtra(product, flavor, flavorPrice, base)
+        : (base > 0 && flavorPrice < base && !product.priceFrom);
+      if (extra) return base + flavorPrice;
       if (
         product.promoActive &&
         product.promoPrice != null &&
@@ -1369,6 +1372,10 @@ function bindLightboxFlavorInputs(product, multi) {
 
         const done = allLightboxFlavorsSelected(product);
         flavorRoot?.classList.toggle('is-done', done);
+        if (done) {
+          const err = document.getElementById('order-error');
+          if (err) err.hidden = true;
+        }
         if (multi) {
           flavorRoot?.classList.add('is-open');
           const nextEmpty = selectedFlavors.slice(0, lightboxQty).findIndex((f) => !f);

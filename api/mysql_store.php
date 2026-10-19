@@ -331,13 +331,21 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
   }
 
   $priceMap = [];
+  $extraMap = [];
+  $hasFlavorExtra = aurora_flavor_price_has_extra($pdo);
   $priceRows = $pdo->query(
-    'SELECT product_id, flavor, price FROM product_flavor_prices ORDER BY id ASC'
+    $hasFlavorExtra
+      ? 'SELECT product_id, flavor, price, is_extra FROM product_flavor_prices ORDER BY id ASC'
+      : 'SELECT product_id, flavor, price FROM product_flavor_prices ORDER BY id ASC'
   )->fetchAll();
   foreach ($priceRows as $row) {
     $pid = $row['product_id'];
     if (!isset($priceMap[$pid])) $priceMap[$pid] = [];
     $priceMap[$pid][$row['flavor']] = (float) $row['price'];
+    if ($hasFlavorExtra && array_key_exists('is_extra', $row) && $row['is_extra'] !== null && $row['is_extra'] !== '') {
+      if (!isset($extraMap[$pid])) $extraMap[$pid] = [];
+      $extraMap[$pid][$row['flavor']] = ((int) $row['is_extra']) === 1;
+    }
   }
 
   // Conversão de data-URL só sob demanda no save — nunca no login/load
@@ -376,6 +384,9 @@ function aurora_load_all(PDO $pdo, string $mode = 'full'): ?array {
     }
     if (!empty($priceMap[$pid])) {
       $product['flavorPrices'] = $priceMap[$pid];
+    }
+    if (!empty($extraMap[$pid])) {
+      $product['flavorExtras'] = $extraMap[$pid];
     }
     // Garante Copo da Felicidade sem promo antiga no cardápio público
     if ($pid === 'p0') {
@@ -890,6 +901,35 @@ function aurora_products_has_available(PDO $pdo): bool {
   return $has;
 }
 
+function aurora_flavor_price_has_extra(PDO $pdo): bool {
+  static $has = null;
+  if ($has !== null) return $has;
+  try {
+    $col = $pdo->query("SHOW COLUMNS FROM product_flavor_prices LIKE 'is_extra'")->fetch();
+    if (!$col && function_exists('aurora_ensure_column')) {
+      aurora_ensure_column(
+        $pdo,
+        'product_flavor_prices',
+        'is_extra',
+        "TINYINT(1) NULL DEFAULT NULL COMMENT '1 soma no preco, 0 substitui, NULL legado'"
+      );
+      $col = $pdo->query("SHOW COLUMNS FROM product_flavor_prices LIKE 'is_extra'")->fetch();
+    }
+    $has = (bool) $col;
+  } catch (Throwable $e) {
+    $has = false;
+  }
+  return $has;
+}
+
+function aurora_flavor_extra_db_value(array $extras, string $flavor): ?int {
+  if (!array_key_exists($flavor, $extras)) return null;
+  $flag = $extras[$flavor];
+  if ($flag === true || $flag === 1 || $flag === '1') return 1;
+  if ($flag === false || $flag === 0 || $flag === '0') return 0;
+  return null;
+}
+
 function aurora_product_has_stock_column(PDO $pdo): bool {
   static $cache = [];
   $key = spl_object_hash($pdo);
@@ -1093,6 +1133,16 @@ function aurora_product_to_public_row(array $p): array {
   if (!empty($p['flavorPrices']) && is_array($p['flavorPrices'])) {
     $row['flavorPrices'] = $p['flavorPrices'];
   }
+  if (isset($p['flavorExtras']) && is_array($p['flavorExtras'])) {
+    $extras = [];
+    foreach ($p['flavorExtras'] as $flavor => $flag) {
+      $flavor = trim((string) $flavor);
+      if ($flavor === '') continue;
+      if ($flag === true || $flag === 1 || $flag === '1') $extras[$flavor] = true;
+      elseif ($flag === false || $flag === 0 || $flag === '0') $extras[$flavor] = false;
+    }
+    if ($extras) $row['flavorExtras'] = $extras;
+  }
   return $row;
 }
 
@@ -1151,6 +1201,15 @@ function aurora_normalize_product_input(array $p): array {
     $flavorPrices[$flavor] = aurora_parse_money($price);
   }
 
+  $flavorExtras = [];
+  $rawExtras = is_array($p['flavorExtras'] ?? null) ? $p['flavorExtras'] : [];
+  foreach ($rawExtras as $flavor => $flag) {
+    $flavor = trim((string) $flavor);
+    if ($flavor === '' || !isset($flavorPrices[$flavor])) continue;
+    if ($flag === true || $flag === 1 || $flag === '1') $flavorExtras[$flavor] = true;
+    elseif ($flag === false || $flag === 0 || $flag === '0') $flavorExtras[$flavor] = false;
+  }
+
   $img = trim((string) ($p['image'] ?? ''));
   if (str_starts_with($img, 'data:image')) {
     $path = aurora_save_data_url_file($img);
@@ -1178,6 +1237,7 @@ function aurora_normalize_product_input(array $p): array {
     'size' => trim((string) ($p['size'] ?? '')),
     'flavors' => $flavors,
     'flavorPrices' => $flavorPrices,
+    'flavorExtras' => $flavorExtras,
     'promoActive' => !empty($p['promoActive']),
     'promoPrice' => $promoPrice,
     'promoLabel' => !empty($p['promoActive']) ? trim((string) ($p['promoLabel'] ?? '')) : '',
@@ -1245,6 +1305,7 @@ function aurora_save_one_product(PDO $pdo, array $payload): array {
 
   $hasAvailable = aurora_products_has_available($pdo);
   $hasStock = aurora_product_has_stock_column($pdo);
+  $hasFlavorExtra = aurora_flavor_price_has_extra($pdo);
 
   $pdo->beginTransaction();
   try {
@@ -1351,10 +1412,22 @@ function aurora_save_one_product(PDO $pdo, array $payload): array {
       $flavorStmt->execute([$p['id'], $flavor, (int) $fi]);
     }
     $fpStmt = $pdo->prepare(
-      'INSERT INTO product_flavor_prices (product_id, flavor, price) VALUES (?, ?, ?)'
+      $hasFlavorExtra
+        ? 'INSERT INTO product_flavor_prices (product_id, flavor, price, is_extra) VALUES (?, ?, ?, ?)'
+        : 'INSERT INTO product_flavor_prices (product_id, flavor, price) VALUES (?, ?, ?)'
     );
+    $flavorExtraFlags = is_array($p['flavorExtras'] ?? null) ? $p['flavorExtras'] : [];
     foreach ($p['flavorPrices'] as $flavor => $price) {
-      $fpStmt->execute([$p['id'], $flavor, (float) $price]);
+      if ($hasFlavorExtra) {
+        $fpStmt->execute([
+          $p['id'],
+          $flavor,
+          (float) $price,
+          aurora_flavor_extra_db_value($flavorExtraFlags, (string) $flavor),
+        ]);
+      } else {
+        $fpStmt->execute([$p['id'], $flavor, (float) $price]);
+      }
     }
 
     $pdo->commit();
@@ -1398,6 +1471,7 @@ function aurora_save_all(PDO $pdo, array $payload): void {
   }
 
   aurora_ensure_sort_order_columns($pdo);
+  $hasFlavorExtra = aurora_flavor_price_has_extra($pdo);
 
   $pdo->beginTransaction();
   try {
@@ -1515,7 +1589,9 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       'INSERT INTO product_flavors (product_id, flavor, sort_order) VALUES (?, ?, ?)'
     );
     $fpStmt = $pdo->prepare(
-      'INSERT INTO product_flavor_prices (product_id, flavor, price) VALUES (?, ?, ?)'
+      $hasFlavorExtra
+        ? 'INSERT INTO product_flavor_prices (product_id, flavor, price, is_extra) VALUES (?, ?, ?, ?)'
+        : 'INSERT INTO product_flavor_prices (product_id, flavor, price) VALUES (?, ?, ?)'
     );
 
     foreach (array_values($payload['products'] ?? []) as $i => $p) {
@@ -1562,8 +1638,18 @@ function aurora_save_all(PDO $pdo, array $payload): void {
       foreach (array_values($p['flavors'] ?? []) as $fi => $flavor) {
         $flavorStmt->execute([$pid, $flavor, $fi]);
       }
+      $flavorExtraFlags = is_array($p['flavorExtras'] ?? null) ? $p['flavorExtras'] : [];
       foreach (($p['flavorPrices'] ?? []) as $flavor => $price) {
-        $fpStmt->execute([$pid, $flavor, (float) $price]);
+        if ($hasFlavorExtra) {
+          $fpStmt->execute([
+            $pid,
+            $flavor,
+            (float) $price,
+            aurora_flavor_extra_db_value($flavorExtraFlags, (string) $flavor),
+          ]);
+        } else {
+          $fpStmt->execute([$pid, $flavor, (float) $price]);
+        }
       }
     }
 

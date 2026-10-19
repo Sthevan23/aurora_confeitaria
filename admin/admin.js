@@ -2753,10 +2753,18 @@ function formatFlavorsForEditor(product) {
   return flavors.map((f) => {
     const price = prices[f];
     if (price == null || price === '' || !(Number(price) > 0)) return f;
-    const extra = extras[f] === true || extras[f] === 1 || extras[f] === '1'
-      || (Number(price) > 0 && Number(product?.price) > 0 && Number(price) < Number(product.price) && !product?.priceFrom);
-    return extra ? `${f} = +${formatMoneyInput(price)}` : `${f} = ${formatMoneyInput(price)}`;
+    return flavorIsExtraInEditor(product, f, price, extras)
+      ? `${f} = +${formatMoneyInput(price)}`
+      : `${f} = ${formatMoneyInput(price)}`;
   }).join('\n');
+}
+
+function flavorIsExtraInEditor(product, flavor, price, extras) {
+  if (extras[flavor] === true || extras[flavor] === 1 || extras[flavor] === '1') return true;
+  if (extras[flavor] === false || extras[flavor] === 0 || extras[flavor] === '0') return false;
+  const fp = Number(price);
+  const b = Number(product?.price);
+  return fp > 0 && b > 0 && fp < b && fp <= b * 0.5 && !product?.priceFrom;
 }
 
 function parseFlavorsFromEditor(raw) {
@@ -2776,7 +2784,7 @@ function parseFlavorsFromEditor(raw) {
         flavors.push(name);
         if (Number.isFinite(price) && price > 0) {
           flavorPrices[name] = price;
-          if (match[2] === '+') flavorExtras[name] = true;
+          flavorExtras[name] = match[2] === '+';
         }
         return;
       }
@@ -2837,7 +2845,7 @@ function openProductModal(product = null) {
       <div class="form-group">
         <label>Sabores e preços (um por linha)</label>
         <textarea id="prod-flavors" rows="5" placeholder="Doce de leite&#10;Nutella Pura = +8&#10;Ninho com Nutella = 28">${formatFlavorsForEditor(product)}</textarea>
-        <small style="display:block;margin-top:6px;color:var(--texto-claro)">Preço do sabor: <strong>Ninho = 3,50</strong> (substitui o valor). Adicional: <strong>Nutella Pura = +8,50</strong> (soma no preço da porção).</small>
+        <small style="display:block;margin-top:6px;color:var(--texto-claro)">Sem o + o valor substitui o preço, mesmo se for menor: <strong>Bolo Nuvem = 36</strong>. Com + soma: <strong>Sorvete = +2</strong>.</small>
       </div>
       <div class="form-row">
         <div class="form-group">

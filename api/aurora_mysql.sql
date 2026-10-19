@@ -116,6 +116,7 @@ CREATE TABLE `product_flavor_prices` (
   `product_id` VARCHAR(64) NOT NULL,
   `flavor` VARCHAR(190) NOT NULL,
   `price` DECIMAL(10,2) NOT NULL,
+  `is_extra` TINYINT(1) NULL DEFAULT NULL COMMENT '1 soma no preco, 0 substitui, NULL legado',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pfp` (`product_id`, `flavor`),
   CONSTRAINT `fk_pfp_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
