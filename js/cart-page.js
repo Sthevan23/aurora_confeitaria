@@ -623,7 +623,7 @@
     loyaltyTimer = setTimeout(refreshLoyalty, 450);
   }
 
-  async function refreshLoyalty() {
+  async function refreshLoyalty(fresh = false) {
     const phone = onlyDigits(document.getElementById('cart-page-phone')?.value || '');
     const box = document.getElementById('cart-page-loyalty');
     if (phone.length < 10) {
@@ -632,7 +632,7 @@
     }
     const req = ++loyaltyReq;
     try {
-      const loyalty = await Storage.getLoyaltyStatus(phone);
+      const loyalty = await Storage.getLoyaltyStatus(phone, { fresh });
       if (req !== loyaltyReq) return;
       paintLoyalty(loyalty);
     } catch {
@@ -1052,7 +1052,13 @@
       scheduleLoyaltyRefresh();
       saveFormCustomer();
     });
-    refreshLoyalty();
+    refreshLoyalty(true);
+    // Atualiza sozinho: ao voltar para a aba e a cada 30s enquanto ela está visível
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refreshLoyalty(true);
+    });
+    window.addEventListener('focus', () => refreshLoyalty(true));
+    setInterval(() => { if (!document.hidden) refreshLoyalty(true); }, 30000);
     setInterval(applyStoreStatus, 60000);
     window.AuroraAnalytics?.pageView('cart.html');
   }

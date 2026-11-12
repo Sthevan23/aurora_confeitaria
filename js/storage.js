@@ -45,7 +45,7 @@ const Storage = (() => {
   let lastLoadFromCache = false;
   let loyaltyCache = { phone: '', at: 0, data: null };
   let loyaltyInflight = null;
-  const LOYALTY_CACHE_MS = 45000;
+  const LOYALTY_CACHE_MS = 8000;
 
   function emptyStore() {
     return {
@@ -1688,7 +1688,7 @@ const Storage = (() => {
     return { phone, total, siteTotal, bonus, progress, goal, remaining, rewards, eligible, gift };
   }
 
-  async function getLoyaltyStatus(whatsapp) {
+  async function getLoyaltyStatus(whatsapp, { fresh = false } = {}) {
     const phone = String(whatsapp || '').replace(/\D/g, '');
     if (!phone || phone.length < 10) {
       return computeLoyaltyFromOrders([], phone);
@@ -1696,19 +1696,23 @@ const Storage = (() => {
 
     const now = Date.now();
     if (
-      loyaltyCache.phone === phone
+      !fresh
+      && loyaltyCache.phone === phone
       && loyaltyCache.data
       && (now - loyaltyCache.at) < LOYALTY_CACHE_MS
     ) {
       return loyaltyCache.data;
     }
 
-    if (location.protocol === 'file:' && !isLocalHost) {
-      return computeLoyaltyFromOrders(getOrders(), phone);
-    }
+    // Sem API: usa o último valor vindo do servidor (os pedidos locais do site público são vazios)
+    const lastKnown = () => (
+      loyaltyCache.phone === phone && loyaltyCache.data
+        ? loyaltyCache.data
+        : computeLoyaltyFromOrders(getOrders(), phone)
+    );
 
-    if (apiCoolingDown()) {
-      return computeLoyaltyFromOrders(getOrders(), phone);
+    if (location.protocol === 'file:' && !isLocalHost) {
+      return lastKnown();
     }
 
     try {
@@ -1721,13 +1725,13 @@ const Storage = (() => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'loyalty_status', phone }),
-        }, 12000);
+        }, 12000, { force: true });
         const result = await res.json().catch(() => ({}));
         if (res.ok && result.ok && result.loyalty) {
           loyaltyCache = { phone, at: Date.now(), data: result.loyalty };
           return result.loyalty;
         }
-        return computeLoyaltyFromOrders(getOrders(), phone);
+        return lastKnown();
       })();
 
       loyaltyInflight = { phone, promise };
@@ -1735,7 +1739,8 @@ const Storage = (() => {
       if (loyaltyInflight?.phone === phone) loyaltyInflight = null;
       return data;
     } catch {
-      return computeLoyaltyFromOrders(getOrders(), phone);
+      if (loyaltyInflight?.phone === phone) loyaltyInflight = null;
+      return lastKnown();
     }
   }
 
